@@ -34,6 +34,7 @@
     "client.email": "Email",
     "client.address": "Address",
     "client.new": "New client",
+    "client.selectAgency": "Select an agency in the header to create a client.",
     "client.search": "Search a client (name, phone)",
     "client.noResults": "No client found.",
     "client.loyaltyPoints": "Loyalty points",

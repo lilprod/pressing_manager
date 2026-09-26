@@ -34,6 +34,7 @@
     "client.email": "E-mail",
     "client.address": "Adresse",
     "client.new": "Nouveau client",
+    "client.selectAgency": "Sélectionnez une agence dans l'en-tête pour créer un client.",
     "client.search": "Rechercher un client (nom, téléphone)",
     "client.noResults": "Aucun client trouvé.",
     "client.loyaltyPoints": "Points de fidélité",

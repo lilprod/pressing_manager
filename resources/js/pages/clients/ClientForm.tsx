@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
 import { api, ApiError } from '../../lib/api';
 import type { Client } from '../../types';
@@ -11,6 +12,7 @@ interface Props {
 
 export default function ClientForm({ client, onSaved, onCancel }: Props) {
     const { t } = useI18n();
+    const { user, activeAgencyId } = useAuth();
     const [firstName, setFirstName] = useState(client?.first_name ?? '');
     const [lastName, setLastName] = useState(client?.last_name ?? '');
     const [phone, setPhone] = useState(client?.phone ?? '');
@@ -24,10 +26,17 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
         setBusy(true);
         setError(null);
         const payload = { first_name: firstName, last_name: lastName, phone, email: email || null, address: address || null };
+        const isGlobal = user?.agency_id === null;
+        if (!client && isGlobal && !activeAgencyId) {
+            setError(t('client.selectAgency'));
+            setBusy(false);
+            return;
+        }
         try {
+            // À la création, l'API exige l'agence pour un rôle global et la refuse pour un rôle d'agence.
             const saved = client
                 ? await api.patch<Client>(`/clients/${client.id}`, payload)
-                : await api.post<Client>('/clients', payload);
+                : await api.post<Client>('/clients', isGlobal ? { ...payload, agency_id: activeAgencyId } : payload);
             onSaved(saved);
         } catch (err) {
             setError(err instanceof ApiError ? err.message : t('common.error'));

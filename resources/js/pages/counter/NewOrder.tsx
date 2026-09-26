@@ -116,6 +116,8 @@ export default function NewOrder() {
 
         const clientLocalUuid = crypto.randomUUID();
         const payload = {
+            // L'API exige l'agence pour un rôle global et la refuse pour un rôle d'agence.
+            ...(user?.agency_id === null ? { agency_id: agencyId } : {}),
             client_id: selectedClient.id,
             client_local_uuid: clientLocalUuid,
             is_express: isExpress,

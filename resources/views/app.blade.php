@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#4338ca">
     <title>Pressing Manager</title>
+    @viteReactRefresh
     @vite(['resources/css/app.css', 'resources/js/main.tsx'])
     <script>
         // Applique le thème avant le rendu pour éviter un flash clair/sombre.

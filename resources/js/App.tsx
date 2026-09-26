@@ -12,6 +12,7 @@ import Scan from './pages/Scan';
 import ClientsList from './pages/clients/ClientsList';
 import LicensePage from './pages/LicensePage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
+import StockPage from './pages/StockPage';
 
 function ProtectedLayout() {
     const { user, loading } = useAuth();
@@ -46,6 +47,7 @@ export default function App() {
                     <Route path="/scan" element={<Scan />} />
                     <Route path="/clients" element={<ClientsList />} />
                     <Route path="/subscriptions" element={<SubscriptionsPage />} />
+                    <Route path="/stock" element={<StockPage />} />
                     <Route path="/license" element={<LicensePage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />

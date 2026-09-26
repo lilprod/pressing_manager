@@ -11,7 +11,11 @@ use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentWebhookController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\StockController;
+use App\Http\Controllers\Api\StockItemController;
+use App\Http\Controllers\Api\StockMovementController;
 use App\Http\Controllers\Api\SubscriptionPlanController;
+use App\Http\Controllers\Api\SupplierController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
@@ -57,4 +61,15 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::post('/customer-subscriptions', [CustomerSubscriptionController::class, 'store']);
     Route::get('/customer-subscriptions/{customerSubscription}', [CustomerSubscriptionController::class, 'show']);
     Route::post('/customer-subscriptions/{customerSubscription}/renew', [CustomerSubscriptionController::class, 'renew']);
+
+    Route::get('/suppliers', [SupplierController::class, 'index']);
+    Route::post('/suppliers', [SupplierController::class, 'store']);
+
+    Route::get('/stock-items', [StockItemController::class, 'index']);
+    Route::post('/stock-items', [StockItemController::class, 'store']);
+
+    Route::get('/stock', [StockController::class, 'index']);
+
+    Route::get('/stock-movements', [StockMovementController::class, 'index']);
+    Route::post('/stock-movements', [StockMovementController::class, 'store']);
 });

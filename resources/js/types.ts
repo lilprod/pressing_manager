@@ -206,3 +206,57 @@ export interface Paginated<T> {
     last_page: number;
     total: number;
 }
+
+export type StockUnit = 'unite' | 'kg' | 'litre' | 'paquet';
+export type StockMovementType = 'entree' | 'sortie';
+export type StockMovementReason = 'livraison' | 'consommation' | 'perte' | 'ajustement';
+
+export interface Supplier {
+    id: number;
+    agency_id: number | null;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    notes: string | null;
+    is_active: boolean;
+}
+
+export interface StockItem {
+    id: number;
+    code: string;
+    name: string;
+    unit: StockUnit;
+    category: string | null;
+    default_reorder_threshold: number;
+    is_active: boolean;
+}
+
+export interface StockLevel {
+    stock_item_id: number;
+    code: string;
+    name: string;
+    unit: StockUnit;
+    category: string | null;
+    agency_id: number;
+    quantity_on_hand: number;
+    reorder_threshold: number;
+    is_low_stock: boolean;
+}
+
+export interface StockMovement {
+    id: number;
+    agency_id: number;
+    stock_item_id: number;
+    stock_item?: StockItem;
+    supplier_id: number | null;
+    supplier?: Supplier;
+    user_id: number | null;
+    user?: User;
+    type: StockMovementType;
+    quantity: number;
+    unit_cost: number | null;
+    reason: StockMovementReason;
+    notes: string | null;
+    occurred_at: string;
+}

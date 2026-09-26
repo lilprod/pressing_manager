@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             LicenseSeeder::class,
             SubscriptionPlanSeeder::class,
             OrderSeeder::class,
+            StockSeeder::class,
         ]);
     }
 }

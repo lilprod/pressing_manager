@@ -19,12 +19,13 @@ class PermissionSeeder extends Seeder
         ['slug' => 'reports.view', 'name' => 'Consulter les rapports', 'group' => 'reports'],
         ['slug' => 'agencies.manage', 'name' => 'Gérer les agences', 'group' => 'admin'],
         ['slug' => 'users.manage', 'name' => 'Gérer les utilisateurs', 'group' => 'admin'],
+        ['slug' => 'stocks.manage', 'name' => 'Gérer les stocks et fournisseurs', 'group' => 'stocks'],
     ];
 
     /** Rôle => permissions accordées. */
     public const ROLE_PERMISSIONS = [
-        'admin' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'licenses.manage', 'subscriptions.manage', 'reports.view', 'agencies.manage', 'users.manage'],
-        'manager' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'subscriptions.manage', 'reports.view', 'users.manage'],
+        'admin' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'licenses.manage', 'subscriptions.manage', 'reports.view', 'agencies.manage', 'users.manage', 'stocks.manage'],
+        'manager' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'subscriptions.manage', 'reports.view', 'users.manage', 'stocks.manage'],
         'accueil' => ['clients.manage', 'orders.manage', 'invoices.manage', 'payments.manage', 'subscriptions.manage'],
         'technicien' => ['orders.update_status'],
         'livreur' => ['orders.update_status'],

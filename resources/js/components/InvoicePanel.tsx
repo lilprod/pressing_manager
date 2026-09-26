@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { api, ApiError } from '../lib/api';
 import type { Invoice, Order, Payment, PaymentMethod } from '../types';
@@ -12,6 +13,9 @@ import { button, card, cx, input, label, sectionTitle } from './ui/styles';
 export default function InvoicePanel({ order }: { order: Order }) {
     const { t } = useI18n();
     const { money } = useFormat();
+    const { user } = useAuth();
+    // L'API exige l'agence pour un rôle global et la refuse pour un rôle d'agence.
+    const agencyScope = user?.agency_id === null ? { agency_id: order.agency_id } : {};
     const [invoice, setInvoice] = useState<Invoice | null>(order.invoice?.[0] ?? null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -53,6 +57,7 @@ export default function InvoicePanel({ order }: { order: Order }) {
         try {
             if (method === 'espece') {
                 await api.post<Payment>('/payments/cash', {
+                    ...agencyScope,
                     client_id: order.client_id,
                     invoice_id: invoice.id,
                     amount,
@@ -61,6 +66,7 @@ export default function InvoicePanel({ order }: { order: Order }) {
                 setInvoice(refreshed);
             } else {
                 const payment = await api.post<Payment>('/payments/remote', {
+                    ...agencyScope,
                     client_id: order.client_id,
                     invoice_id: invoice.id,
                     amount,

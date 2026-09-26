@@ -86,7 +86,7 @@ export default function NewOrder() {
         const controller = new AbortController();
         const timeout = setTimeout(() => {
             api
-                .get<{ data: Client[] }>(`/clients?search=${encodeURIComponent(clientQuery)}`, controller.signal)
+                .get<{ data: Client[] }>(`/clients?search=${encodeURIComponent(clientQuery)}&agency_id=${agencyId}`, controller.signal)
                 .then((res) => {
                     setClientResults(res.data);
                     rememberClients(res.data);
@@ -96,8 +96,8 @@ export default function NewOrder() {
                     setClientResults(
                         readRecentClients().filter(
                             (c) =>
-                                `${c.first_name} ${c.last_name}`.toLowerCase().includes(term) ||
-                                c.phone.includes(term),
+                                c.agency_id === agencyId &&
+                                (`${c.first_name} ${c.last_name}`.toLowerCase().includes(term) || c.phone.includes(term)),
                         ),
                     );
                 });
@@ -106,7 +106,7 @@ export default function NewOrder() {
             clearTimeout(timeout);
             controller.abort();
         };
-    }, [clientQuery]);
+    }, [clientQuery, agencyId]);
 
     const total = useMemo(
         () =>
@@ -146,6 +146,8 @@ export default function NewOrder() {
 
         const clientLocalUuid = crypto.randomUUID();
         const payload = {
+            // L'API exige l'agence pour un rôle global et la refuse pour un rôle d'agence.
+            ...(user?.agency_id === null ? { agency_id: agencyId } : {}),
             client_id: selectedClient.id,
             client_local_uuid: clientLocalUuid,
             is_express: isExpress,

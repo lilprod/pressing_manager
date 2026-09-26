@@ -12,7 +12,8 @@
         "endroid/qr-code": "^6.1",
         "laravel/framework": "^12.61",
         "laravel/sanctum": "^4.0",
-        "laravel/tinker": "^2.9"
+        "laravel/tinker": "^2.9",
+        "phpoffice/phpspreadsheet": "^5.10"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

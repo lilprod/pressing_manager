@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Boxes, Building2, ClipboardList, Crown, KeyRound, Languages, LogOut, Moon, ScanLine, ShoppingBag, Sun, Truck, UsersRound, Users, WifiOff, type LucideIcon } from 'lucide-react';
+import { Boxes, Building2, ClipboardList, Crown, KeyRound, Languages, LogOut, Moon, ScanLine, ShoppingBag, Sun, Truck, UsersRound, Users, WifiOff, LayoutDashboard, type LucideIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -125,6 +125,7 @@ export default function AppLayout() {
                         <NavItem to="/deliveries" icon={Truck} label={t('nav.deliveries')} />
                     )}
                     {(hasPermission(user, 'hr.manage') || hasPermission(user, 'hr.clock')) && <NavItem to="/hr" icon={UsersRound} label={t('nav.hr')} />}
+                    {hasPermission(user, 'reports.view') && <NavItem to="/kpi" icon={LayoutDashboard} label={t('nav.kpi')} />}
                     {hasPermission(user, 'licenses.manage') && <NavItem to="/license" icon={KeyRound} label={t('nav.license')} />}
                 </nav>
             </header>

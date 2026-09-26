@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CustomerSubscriptionController;
 use App\Http\Controllers\Api\DeliveryController;
 use App\Http\Controllers\Api\DeliveryZoneController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\LicenseController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OrderItemController;
@@ -102,4 +103,8 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::post('/attendances/clock-out', [AttendanceController::class, 'clockOut']);
 
     Route::get('/hr/performance', [PerformanceController::class, 'index']);
+
+    Route::get('/kpi', [KpiController::class, 'index']);
+    Route::get('/kpi/export/pdf', [KpiController::class, 'exportPdf']);
+    Route::get('/kpi/export/excel', [KpiController::class, 'exportExcel']);
 });

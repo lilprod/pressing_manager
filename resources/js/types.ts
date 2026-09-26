@@ -333,3 +333,34 @@ export interface PerformanceRow {
     items_processed: number | null;
     deliveries_completed: number | null;
 }
+
+export interface KpiMetrics {
+    revenue: number;
+    orders_count: number;
+    average_order_value: number;
+    express_rate: number;
+    low_stock_items: number;
+    stock_movements: number;
+    deliveries_total: number;
+    deliveries_completed: number;
+    deliveries_failed: number;
+    delivery_completion_rate: number;
+    attendance_present: number;
+    attendance_retard: number;
+    attendance_absent: number;
+    hours_worked: number;
+    active_subscriptions: number;
+}
+
+export interface KpiAgencyRow extends KpiMetrics {
+    agency_id: number;
+    agency_name: string;
+}
+
+export interface KpiData extends KpiMetrics {
+    scope: 'agency' | 'consolidated';
+    from: string;
+    to: string;
+    agency?: { id: number; name: string } | null;
+    by_agency?: KpiAgencyRow[];
+}

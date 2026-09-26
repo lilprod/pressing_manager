@@ -115,16 +115,23 @@ export default function AppLayout() {
                 </div>
 
                 <nav aria-label={t('nav.main')} className="scrollbar-none mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-2.5 sm:px-6">
+                    {/* Comptoir & suivi commande */}
                     <NavItem to="/" end icon={ShoppingBag} label={t('nav.newOrder')} />
                     <NavItem to="/orders" icon={ClipboardList} label={t('nav.orders')} />
                     <NavItem to="/scan" icon={ScanLine} label={t('nav.scan')} />
-                    {hasPermission(user, 'clients.manage') && <NavItem to="/clients" icon={Users} label={t('nav.clients')} />}
-                    {hasPermission(user, 'subscriptions.manage') && <NavItem to="/subscriptions" icon={Crown} label={t('subscription.title')} />}
-                    {hasPermission(user, 'stocks.manage') && <NavItem to="/stock" icon={Boxes} label={t('nav.stock')} />}
                     {(hasPermission(user, 'deliveries.manage') || hasPermission(user, 'deliveries.fulfill')) && (
                         <NavItem to="/deliveries" icon={Truck} label={t('nav.deliveries')} />
                     )}
+
+                    {/* Relation client */}
+                    {hasPermission(user, 'clients.manage') && <NavItem to="/clients" icon={Users} label={t('nav.clients')} />}
+                    {hasPermission(user, 'subscriptions.manage') && <NavItem to="/subscriptions" icon={Crown} label={t('subscription.title')} />}
+
+                    {/* Ressources & back-office */}
+                    {hasPermission(user, 'stocks.manage') && <NavItem to="/stock" icon={Boxes} label={t('nav.stock')} />}
                     {(hasPermission(user, 'hr.manage') || hasPermission(user, 'hr.clock')) && <NavItem to="/hr" icon={UsersRound} label={t('nav.hr')} />}
+
+                    {/* Pilotage */}
                     {hasPermission(user, 'reports.view') && <NavItem to="/kpi" icon={LayoutDashboard} label={t('nav.kpi')} />}
                     {hasPermission(user, 'licenses.manage') && <NavItem to="/license" icon={KeyRound} label={t('nav.license')} />}
                 </nav>

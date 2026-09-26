@@ -3,7 +3,11 @@
 @tailwind utilities;
 
 :root {
-    color-scheme: light dark;
+    color-scheme: light;
+}
+
+:root.dark {
+    color-scheme: dark;
 }
 
 html,
@@ -12,17 +16,60 @@ body,
     height: 100%;
 }
 
+html {
+    -webkit-tap-highlight-color: transparent;
+}
+
 body {
-    @apply bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100;
+    @apply bg-ink-50 font-sans text-ink-900 antialiased dark:bg-ink-950 dark:text-ink-50;
+    font-feature-settings: 'cv11', 'ss01';
+}
+
+h1,
+h2,
+h3,
+.font-display {
+    letter-spacing: -0.01em;
+    /* L'espace de Plus Jakarta Sans est étroit : on l'élargit légèrement pour les titres. */
+    word-spacing: 0.08em;
+}
+
+h1,
+h2,
+h3 {
+    @apply font-display;
 }
 
 .skip-link {
-    @apply sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-indigo-600 focus:px-4 focus:py-2 focus:text-white;
+    @apply sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[60] focus:rounded-xl focus:bg-brand-700 focus:px-4 focus:py-2 focus:font-semibold focus:text-white focus:shadow-pop;
 }
 
 :focus-visible {
-    outline: 2px solid theme('colors.indigo.500');
+    outline: 2px solid theme('colors.brand.600');
     outline-offset: 2px;
+}
+
+.dark :focus-visible {
+    outline-color: theme('colors.brand.300');
+}
+
+/* Défilement horizontal discret (barre de navigation, filtres). */
+.scrollbar-none {
+    scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+    display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
 
 .printable {
@@ -39,6 +86,8 @@ body {
         visibility: visible;
         position: absolute;
         inset: 0;
+        color: #000;
+        background: #fff;
     }
 
     .printable * {

@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../contexts/I18nContext';
 import { api, ApiError } from '../lib/api';
 import type { Invoice, Order, Payment, PaymentMethod } from '../types';
-
-const REMOTE_METHODS: PaymentMethod[] = ['carte', 'flooz', 'tmoney'];
+import { CircleCheck, FileDown, FilePlus2, HandCoins, Receipt, Send } from 'lucide-react';
+import { useFormat } from '../lib/format';
+import PaymentMethodPicker from './PaymentMethodPicker';
+import StatusBadge from './ui/StatusBadge';
+import { Alert, Spinner } from './ui/Feedback';
+import { button, card, cx, input, label, sectionTitle } from './ui/styles';
 
 export default function InvoicePanel({ order }: { order: Order }) {
     const { t } = useI18n();
+    const { money } = useFormat();
     const [invoice, setInvoice] = useState<Invoice | null>(order.invoice?.[0] ?? null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -80,82 +85,95 @@ export default function InvoicePanel({ order }: { order: Order }) {
     }
 
     return (
-        <section aria-labelledby="invoice-heading" className="space-y-3 rounded-md border border-slate-200 p-4 dark:border-slate-700">
-            <h2 id="invoice-heading" className="font-medium">
-                {t('order.invoice')}
-            </h2>
+        <section aria-labelledby="invoice-heading" className={cx(card, 'overflow-hidden')}>
+            <div className="flex items-center justify-between gap-2 border-b border-ink-200/80 px-5 py-4 dark:border-ink-800">
+                <h2 id="invoice-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
+                    <Receipt aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
+                    {t('order.invoice')}
+                </h2>
+                {invoice && <StatusBadge kind="invoice" status={invoice.status} />}
+            </div>
 
-            {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+            <div className="space-y-5 p-5">
+                {error && <Alert tone="error">{error}</Alert>}
 
-            {!invoice ? (
-                <button
-                    type="button"
-                    onClick={() => void createInvoice()}
-                    disabled={busy}
-                    className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-                >
-                    {t('order.createInvoice')}
-                </button>
-            ) : (
-                <div className="space-y-3">
-                    <p className="text-sm">
-                        {t('common.status')}: <strong>{invoice.status}</strong> — {invoice.total_amount} FCFA
-                    </p>
-
-                    {invoice.pdf_path && (
-                        <button
-                            type="button"
-                            onClick={() => void downloadPdf()}
-                            className="text-sm text-indigo-600 underline dark:text-indigo-400"
-                        >
-                            {t('order.downloadPdf')}
+                {!invoice ? (
+                    <div className="space-y-4 text-center">
+                        <p className="text-sm text-ink-600 dark:text-ink-350">{t('invoice.noneYet')}</p>
+                        <button type="button" onClick={() => void createInvoice()} disabled={busy} className={button('primary', 'lg', 'w-full')}>
+                            {busy ? <Spinner className="h-5 w-5" /> : <FilePlus2 aria-hidden="true" className="h-5 w-5" />}
+                            {t('order.createInvoice')}
                         </button>
-                    )}
-
-                    {invoice.status !== 'payee' && (
-                        <div className="flex flex-wrap items-end gap-2">
-                            <label className="text-sm">
-                                {t('payment.amount')}
-                                <input
-                                    type="number"
-                                    value={amount}
-                                    onChange={(e) => setAmount(Number(e.target.value))}
-                                    className="ml-2 w-28 rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-900"
-                                />
-                            </label>
-                            <label className="text-sm">
-                                {t('common.status')}
-                                <select
-                                    value={method}
-                                    onChange={(e) => setMethod(e.target.value as PaymentMethod)}
-                                    className="ml-2 rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-900"
-                                >
-                                    <option value="espece">{t('payment.cash')}</option>
-                                    {REMOTE_METHODS.map((m) => (
-                                        <option key={m} value={m}>
-                                            {t(`payment.${m === 'carte' ? 'card' : m}`)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <button
-                                type="button"
-                                onClick={() => void pay()}
-                                disabled={busy}
-                                className="rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"
-                            >
-                                {method === 'espece' ? t('payment.pay') : t('payment.initiate')}
-                            </button>
+                    </div>
+                ) : (
+                    <div className="space-y-5">
+                        <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl bg-ink-50 px-4 py-3.5 dark:bg-ink-950/60">
+                            <div>
+                                <p className="text-xs font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('invoice.amountDue')}</p>
+                                <p className="whitespace-nowrap font-display text-2xl font-extrabold tabular-nums text-ink-900 dark:text-white">{money(invoice.total_amount)}</p>
+                            </div>
+                            {invoice.pdf_path && (
+                                <button type="button" onClick={() => void downloadPdf()} className={button('secondary', 'sm')}>
+                                    <FileDown aria-hidden="true" className="h-4 w-4" />
+                                    {t('order.downloadPdf')}
+                                </button>
+                            )}
                         </div>
-                    )}
 
-                    {pollingPayment && (
-                        <p role="status" className="text-sm">
-                            {t('payment.amount')}: {pollingPayment.amount} FCFA — {t(`payment.status.${pollingPayment.status}`)}
-                        </p>
-                    )}
-                </div>
-            )}
+                        {invoice.status === 'payee' ? (
+                            <Alert tone="success" icon={CircleCheck}>
+                                {t('invoice.fullyPaid')}
+                            </Alert>
+                        ) : (
+                            <div className="space-y-4">
+                                <div>
+                                    <label htmlFor={`invoice-amount-${order.id}`} className={label}>
+                                        {t('payment.amount')}
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            id={`invoice-amount-${order.id}`}
+                                            type="number"
+                                            value={amount}
+                                            onChange={(e) => setAmount(Number(e.target.value))}
+                                            className={cx(input, 'pr-16 font-semibold tabular-nums')}
+                                        />
+                                        <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-ink-600 dark:text-ink-350">
+                                            {t('common.currency')}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <PaymentMethodPicker name={`invoice-method-${order.id}`} value={method} onChange={setMethod} layout="compact" />
+
+                                <button type="button" onClick={() => void pay()} disabled={busy} className={button('success', 'lg', 'w-full')}>
+                                    {busy ? (
+                                        <Spinner className="h-5 w-5" />
+                                    ) : method === 'espece' ? (
+                                        <HandCoins aria-hidden="true" className="h-5 w-5" />
+                                    ) : (
+                                        <Send aria-hidden="true" className="h-5 w-5" />
+                                    )}
+                                    {method === 'espece' ? t('payment.pay') : t('payment.initiate')}
+                                </button>
+                            </div>
+                        )}
+
+                        {pollingPayment && (
+                            <div
+                                role="status"
+                                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink-200 px-3.5 py-3 text-sm dark:border-ink-700"
+                            >
+                                <span className="inline-flex items-center gap-2 font-medium text-ink-800 dark:text-ink-100">
+                                    {pollingPayment.status === 'en_attente' && <Spinner className="h-4 w-4 text-amber-700 dark:text-amber-300" />}
+                                    {money(pollingPayment.amount)}
+                                </span>
+                                <StatusBadge kind="payment" status={pollingPayment.status} />
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
         </section>
     );
 }

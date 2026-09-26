@@ -2,6 +2,9 @@ import { useState, type FormEvent } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
 import { api, ApiError } from '../../lib/api';
 import type { Client } from '../../types';
+import { Check, UserPen, UserPlus } from 'lucide-react';
+import { Alert, Spinner } from '../../components/ui/Feedback';
+import { button, cardPadded, cx, input, label, sectionTitle } from '../../components/ui/styles';
 
 interface Props {
     client: Client | null;
@@ -36,63 +39,47 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
         }
     }
 
-    return (
-        <form onSubmit={handleSubmit} className="space-y-3 rounded-md border border-slate-200 p-4 dark:border-slate-700" aria-label={t('client.new')}>
-            {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+    const Icon = client ? UserPen : UserPlus;
 
-            <div className="grid grid-cols-2 gap-3">
-                <label className="text-sm">
-                    {t('client.firstName')}
-                    <input
-                        required
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-900"
-                    />
+    return (
+        <form onSubmit={handleSubmit} className={cx(cardPadded, 'animate-fade-in space-y-5 ring-2 ring-brand-500/20')} aria-label={client ? t('client.edit') : t('client.new')}>
+            <h2 className={cx(sectionTitle, 'flex items-center gap-2')}>
+                <Icon aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
+                {client ? t('client.edit') : t('client.new')}
+            </h2>
+
+            {error && <Alert tone="error">{error}</Alert>}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                    <span className={label}>{t('client.firstName')}</span>
+                    <input required value={firstName} onChange={(e) => setFirstName(e.target.value)} className={input} />
                 </label>
-                <label className="text-sm">
-                    {t('client.lastName')}
-                    <input
-                        required
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-900"
-                    />
+                <label className="block">
+                    <span className={label}>{t('client.lastName')}</span>
+                    <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} />
                 </label>
-                <label className="text-sm">
-                    {t('client.phone')}
-                    <input
-                        required
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-900"
-                    />
+                <label className="block">
+                    <span className={label}>{t('client.phone')}</span>
+                    <input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={input} />
                 </label>
-                <label className="text-sm">
-                    {t('client.email')}
-                    <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-900"
-                    />
+                <label className="block">
+                    <span className={label}>{t('client.email')}</span>
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={input} />
                 </label>
-                <label className="col-span-2 text-sm">
-                    {t('client.address')}
-                    <input
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 dark:border-slate-600 dark:bg-slate-900"
-                    />
+                <label className="block sm:col-span-2">
+                    <span className={label}>{t('client.address')}</span>
+                    <input value={address} onChange={(e) => setAddress(e.target.value)} className={input} />
                 </label>
             </div>
 
-            <div className="flex gap-2">
-                <button type="submit" disabled={busy} className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
-                    {t('common.save')}
-                </button>
-                <button type="button" onClick={onCancel} className="rounded-md border border-slate-300 px-4 py-2 text-sm dark:border-slate-600">
+            <div className="flex flex-wrap justify-end gap-2">
+                <button type="button" onClick={onCancel} className={button('ghost')}>
                     {t('common.cancel')}
+                </button>
+                <button type="submit" disabled={busy} className={button('primary')}>
+                    {busy ? <Spinner className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />}
+                    {t('common.save')}
                 </button>
             </div>
         </form>

@@ -3,6 +3,12 @@ import { useI18n } from '../../contexts/I18nContext';
 import { api } from '../../lib/api';
 import ClientForm from './ClientForm';
 import type { Client, Order, Paginated } from '../../types';
+import { Link } from 'react-router-dom';
+import { Award, ChevronRight, Mail, MapPin, Pencil, Phone, Search, UserPlus, Users, X } from 'lucide-react';
+import PageHeader, { Avatar } from '../../components/ui/PageHeader';
+import StatusBadge from '../../components/ui/StatusBadge';
+import { EmptyState, LoadingState } from '../../components/ui/Feedback';
+import { button, card, cx, iconButton, inputLg, sectionTitle } from '../../components/ui/styles';
 
 export default function ClientsList() {
     const { t } = useI18n();
@@ -35,84 +41,168 @@ export default function ClientsList() {
     }, [selected]);
 
     return (
-        <div className="grid gap-6 md:grid-cols-[1fr_320px]">
-            <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h1 className="text-xl font-semibold">{t('nav.clients')}</h1>
-                    <button
-                        type="button"
-                        onClick={() => setEditing('new')}
-                        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-                    >
+        <div className="space-y-6">
+            <PageHeader
+                title={t('nav.clients')}
+                subtitle={t('client.listSubtitle')}
+                icon={Users}
+                actions={
+                    <button type="button" onClick={() => setEditing('new')} className={button('primary')}>
+                        <UserPlus aria-hidden="true" className="h-4 w-4" />
                         {t('client.new')}
                     </button>
+                }
+            />
+
+            <div className={cx('grid items-start gap-6', selected && 'lg:grid-cols-[minmax(0,1fr)_360px]')}>
+                <div className="min-w-0 space-y-4">
+                    <label htmlFor="client-list-search" className="sr-only">
+                        {t('client.search')}
+                    </label>
+                    <div className="relative">
+                        <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-500 dark:text-ink-350" />
+                        <input
+                            id="client-list-search"
+                            type="search"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder={t('client.search')}
+                            className={cx(inputLg, 'pl-12')}
+                        />
+                    </div>
+
+                    {editing && (
+                        <ClientForm
+                            client={editing === 'new' ? null : editing}
+                            onCancel={() => setEditing(null)}
+                            onSaved={() => {
+                                setEditing(null);
+                                reload();
+                            }}
+                        />
+                    )}
+
+                    <div className={cx(card, 'overflow-hidden')}>
+                        {loading ? (
+                            <LoadingState />
+                        ) : clients.length === 0 ? (
+                            <EmptyState icon={Users} title={t('client.noResults')} description={t('client.noResultsHint')} />
+                        ) : (
+                            <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                                {clients.map((client) => (
+                                    <li
+                                        key={client.id}
+                                        className={cx(
+                                            'flex items-center gap-2 pr-3 transition',
+                                            selected?.id === client.id ? 'bg-brand-50/70 dark:bg-brand-400/10' : 'hover:bg-ink-50 dark:hover:bg-ink-800/50',
+                                        )}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelected(client)}
+                                            aria-pressed={selected?.id === client.id}
+                                            className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left sm:px-5"
+                                        >
+                                            <Avatar firstName={client.first_name} lastName={client.last_name} />
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block truncate font-semibold text-ink-900 dark:text-ink-50">
+                                                    {client.first_name} {client.last_name}
+                                                </span>
+                                                <span className="flex flex-wrap gap-x-3 text-sm text-ink-600 dark:text-ink-350">
+                                                    <span>{client.phone}</span>
+                                                    {client.email && <span className="hidden truncate sm:inline">{client.email}</span>}
+                                                </span>
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditing(client)}
+                                            className={button('ghost', 'sm')}
+                                        >
+                                            <Pencil aria-hidden="true" className="h-4 w-4" />
+                                            <span className="hidden sm:inline">{t('common.edit')}</span>
+                                            <span className="sr-only sm:hidden">{t('common.edit')}</span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
                 </div>
 
-                <label htmlFor="client-list-search" className="sr-only">
-                    {t('client.search')}
-                </label>
-                <input
-                    id="client-list-search"
-                    type="search"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder={t('client.search')}
-                    className="w-full rounded-md border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-900"
-                />
+                {selected && (
+                    <aside aria-label={t('client.details')} className={cx(card, 'animate-fade-in overflow-hidden lg:sticky lg:top-32')}>
+                        <div className="relative flex flex-col items-center gap-3 bg-gradient-to-b from-brand-50 to-white px-5 pb-5 pt-7 text-center dark:from-brand-400/10 dark:to-ink-900">
+                            <button type="button" onClick={() => setSelected(null)} aria-label={t('common.close')} className={cx(iconButton, 'absolute right-2 top-2')}>
+                                <X aria-hidden="true" className="h-5 w-5" />
+                            </button>
+                            <Avatar firstName={selected.first_name} lastName={selected.last_name} size="lg" />
+                            <h2 className="font-display text-lg font-bold text-ink-900 dark:text-white">
+                                {selected.first_name} {selected.last_name}
+                            </h2>
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-100 px-3 py-1 text-sm font-semibold text-accent-800 dark:bg-accent-400/15 dark:text-accent-300">
+                                <Award aria-hidden="true" className="h-4 w-4" />
+                                {t('client.loyaltyPoints')}: {selected.loyalty_points}
+                            </span>
+                        </div>
 
-                {editing && (
-                    <ClientForm
-                        client={editing === 'new' ? null : editing}
-                        onCancel={() => setEditing(null)}
-                        onSaved={() => {
-                            setEditing(null);
-                            reload();
-                        }}
-                    />
-                )}
+                        <dl className="space-y-2.5 border-y border-ink-200/80 px-5 py-4 text-sm dark:border-ink-800">
+                            <div className="flex items-center gap-2.5">
+                                <dt>
+                                    <Phone aria-hidden="true" className="h-4 w-4 text-ink-600 dark:text-ink-350" />
+                                    <span className="sr-only">{t('client.phone')}</span>
+                                </dt>
+                                <dd className="text-ink-800 dark:text-ink-100">{selected.phone}</dd>
+                            </div>
+                            {selected.email && (
+                                <div className="flex items-center gap-2.5">
+                                    <dt>
+                                        <Mail aria-hidden="true" className="h-4 w-4 text-ink-600 dark:text-ink-350" />
+                                        <span className="sr-only">{t('client.email')}</span>
+                                    </dt>
+                                    <dd className="truncate text-ink-800 dark:text-ink-100">{selected.email}</dd>
+                                </div>
+                            )}
+                            {selected.address && (
+                                <div className="flex items-center gap-2.5">
+                                    <dt>
+                                        <MapPin aria-hidden="true" className="h-4 w-4 text-ink-600 dark:text-ink-350" />
+                                        <span className="sr-only">{t('client.address')}</span>
+                                    </dt>
+                                    <dd className="text-ink-800 dark:text-ink-100">{selected.address}</dd>
+                                </div>
+                            )}
+                        </dl>
 
-                {loading ? (
-                    <p>{t('common.loading')}</p>
-                ) : (
-                    <ul className="divide-y divide-slate-200 dark:divide-slate-700">
-                        {clients.map((client) => (
-                            <li key={client.id} className="flex items-center justify-between px-2 py-2">
-                                <button type="button" onClick={() => setSelected(client)} className="text-left hover:underline">
-                                    {client.first_name} {client.last_name} — {client.phone}
-                                </button>
-                                <button type="button" onClick={() => setEditing(client)} className="text-sm text-indigo-600 dark:text-indigo-400">
-                                    {t('common.save')}
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
+                        <div className="space-y-2 p-5">
+                            <h3 className={cx(sectionTitle, 'text-sm')}>{t('nav.orders')}</h3>
+                            {selectedOrders.length === 0 ? (
+                                <p className="text-sm text-ink-600 dark:text-ink-350">{t('order.noOrders')}</p>
+                            ) : (
+                                <ul className="-mx-2 space-y-0.5">
+                                    {selectedOrders.map((order) => (
+                                        <li key={order.id}>
+                                            <Link
+                                                to={`/orders/${order.id}`}
+                                                className="group flex items-center justify-between gap-2 rounded-lg px-2 py-2 text-sm transition hover:bg-ink-50 dark:hover:bg-ink-800/50"
+                                            >
+                                                <span className="font-semibold text-ink-900 dark:text-ink-50">
+                                                    {t('order.number')}
+                                                    {order.order_number}
+                                                </span>
+                                                <span className="flex items-center gap-1.5">
+                                                    <StatusBadge kind="order" status={order.status} />
+                                                    <ChevronRight aria-hidden="true" className="h-4 w-4 text-ink-400 group-hover:text-brand-700 dark:group-hover:text-brand-300" />
+                                                </span>
+                                            </Link>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                    </aside>
                 )}
             </div>
-
-            {selected && (
-                <aside aria-label={t('client.new')} className="space-y-2 rounded-md border border-slate-200 p-4 dark:border-slate-700">
-                    <h2 className="font-semibold">
-                        {selected.first_name} {selected.last_name}
-                    </h2>
-                    <p className="text-sm">{selected.phone}</p>
-                    {selected.email && <p className="text-sm">{selected.email}</p>}
-                    <p className="text-sm">
-                        {t('client.loyaltyPoints')}: {selected.loyalty_points}
-                    </p>
-                    <h3 className="mt-3 text-sm font-medium">{t('nav.orders')}</h3>
-                    <ul className="text-sm">
-                        {selectedOrders.map((order) => (
-                            <li key={order.id}>
-                                {t('order.number')}
-                                {order.order_number} — {t(`status.${order.status}`)}
-                            </li>
-                        ))}
-                    </ul>
-                    <button type="button" onClick={() => setSelected(null)} className="text-sm text-slate-600 dark:text-slate-400">
-                        {t('common.close')}
-                    </button>
-                </aside>
-            )}
         </div>
     );
 }

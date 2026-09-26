@@ -1,11 +1,17 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { CalendarClock, Check, RefreshCw } from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
 import { useLicense } from '../contexts/LicenseContext';
 import { api, ApiError } from '../lib/api';
+import { useFormat } from '../lib/format';
 import type { LicensePlanConfig, PaymentMethod } from '../types';
+import PaymentMethodPicker from './PaymentMethodPicker';
+import { Alert, Spinner } from './ui/Feedback';
+import { button, cx, input, label } from './ui/styles';
 
 export default function LicenseRenewalForm() {
     const { t } = useI18n();
+    const { money } = useFormat();
     const { refresh } = useLicense();
     const [plans, setPlans] = useState<Record<string, LicensePlanConfig>>({});
     const [plan, setPlan] = useState('');
@@ -43,55 +49,75 @@ export default function LicenseRenewalForm() {
         }
     }
 
+    function planLabel(slug: string): string {
+        const key = `license.planName.${slug}`;
+        const translated = t(key);
+        return translated === key ? slug : translated;
+    }
+
     return (
-        <form onSubmit={handleSubmit} className="space-y-3">
-            {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-            {success && <p role="status" className="text-sm text-green-700 dark:text-green-400">{t('license.renewed')}</p>}
+        <form onSubmit={handleSubmit} className="space-y-5">
+            {error && <Alert tone="error">{error}</Alert>}
+            {success && <Alert tone="success">{t('license.renewed')}</Alert>}
 
-            <label className="block text-sm">
-                {t('license.plan')}
-                <select
-                    value={plan}
-                    onChange={(e) => setPlan(e.target.value)}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 dark:border-slate-600 dark:bg-slate-900"
-                >
-                    {Object.entries(plans).map(([slug, config]) => (
-                        <option key={slug} value={slug}>
-                            {slug} — {config.price} FCFA / {config.days}j
-                        </option>
-                    ))}
-                </select>
-            </label>
+            <fieldset>
+                <legend className={label}>{t('license.plan')}</legend>
+                <div className="grid gap-2.5 sm:grid-cols-3">
+                    {Object.entries(plans).map(([slug, config]) => {
+                        const checked = plan === slug;
+                        return (
+                            <label
+                                key={slug}
+                                className={cx(
+                                    'relative flex cursor-pointer flex-col gap-1 rounded-xl border-2 p-3.5 transition duration-150',
+                                    'has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand-500/25',
+                                    checked
+                                        ? 'border-brand-600 bg-brand-50 dark:border-brand-300 dark:bg-brand-400/10'
+                                        : 'border-ink-200 bg-white hover:border-ink-300 dark:border-ink-700 dark:bg-ink-900 dark:hover:border-ink-600',
+                                )}
+                            >
+                                <input
+                                    type="radio"
+                                    name="license-plan"
+                                    value={slug}
+                                    checked={checked}
+                                    onChange={() => setPlan(slug)}
+                                    className="sr-only"
+                                />
+                                {checked && (
+                                    <span className="absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-white dark:bg-brand-300 dark:text-ink-950">
+                                        <Check aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={3} />
+                                    </span>
+                                )}
+                                <span className="text-sm font-semibold capitalize text-ink-900 dark:text-ink-50">{planLabel(slug)}</span>
+                                <span className="font-display text-lg font-bold tabular-nums text-ink-900 dark:text-white">{money(config.price)}</span>
+                                <span className="inline-flex items-center gap-1 text-xs text-ink-600 dark:text-ink-350">
+                                    <CalendarClock aria-hidden="true" className="h-3.5 w-3.5" />
+                                    {t('license.days', { days: config.days })}
+                                </span>
+                            </label>
+                        );
+                    })}
+                </div>
+            </fieldset>
 
-            <label className="block text-sm">
-                {t('payment.method')}
-                <select
-                    value={method}
-                    onChange={(e) => setMethod(e.target.value as PaymentMethod)}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 dark:border-slate-600 dark:bg-slate-900"
-                >
-                    <option value="espece">{t('payment.cash')}</option>
-                    <option value="carte">{t('payment.card')}</option>
-                    <option value="flooz">{t('payment.flooz')}</option>
-                    <option value="tmoney">{t('payment.tmoney')}</option>
-                </select>
-            </label>
+            <PaymentMethodPicker name="license-method" value={method} onChange={setMethod} />
 
-            <label className="block text-sm">
-                {t('payment.externalReference')}
+            <div>
+                <label htmlFor="license-external-ref" className={label}>
+                    {t('payment.externalReference')}
+                </label>
                 <input
+                    id="license-external-ref"
                     type="text"
                     value={externalReference}
                     onChange={(e) => setExternalReference(e.target.value)}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 dark:border-slate-600 dark:bg-slate-900"
+                    className={input}
                 />
-            </label>
+            </div>
 
-            <button
-                type="submit"
-                disabled={busy || !plan}
-                className="w-full rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
+            <button type="submit" disabled={busy || !plan} className={button('primary', 'lg', 'w-full')}>
+                {busy ? <Spinner className="h-5 w-5" /> : <RefreshCw aria-hidden="true" className="h-5 w-5" />}
                 {t('license.renew')}
             </button>
         </form>

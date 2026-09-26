@@ -3,6 +3,7 @@ import { useAuth } from './contexts/AuthContext';
 import { useLicense } from './contexts/LicenseContext';
 import AppLayout from './components/AppLayout';
 import LicenseBlockedScreen from './components/LicenseBlockedScreen';
+import SplashScreen from './components/SplashScreen';
 import Login from './pages/Login';
 import NewOrder from './pages/counter/NewOrder';
 import OrdersList from './pages/counter/OrdersList';
@@ -17,7 +18,7 @@ function ProtectedLayout() {
     const { license, loading: licenseLoading } = useLicense();
 
     if (loading || licenseLoading) {
-        return null;
+        return <SplashScreen />;
     }
 
     if (!user) {

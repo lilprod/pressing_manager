@@ -56,7 +56,7 @@ export default function NewOrder() {
         const controller = new AbortController();
         const timeout = setTimeout(() => {
             api
-                .get<{ data: Client[] }>(`/clients?search=${encodeURIComponent(clientQuery)}`, controller.signal)
+                .get<{ data: Client[] }>(`/clients?search=${encodeURIComponent(clientQuery)}&agency_id=${agencyId}`, controller.signal)
                 .then((res) => {
                     setClientResults(res.data);
                     rememberClients(res.data);
@@ -66,8 +66,8 @@ export default function NewOrder() {
                     setClientResults(
                         readRecentClients().filter(
                             (c) =>
-                                `${c.first_name} ${c.last_name}`.toLowerCase().includes(term) ||
-                                c.phone.includes(term),
+                                c.agency_id === agencyId &&
+                                (`${c.first_name} ${c.last_name}`.toLowerCase().includes(term) || c.phone.includes(term)),
                         ),
                     );
                 });
@@ -76,7 +76,7 @@ export default function NewOrder() {
             clearTimeout(timeout);
             controller.abort();
         };
-    }, [clientQuery]);
+    }, [clientQuery, agencyId]);
 
     const total = useMemo(
         () =>
@@ -166,6 +166,17 @@ export default function NewOrder() {
         setClientQuery('');
         setIsExpress(false);
         setNotes('');
+    }
+
+    if (!agencyId) {
+        return (
+            <div className="space-y-6">
+                <h1 className="text-xl font-semibold">{t('order.new')}</h1>
+                <p role="status" className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                    {t('order.selectAgency')}
+                </p>
+            </div>
+        );
     }
 
     return (

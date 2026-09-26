@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
 import { api } from '../../lib/api';
 import { useSyncQueue } from '../../lib/useSyncQueue';
@@ -9,6 +10,7 @@ const STATUSES: OrderStatus[] = ['recu', 'trie', 'en_traitement', 'controle_qual
 
 export default function OrdersList() {
     const { t } = useI18n();
+    const { activeAgencyId } = useAuth();
     const pending = useSyncQueue();
     const [orders, setOrders] = useState<Order[]>([]);
     const [status, setStatus] = useState<OrderStatus | ''>('');
@@ -16,13 +18,17 @@ export default function OrdersList() {
 
     useEffect(() => {
         setLoading(true);
-        const query = status ? `?status=${status}` : '';
+        // Pour un rôle global, l'agence choisie dans l'en-tête filtre la liste (vide = toutes les agences).
+        const params = new URLSearchParams();
+        if (status) params.set('status', status);
+        if (activeAgencyId) params.set('agency_id', String(activeAgencyId));
+        const query = params.toString() ? `?${params}` : '';
         api
             .get<Paginated<Order>>(`/orders${query}`)
             .then((res) => setOrders(res.data))
             .catch(() => setOrders([]))
             .finally(() => setLoading(false));
-    }, [status]);
+    }, [status, activeAgencyId]);
 
     return (
         <div className="space-y-4">

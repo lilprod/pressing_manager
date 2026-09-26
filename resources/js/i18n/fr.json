@@ -38,6 +38,7 @@
     "client.noResults": "Aucun client trouvé.",
     "client.loyaltyPoints": "Points de fidélité",
     "order.new": "Nouvelle commande",
+    "order.selectAgency": "Sélectionnez une agence dans l'en-tête pour créer une commande.",
     "order.express": "Commande express",
     "order.addItem": "Ajouter un article",
     "order.service": "Service",

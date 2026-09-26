@@ -6,6 +6,7 @@ use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\OrderItem;
 use App\Models\OrderItemStatusHistory;
 use App\Models\User;
+use App\Notifications\OrderReadyNotification;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -26,6 +27,8 @@ class OrderItemStatusTransitioner
         'perdu' => [],
     ];
 
+    public function __construct(private readonly NotificationService $notifications) {}
+
     /**
      * @param  array{quality_check_result?: string|null, quality_check_notes?: string|null, is_damaged?: bool, damage_compensation_amount?: int|null, notes?: string|null}  $context
      */
@@ -42,7 +45,7 @@ class OrderItemStatusTransitioner
             $this->assertQualityCheckConsistency($from, $to, $context['quality_check_result'] ?? null);
         }
 
-        return DB::transaction(function () use ($item, $from, $to, $actor, $context) {
+        $item = DB::transaction(function () use ($item, $from, $to, $actor, $context) {
             $item->status = $to;
 
             foreach (['quality_check_result', 'quality_check_notes', 'is_damaged', 'damage_compensation_amount'] as $field) {
@@ -72,6 +75,29 @@ class OrderItemStatusTransitioner
 
             return $item;
         });
+
+        if ($to === 'pret') {
+            $this->notifyIfOrderReady($item);
+        }
+
+        return $item;
+    }
+
+    /**
+     * Notifie le client une seule fois, quand le dernier article de la commande
+     * atteint un statut terminal côté atelier (prêt, livré, non récupéré ou perdu).
+     */
+    private function notifyIfOrderReady(OrderItem $item): void
+    {
+        $order = $item->order()->with('items', 'client')->first();
+
+        $allReady = $order->items->every(
+            fn (OrderItem $i) => in_array($i->status, ['pret', 'livre', 'non_recupere', 'perdu'], true)
+        );
+
+        if ($allReady) {
+            $this->notifications->notify($order->agency_id, 'order_ready', $order->client, new OrderReadyNotification($order));
+        }
     }
 
     private function assertQualityCheckConsistency(string $from, string $to, ?string $result): void

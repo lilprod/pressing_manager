@@ -16,6 +16,7 @@ import StockPage from './pages/StockPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import RhPage from './pages/RhPage';
 import KpiPage from './pages/KpiPage';
+import NotificationsPage from './pages/NotificationsPage';
 
 function ProtectedLayout() {
     const { user, loading } = useAuth();
@@ -54,6 +55,7 @@ export default function App() {
                     <Route path="/deliveries" element={<DeliveriesPage />} />
                     <Route path="/hr" element={<RhPage />} />
                     <Route path="/kpi" element={<KpiPage />} />
+                    <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/license" element={<LicensePage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />

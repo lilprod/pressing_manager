@@ -364,3 +364,28 @@ export interface KpiData extends KpiMetrics {
     agency?: { id: number; name: string } | null;
     by_agency?: KpiAgencyRow[];
 }
+
+export type NotificationEvent = 'order_ready' | 'delivery_completed' | 'delivery_failed';
+
+export interface NotificationSetting {
+    agency_id: number;
+    event: NotificationEvent;
+    channel_email: boolean;
+    channel_sms: boolean;
+}
+
+export type NotificationChannel = 'mail' | 'sms';
+export type NotificationStatus = 'sent' | 'simulated' | 'failed';
+
+export interface NotificationLog {
+    id: number;
+    agency_id: number;
+    client_id: number | null;
+    client?: Client;
+    event: NotificationEvent;
+    channel: NotificationChannel;
+    recipient: string;
+    message: string;
+    status: NotificationStatus;
+    sent_at: string;
+}

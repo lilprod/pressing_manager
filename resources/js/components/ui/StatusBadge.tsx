@@ -7,6 +7,7 @@ import {
     Hourglass,
     Inbox,
     ListFilter,
+    MailWarning,
     PackageCheck,
     RotateCcw,
     ShieldCheck,
@@ -37,7 +38,7 @@ export const TONES: Record<Tone, string> = {
     accent: 'bg-accent-100 text-accent-800 ring-accent-200 dark:bg-accent-400/15 dark:text-accent-300 dark:ring-accent-400/25',
 };
 
-type StatusKind = 'order' | 'invoice' | 'payment' | 'license' | 'subscription' | 'delivery' | 'attendance';
+type StatusKind = 'order' | 'invoice' | 'payment' | 'license' | 'subscription' | 'delivery' | 'attendance' | 'notification';
 
 interface StatusStyle {
     tone: Tone;
@@ -92,6 +93,11 @@ const STYLES: Record<StatusKind, Record<string, StatusStyle>> = {
         retard: { tone: 'amber', icon: Clock },
         absent: { tone: 'rose', icon: XCircle },
     },
+    notification: {
+        sent: { tone: 'emerald', icon: CircleCheck },
+        simulated: { tone: 'sky', icon: MailWarning },
+        failed: { tone: 'rose', icon: XCircle },
+    },
 };
 
 const LABEL_PREFIX: Record<StatusKind, string> = {
@@ -102,6 +108,7 @@ const LABEL_PREFIX: Record<StatusKind, string> = {
     subscription: 'subscription.status.',
     delivery: 'delivery.status.',
     attendance: 'hr.status.',
+    notification: 'notifications.status.',
 };
 
 export function statusTone(kind: StatusKind, status: string): Tone {

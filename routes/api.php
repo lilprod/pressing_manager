@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\DeliveryZoneController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\LicenseController;
+use App\Http\Controllers\Api\NotificationLogController;
+use App\Http\Controllers\Api\NotificationSettingController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PaymentController;
@@ -107,4 +109,9 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/kpi', [KpiController::class, 'index']);
     Route::get('/kpi/export/pdf', [KpiController::class, 'exportPdf']);
     Route::get('/kpi/export/excel', [KpiController::class, 'exportExcel']);
+
+    Route::get('/notification-settings', [NotificationSettingController::class, 'index']);
+    Route::post('/notification-settings', [NotificationSettingController::class, 'store']);
+
+    Route::get('/notification-logs', [NotificationLogController::class, 'index']);
 });

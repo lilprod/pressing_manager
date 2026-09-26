@@ -6,6 +6,8 @@ use App\Exceptions\InvalidStatusTransitionException;
 use App\Models\Delivery;
 use App\Models\DeliveryZone;
 use App\Models\Order;
+use App\Notifications\DeliveryCompletedNotification;
+use App\Notifications\DeliveryFailedNotification;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -19,6 +21,8 @@ class DeliveryService
         'echouee' => ['a_planifier'],
         'livree' => [],
     ];
+
+    public function __construct(private readonly NotificationService $notifications) {}
 
     public function createForOrder(
         Order $order,
@@ -76,7 +80,7 @@ class DeliveryService
     ): Delivery {
         $this->assertAllowed($delivery->status, 'livree');
 
-        return DB::transaction(function () use ($delivery, $photo, $signature, $latitude, $longitude, $notes) {
+        $delivery = DB::transaction(function () use ($delivery, $photo, $signature, $latitude, $longitude, $notes) {
             $disk = Storage::disk(config('filesystems.default'));
             $photoPath = $photo->store("deliveries/{$delivery->id}", ['disk' => config('filesystems.default')]);
             $signaturePath = $signature->store("deliveries/{$delivery->id}", ['disk' => config('filesystems.default')]);
@@ -92,6 +96,11 @@ class DeliveryService
 
             return $delivery;
         });
+
+        $delivery->loadMissing('order.client');
+        $this->notifications->notify($delivery->agency_id, 'delivery_completed', $delivery->order->client, new DeliveryCompletedNotification($delivery));
+
+        return $delivery;
     }
 
     public function fail(Delivery $delivery, string $reason): Delivery
@@ -101,6 +110,9 @@ class DeliveryService
         $delivery->status = 'echouee';
         $delivery->failure_reason = $reason;
         $delivery->save();
+
+        $delivery->loadMissing('order.client');
+        $this->notifications->notify($delivery->agency_id, 'delivery_failed', $delivery->order->client, new DeliveryFailedNotification($delivery));
 
         return $delivery;
     }

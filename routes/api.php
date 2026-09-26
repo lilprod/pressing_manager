@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\AgencyController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\CustomerSubscriptionController;
+use App\Http\Controllers\Api\DeliveryController;
+use App\Http\Controllers\Api\DeliveryZoneController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\LicenseController;
 use App\Http\Controllers\Api\OrderController;
@@ -16,6 +18,7 @@ use App\Http\Controllers\Api\StockItemController;
 use App\Http\Controllers\Api\StockMovementController;
 use App\Http\Controllers\Api\SubscriptionPlanController;
 use App\Http\Controllers\Api\SupplierController;
+use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
@@ -72,4 +75,19 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
 
     Route::get('/stock-movements', [StockMovementController::class, 'index']);
     Route::post('/stock-movements', [StockMovementController::class, 'store']);
+
+    Route::get('/delivery-zones', [DeliveryZoneController::class, 'index']);
+    Route::post('/delivery-zones', [DeliveryZoneController::class, 'store']);
+
+    Route::get('/deliveries', [DeliveryController::class, 'index']);
+    Route::post('/deliveries', [DeliveryController::class, 'store']);
+    Route::get('/deliveries/{delivery}', [DeliveryController::class, 'show']);
+    Route::post('/deliveries/{delivery}/assign', [DeliveryController::class, 'assign']);
+    Route::post('/deliveries/{delivery}/status', [DeliveryController::class, 'updateStatus']);
+    Route::post('/deliveries/{delivery}/complete', [DeliveryController::class, 'complete']);
+    Route::post('/deliveries/{delivery}/fail', [DeliveryController::class, 'fail']);
+    Route::get('/deliveries/{delivery}/photo', [DeliveryController::class, 'photo']);
+    Route::get('/deliveries/{delivery}/signature', [DeliveryController::class, 'signature']);
+
+    Route::get('/users', [UserController::class, 'index']);
 });

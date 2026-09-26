@@ -63,9 +63,35 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     return data as T;
 }
 
+async function requestForm<T>(path: string, formData: FormData): Promise<T> {
+    const token = getToken();
+
+    const response = await fetch(`/api${path}`, {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+        const message = (data && (data.message as string)) || `Erreur ${response.status}`;
+        if (response.status === 402) {
+            licenseEvents.dispatchEvent(new Event('blocked'));
+        }
+        throw new ApiError(response.status, message, data?.errors);
+    }
+
+    return data as T;
+}
+
 export const api = {
     get: <T>(path: string, signal?: AbortSignal) => request<T>(path, { signal }),
     post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
+    postForm: <T>(path: string, formData: FormData) => requestForm<T>(path, formData),
     patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
     delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
     async blob(path: string): Promise<Blob> {

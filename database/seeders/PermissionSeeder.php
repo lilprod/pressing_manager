@@ -20,15 +20,17 @@ class PermissionSeeder extends Seeder
         ['slug' => 'agencies.manage', 'name' => 'Gérer les agences', 'group' => 'admin'],
         ['slug' => 'users.manage', 'name' => 'Gérer les utilisateurs', 'group' => 'admin'],
         ['slug' => 'stocks.manage', 'name' => 'Gérer les stocks et fournisseurs', 'group' => 'stocks'],
+        ['slug' => 'deliveries.manage', 'name' => 'Planifier les livraisons et gérer les zones', 'group' => 'deliveries'],
+        ['slug' => 'deliveries.fulfill', 'name' => 'Effectuer les livraisons (statut, preuve)', 'group' => 'deliveries'],
     ];
 
     /** Rôle => permissions accordées. */
     public const ROLE_PERMISSIONS = [
-        'admin' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'licenses.manage', 'subscriptions.manage', 'reports.view', 'agencies.manage', 'users.manage', 'stocks.manage'],
-        'manager' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'subscriptions.manage', 'reports.view', 'users.manage', 'stocks.manage'],
-        'accueil' => ['clients.manage', 'orders.manage', 'invoices.manage', 'payments.manage', 'subscriptions.manage'],
+        'admin' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'licenses.manage', 'subscriptions.manage', 'reports.view', 'agencies.manage', 'users.manage', 'stocks.manage', 'deliveries.manage', 'deliveries.fulfill'],
+        'manager' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'subscriptions.manage', 'reports.view', 'users.manage', 'stocks.manage', 'deliveries.manage', 'deliveries.fulfill'],
+        'accueil' => ['clients.manage', 'orders.manage', 'invoices.manage', 'payments.manage', 'subscriptions.manage', 'deliveries.manage'],
         'technicien' => ['orders.update_status'],
-        'livreur' => ['orders.update_status'],
+        'livreur' => ['orders.update_status', 'deliveries.fulfill'],
         'client' => [],
     ];
 

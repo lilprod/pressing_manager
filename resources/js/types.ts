@@ -260,3 +260,38 @@ export interface StockMovement {
     notes: string | null;
     occurred_at: string;
 }
+
+export type DeliveryStatus = 'a_planifier' | 'en_cours' | 'livree' | 'echouee';
+
+export interface DeliveryZone {
+    id: number;
+    agency_id: number;
+    name: string;
+    fee: number;
+    description: string | null;
+    is_active: boolean;
+}
+
+export interface Delivery {
+    id: number;
+    order_id: number;
+    order?: Order;
+    agency_id: number;
+    delivery_zone_id: number | null;
+    zone?: DeliveryZone;
+    livreur_id: number | null;
+    livreur?: User;
+    address: string;
+    phone: string | null;
+    fee: number;
+    status: DeliveryStatus;
+    scheduled_at: string | null;
+    delivered_at: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    proof_photo_path: string | null;
+    signature_path: string | null;
+    failure_reason: string | null;
+    notes: string | null;
+    created_at: string;
+}

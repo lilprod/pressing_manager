@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             SubscriptionPlanSeeder::class,
             OrderSeeder::class,
             StockSeeder::class,
+            DeliveryZoneSeeder::class,
         ]);
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AgencyController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\InvoiceController;
@@ -7,6 +8,7 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentWebhookController;
+use App\Http\Controllers\Api\ServiceController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
@@ -17,9 +19,12 @@ Route::post('/webhooks/payments/{method}', [PaymentWebhookController::class, 'ha
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+    Route::get('/agencies', [AgencyController::class, 'index']);
 
     Route::apiResource('clients', ClientController::class)->except(['destroy'])->parameters(['clients' => 'client']);
     Route::delete('/clients/{client}', [ClientController::class, 'destroy']);
+
+    Route::get('/services', [ServiceController::class, 'index']);
 
     Route::get('/orders', [OrderController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'store']);

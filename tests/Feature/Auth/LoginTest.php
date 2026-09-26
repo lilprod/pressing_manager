@@ -22,6 +22,10 @@ class LoginTest extends TestCase
         ]);
 
         $response->assertOk()->assertJsonStructure(['token', 'user']);
+        // Le frontend décide de l'affichage (ex. lien "Clients") sur la base de ces permissions
+        // dès la connexion, sans attendre un rechargement complet qui rappellerait /me.
+        $slugs = collect($response->json('user.role.permissions'))->pluck('slug');
+        $this->assertTrue($slugs->contains('clients.manage'));
     }
 
     public function test_login_rejects_invalid_credentials(): void

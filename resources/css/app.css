@@ -1,3 +1,51 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+    color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+}
+
+body {
+    @apply bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100;
+}
+
+.skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-indigo-600 focus:px-4 focus:py-2 focus:text-white;
+}
+
+:focus-visible {
+    outline: 2px solid theme('colors.indigo.500');
+    outline-offset: 2px;
+}
+
+.printable {
+    display: none;
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    .printable {
+        display: block !important;
+        visibility: visible;
+        position: absolute;
+        inset: 0;
+    }
+
+    .printable * {
+        visibility: visible;
+    }
+
+    .no-print {
+        display: none !important;
+    }
+}

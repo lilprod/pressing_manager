@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AgencyController;
+use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\CustomerSubscriptionController;
@@ -12,7 +13,9 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentWebhookController;
+use App\Http\Controllers\Api\PerformanceController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\ShiftController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\StockItemController;
 use App\Http\Controllers\Api\StockMovementController;
@@ -90,4 +93,13 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/deliveries/{delivery}/signature', [DeliveryController::class, 'signature']);
 
     Route::get('/users', [UserController::class, 'index']);
+
+    Route::get('/shifts', [ShiftController::class, 'index']);
+    Route::post('/shifts', [ShiftController::class, 'store']);
+
+    Route::get('/attendances', [AttendanceController::class, 'index']);
+    Route::post('/attendances/clock-in', [AttendanceController::class, 'clockIn']);
+    Route::post('/attendances/clock-out', [AttendanceController::class, 'clockOut']);
+
+    Route::get('/hr/performance', [PerformanceController::class, 'index']);
 });

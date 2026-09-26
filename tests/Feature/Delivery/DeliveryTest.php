@@ -202,4 +202,39 @@ class DeliveryTest extends TestCase
 
         $response->assertStatus(403);
     }
+
+    public function test_a_local_user_creates_a_delivery_zone_without_supplying_agency_id(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+
+        $response = $this->actingAs($accueil)->postJson('/api/delivery-zones', [
+            'name' => 'Zone test',
+            'fee' => 750,
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('agency_id', $agency->id);
+    }
+
+    public function test_a_global_user_must_supply_agency_id_to_create_a_delivery_zone(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $manager = $this->makeUser('manager');
+
+        $missing = $this->actingAs($manager)->postJson('/api/delivery-zones', [
+            'name' => 'Zone test',
+            'fee' => 750,
+        ]);
+        $missing->assertStatus(422);
+
+        $withAgency = $this->actingAs($manager)->postJson('/api/delivery-zones', [
+            'agency_id' => $agency->id,
+            'name' => 'Zone test',
+            'fee' => 750,
+        ]);
+        $withAgency->assertCreated();
+    }
 }

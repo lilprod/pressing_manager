@@ -30,6 +30,9 @@ export default function DeliveriesPage() {
     const agencyId = user?.agency_id ?? activeAgencyId;
     const canManage = hasPermission(user, 'deliveries.manage');
     const canFulfill = hasPermission(user, 'deliveries.fulfill');
+    // Un utilisateur local a une agence imposée côté API (champ "prohibited") ; seul un
+    // rôle global (agency_id null) doit préciser l'agence visée dans le corps de la requête.
+    const requestAgencyId = user?.agency_id ? undefined : (agencyId ?? undefined);
 
     const [deliveries, setDeliveries] = useState<Delivery[]>([]);
     const [zones, setZones] = useState<DeliveryZone[]>([]);
@@ -103,7 +106,7 @@ export default function DeliveriesPage() {
                     {canManage && (
                         <div className="space-y-6">
                             <NewDeliveryPanel orders={readyOrders} zones={zones} livreurs={livreurs} onCreated={reload} />
-                            <ZonesPanel agencyId={agencyId} zones={zones} onCreated={reload} />
+                            <ZonesPanel requestAgencyId={requestAgencyId} zones={zones} onCreated={reload} />
                         </div>
                     )}
                 </div>
@@ -686,7 +689,15 @@ function NewDeliveryPanel({
     );
 }
 
-function ZonesPanel({ agencyId, zones, onCreated }: { agencyId: number; zones: DeliveryZone[]; onCreated: () => void }) {
+function ZonesPanel({
+    requestAgencyId,
+    zones,
+    onCreated,
+}: {
+    requestAgencyId: number | undefined;
+    zones: DeliveryZone[];
+    onCreated: () => void;
+}) {
     const { t } = useI18n();
     const { money } = useFormat();
     const [name, setName] = useState('');
@@ -698,7 +709,7 @@ function ZonesPanel({ agencyId, zones, onCreated }: { agencyId: number; zones: D
         setBusy(true);
         setError(null);
         try {
-            await api.post('/delivery-zones', { agency_id: agencyId, name, fee });
+            await api.post('/delivery-zones', { agency_id: requestAgencyId, name, fee });
             setName('');
             setFee(500);
             onCreated();

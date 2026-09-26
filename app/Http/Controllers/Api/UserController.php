@@ -6,12 +6,17 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class UserController extends ApiController
 {
     public function index(Request $request): JsonResponse
     {
-        $this->authorizePermission($request->user(), 'deliveries.manage');
+        // Listing du personnel utilisé par les modules Livraisons (choix du livreur) et RH (planning) —
+        // toute permission de gestion d'agence suffit à consulter la liste, pas seulement l'une des deux.
+        if (! $request->user()->hasPermission('deliveries.manage') && ! $request->user()->hasPermission('hr.manage')) {
+            throw new HttpException(403, 'Permission manquante.');
+        }
 
         $agencyId = $this->resolveAgencyFilter($request, $request->user());
 

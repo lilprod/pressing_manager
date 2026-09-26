@@ -37,7 +37,7 @@ export const TONES: Record<Tone, string> = {
     accent: 'bg-accent-100 text-accent-800 ring-accent-200 dark:bg-accent-400/15 dark:text-accent-300 dark:ring-accent-400/25',
 };
 
-type StatusKind = 'order' | 'invoice' | 'payment' | 'license' | 'subscription' | 'delivery';
+type StatusKind = 'order' | 'invoice' | 'payment' | 'license' | 'subscription' | 'delivery' | 'attendance';
 
 interface StatusStyle {
     tone: Tone;
@@ -87,6 +87,11 @@ const STYLES: Record<StatusKind, Record<string, StatusStyle>> = {
         livree: { tone: 'emerald', icon: CircleCheck },
         echouee: { tone: 'rose', icon: XCircle },
     },
+    attendance: {
+        present: { tone: 'emerald', icon: CircleCheck },
+        retard: { tone: 'amber', icon: Clock },
+        absent: { tone: 'rose', icon: XCircle },
+    },
 };
 
 const LABEL_PREFIX: Record<StatusKind, string> = {
@@ -96,6 +101,7 @@ const LABEL_PREFIX: Record<StatusKind, string> = {
     license: 'license.status.',
     subscription: 'subscription.status.',
     delivery: 'delivery.status.',
+    attendance: 'hr.status.',
 };
 
 export function statusTone(kind: StatusKind, status: string): Tone {

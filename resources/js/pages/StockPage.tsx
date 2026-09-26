@@ -23,6 +23,9 @@ export default function StockPage() {
     const { user, activeAgencyId } = useAuth();
     const { t } = useI18n();
     const agencyId = user?.agency_id ?? activeAgencyId;
+    // Un utilisateur local a une agence imposée côté API (champ "prohibited") ; seul un
+    // rôle global (agency_id null) doit préciser l'agence visée dans le corps de la requête.
+    const requestAgencyId = user?.agency_id ? undefined : (agencyId ?? undefined);
 
     const [levels, setLevels] = useState<StockLevel[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -73,7 +76,7 @@ export default function StockPage() {
                         <StockLevelsPanel levels={levels} />
 
                         <div className="space-y-6">
-                            <MovementForm agencyId={agencyId} levels={levels} suppliers={suppliers} onRecorded={reload} />
+                            <MovementForm requestAgencyId={requestAgencyId} levels={levels} suppliers={suppliers} onRecorded={reload} />
                             <SuppliersPanel agencyId={agencyId} suppliers={suppliers} onCreated={reload} />
                         </div>
                     </div>
@@ -129,12 +132,12 @@ const REASONS_BY_TYPE: Record<StockMovementType, StockMovementReason[]> = {
 };
 
 function MovementForm({
-    agencyId,
+    requestAgencyId,
     levels,
     suppliers,
     onRecorded,
 }: {
-    agencyId: number;
+    requestAgencyId: number | undefined;
     levels: StockLevel[];
     suppliers: Supplier[];
     onRecorded: () => void;
@@ -164,7 +167,7 @@ function MovementForm({
         setFeedback(null);
         try {
             await api.post('/stock-movements', {
-                agency_id: agencyId,
+                agency_id: requestAgencyId,
                 stock_item_id: stockItemId,
                 type,
                 quantity,

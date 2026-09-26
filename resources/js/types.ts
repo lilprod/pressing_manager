@@ -295,3 +295,41 @@ export interface Delivery {
     notes: string | null;
     created_at: string;
 }
+
+export interface Shift {
+    id: number;
+    agency_id: number;
+    user_id: number;
+    user?: User;
+    starts_at: string;
+    ends_at: string;
+    notes: string | null;
+}
+
+export type AttendanceStatus = 'present' | 'retard' | 'absent';
+
+export interface Attendance {
+    id: number;
+    agency_id: number;
+    user_id: number;
+    user?: User;
+    shift_id: number | null;
+    shift?: Shift;
+    clock_in: string | null;
+    clock_out: string | null;
+    status: AttendanceStatus;
+    notes: string | null;
+    created_at: string;
+}
+
+export interface PerformanceRow {
+    user_id: number;
+    name: string;
+    role: string | null;
+    present: number;
+    retard: number;
+    absent: number;
+    hours_worked: number;
+    items_processed: number | null;
+    deliveries_completed: number | null;
+}

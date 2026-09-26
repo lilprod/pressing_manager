@@ -124,4 +124,22 @@ class StockMovementTest extends TestCase
 
         $response->assertStatus(403);
     }
+
+    public function test_a_local_user_records_a_movement_without_supplying_agency_id(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $manager = $this->makeUser('manager', $agency);
+        $item = StockItem::factory()->create();
+
+        $response = $this->actingAs($manager)->postJson('/api/stock-movements', [
+            'stock_item_id' => $item->id,
+            'type' => 'entree',
+            'quantity' => 5,
+            'reason' => 'livraison',
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('agency_id', $agency->id);
+    }
 }

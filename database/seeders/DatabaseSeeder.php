@@ -18,6 +18,8 @@ class DatabaseSeeder extends Seeder
             ServiceSeeder::class,
             UserSeeder::class,
             ClientSeeder::class,
+            LicenseSeeder::class,
+            SubscriptionPlanSeeder::class,
         ]);
     }
 }

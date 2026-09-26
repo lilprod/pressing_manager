@@ -1,22 +1,33 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
+import { useLicense } from './contexts/LicenseContext';
 import AppLayout from './components/AppLayout';
+import LicenseBlockedScreen from './components/LicenseBlockedScreen';
 import Login from './pages/Login';
 import NewOrder from './pages/counter/NewOrder';
 import OrdersList from './pages/counter/OrdersList';
 import OrderDetail from './pages/counter/OrderDetail';
 import Scan from './pages/Scan';
 import ClientsList from './pages/clients/ClientsList';
+import LicensePage from './pages/LicensePage';
+import SubscriptionsPage from './pages/SubscriptionsPage';
 
 function ProtectedLayout() {
     const { user, loading } = useAuth();
+    const { license, loading: licenseLoading } = useLicense();
 
-    if (loading) {
+    if (loading || licenseLoading) {
         return null;
     }
 
     if (!user) {
         return <Navigate to="/login" replace />;
+    }
+
+    // Blocage total de l'application (sauf écran de renouvellement) une fois la
+    // période de grâce dépassée — voir CheckLicenseStatus côté API.
+    if (license?.status === 'expired') {
+        return <LicenseBlockedScreen />;
     }
 
     return <AppLayout />;
@@ -33,6 +44,8 @@ export default function App() {
                     <Route path="/orders/:id" element={<OrderDetail />} />
                     <Route path="/scan" element={<Scan />} />
                     <Route path="/clients" element={<ClientsList />} />
+                    <Route path="/subscriptions" element={<SubscriptionsPage />} />
+                    <Route path="/license" element={<LicensePage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

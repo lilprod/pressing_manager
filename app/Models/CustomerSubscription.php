@@ -42,4 +42,14 @@ class CustomerSubscription extends Model
     {
         return $this->hasMany(CustomerSubscriptionPayment::class);
     }
+
+    public function isCurrentlyActive(): bool
+    {
+        return $this->status === 'active' && now()->lt($this->expires_at);
+    }
+
+    public function quotaRemaining(): int
+    {
+        return max($this->plan->quota_amount - $this->quota_used, 0);
+    }
 }

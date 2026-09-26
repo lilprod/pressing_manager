@@ -4,6 +4,7 @@ import { useI18n } from '../contexts/I18nContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useOnlineStatus } from '../lib/useOnlineStatus';
 import { hasPermission } from '../lib/permissions';
+import LicenseBanner from './LicenseBanner';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `rounded-md px-3 py-2 text-sm font-medium ${
@@ -32,6 +33,8 @@ export default function AppLayout() {
                 </div>
             )}
 
+            <LicenseBanner />
+
             <header className="border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
                 <div className="mx-auto flex flex-wrap items-center gap-3 px-4 py-3">
                     <span className="font-semibold">{t('app.title')}</span>
@@ -49,6 +52,16 @@ export default function AppLayout() {
                         {hasPermission(user, 'clients.manage') && (
                             <NavLink to="/clients" className={navLinkClass}>
                                 {t('nav.clients')}
+                            </NavLink>
+                        )}
+                        {hasPermission(user, 'subscriptions.manage') && (
+                            <NavLink to="/subscriptions" className={navLinkClass}>
+                                {t('subscription.title')}
+                            </NavLink>
+                        )}
+                        {hasPermission(user, 'licenses.manage') && (
+                            <NavLink to="/license" className={navLinkClass}>
+                                {t('nav.license')}
                             </NavLink>
                         )}
                     </nav>

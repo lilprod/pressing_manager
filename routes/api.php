@@ -3,12 +3,15 @@
 use App\Http\Controllers\Api\AgencyController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClientController;
+use App\Http\Controllers\Api\CustomerSubscriptionController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\LicenseController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentWebhookController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\SubscriptionPlanController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
@@ -16,10 +19,15 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,
 // Callbacks des opérateurs de paiement : pas d'authentification Sanctum (voir secret partagé dans le contrôleur).
 Route::post('/webhooks/payments/{method}', [PaymentWebhookController::class, 'handle']);
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::get('/agencies', [AgencyController::class, 'index']);
+
+    Route::get('/license', [LicenseController::class, 'show']);
+    Route::get('/license/history', [LicenseController::class, 'history']);
+    Route::get('/license/plans', [LicenseController::class, 'plans']);
+    Route::post('/license/renew', [LicenseController::class, 'renew']);
 
     Route::apiResource('clients', ClientController::class)->except(['destroy'])->parameters(['clients' => 'client']);
     Route::delete('/clients/{client}', [ClientController::class, 'destroy']);
@@ -41,4 +49,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/payments/cash', [PaymentController::class, 'storeCash']);
     Route::post('/payments/remote', [PaymentController::class, 'initiateRemote']);
     Route::get('/payments/{payment}', [PaymentController::class, 'show']);
+
+    Route::get('/subscription-plans', [SubscriptionPlanController::class, 'index']);
+    Route::post('/subscription-plans', [SubscriptionPlanController::class, 'store']);
+
+    Route::get('/customer-subscriptions', [CustomerSubscriptionController::class, 'index']);
+    Route::post('/customer-subscriptions', [CustomerSubscriptionController::class, 'store']);
+    Route::get('/customer-subscriptions/{customerSubscription}', [CustomerSubscriptionController::class, 'show']);
+    Route::post('/customer-subscriptions/{customerSubscription}/renew', [CustomerSubscriptionController::class, 'renew']);
 });

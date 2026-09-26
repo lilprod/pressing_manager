@@ -6,9 +6,11 @@ use App\Http\Requests\Order\StoreOrderRequest;
 use App\Models\Agency;
 use App\Models\Client;
 use App\Models\Order;
+use App\Models\CustomerSubscription;
 use App\Models\OrderSyncLog;
 use App\Services\OrderNumberGenerator;
 use App\Services\QrCodeGenerator;
+use App\Services\SubscriptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +22,7 @@ class OrderController extends ApiController
     public function __construct(
         private readonly OrderNumberGenerator $orderNumbers,
         private readonly QrCodeGenerator $qrCodes,
+        private readonly SubscriptionService $subscriptions,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -104,6 +107,17 @@ class OrderController extends ApiController
 
             $order->total_amount = $total;
             $order->save();
+
+            $activeSubscription = CustomerSubscription::where('client_id', $data['client_id'])
+                ->where('agency_id', $agencyId)
+                ->where('status', 'active')
+                ->where('expires_at', '>', now())
+                ->first();
+
+            if ($activeSubscription !== null) {
+                $itemsCount = array_sum(array_column($data['items'], 'quantity'));
+                $this->subscriptions->consumeQuota($activeSubscription, $itemsCount);
+            }
 
             if (! empty($data['client_local_uuid'])) {
                 OrderSyncLog::create([

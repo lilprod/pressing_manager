@@ -133,6 +133,73 @@ export interface Payment {
     paid_at: string | null;
 }
 
+export type LicenseStatus = 'active' | 'grace_period' | 'expired';
+
+export interface License {
+    id: number;
+    plan: string;
+    starts_at: string;
+    expires_at: string;
+    grace_period_days: number;
+    status: LicenseStatus;
+    grace_ends_at: string;
+    days_remaining: number;
+}
+
+export interface LicensePayment {
+    id: number;
+    license_id: number;
+    amount: number;
+    method: PaymentMethod;
+    external_reference: string | null;
+    paid_at: string;
+    new_expires_at: string;
+}
+
+export type LicensePlanSlug = string;
+
+export interface LicensePlanConfig {
+    days: number;
+    price: number;
+}
+
+export interface SubscriptionPlan {
+    id: number;
+    agency_id: number | null;
+    name: string;
+    description: string | null;
+    quota_type: 'kg' | 'articles';
+    quota_amount: number;
+    price: number;
+    duration_days: number;
+    is_active: boolean;
+}
+
+export interface CustomerSubscription {
+    id: number;
+    client_id: number;
+    client?: Client;
+    subscription_plan_id: number;
+    plan: SubscriptionPlan;
+    agency_id: number;
+    started_at: string;
+    expires_at: string;
+    quota_used: number;
+    status: 'active' | 'expired' | 'annulee';
+    auto_renew: boolean;
+    last_renewed_at: string | null;
+    payments?: CustomerSubscriptionPayment[];
+}
+
+export interface CustomerSubscriptionPayment {
+    id: number;
+    customer_subscription_id: number;
+    amount: number;
+    method: PaymentMethod;
+    external_reference: string | null;
+    paid_at: string;
+}
+
 export interface Paginated<T> {
     data: T[];
     current_page: number;

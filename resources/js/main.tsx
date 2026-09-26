@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 import { I18nProvider } from './contexts/I18nContext';
+import { LicenseProvider } from './contexts/LicenseContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import './lib/sync';
 
@@ -17,7 +18,9 @@ createRoot(root).render(
         <I18nProvider>
             <ThemeProvider>
                 <AuthProvider>
-                    <App />
+                    <LicenseProvider>
+                        <App />
+                    </LicenseProvider>
                 </AuthProvider>
             </ThemeProvider>
         </I18nProvider>

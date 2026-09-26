@@ -1,5 +1,8 @@
 const TOKEN_KEY = 'pm.token';
 
+/** Émis à chaque réponse 402 (licence en grâce/bloquée) pour que LicenseContext se resynchronise. */
+export const licenseEvents = new EventTarget();
+
 export class ApiError extends Error {
     status: number;
     errors?: Record<string, string[]>;
@@ -51,6 +54,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
     if (!response.ok) {
         const message = (data && (data.message as string)) || `Erreur ${response.status}`;
+        if (response.status === 402) {
+            licenseEvents.dispatchEvent(new Event('blocked'));
+        }
         throw new ApiError(response.status, message, data?.errors);
     }
 

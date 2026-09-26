@@ -24,4 +24,9 @@ class Role extends Model
     {
         return $this->scope === 'global';
     }
+
+    public function requiresAgency(): bool
+    {
+        return $this->scope === 'agency';
+    }
 }

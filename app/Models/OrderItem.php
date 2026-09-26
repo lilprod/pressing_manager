@@ -2,12 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class OrderItem extends Model
 {
+    use Auditable, HasFactory;
+
     protected $fillable = [
         'order_id', 'agency_id', 'service_id', 'qr_code', 'description', 'quantity', 'unit_price',
         'status', 'quality_check_result', 'quality_check_notes', 'is_damaged',

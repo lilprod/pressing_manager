@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Invoice extends Model
 {
+    use Auditable;
+
     protected $fillable = [
         'agency_id', 'client_id', 'order_id', 'invoice_number', 'subtotal', 'discount_amount',
         'tax_amount', 'total_amount', 'status', 'pdf_path', 'issued_at', 'due_at',

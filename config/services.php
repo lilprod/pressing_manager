@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    // Secret partagé attendu dans l'en-tête X-Webhook-Secret de chaque callback opérateur.
+    'payment_webhooks' => [
+        'carte' => env('CARD_GATEWAY_WEBHOOK_SECRET'),
+        'flooz' => env('FLOOZ_WEBHOOK_SECRET'),
+        'tmoney' => env('TMONEY_WEBHOOK_SECRET'),
+    ],
+
 ];

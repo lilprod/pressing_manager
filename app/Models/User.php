@@ -8,11 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes;
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -64,5 +65,23 @@ class User extends Authenticatable
     public function agency(): BelongsTo
     {
         return $this->belongsTo(Agency::class);
+    }
+
+    public function hasRole(string ...$slugs): bool
+    {
+        return in_array($this->role?->slug, $slugs, true);
+    }
+
+    public function hasPermission(string $slug): bool
+    {
+        return $this->role !== null && $this->role->permissions->contains('slug', $slug);
+    }
+
+    /**
+     * Un utilisateur sans agence (rôle global) accède à toutes les agences.
+     */
+    public function canAccessAgency(int $agencyId): bool
+    {
+        return $this->agency_id === null || $this->agency_id === $agencyId;
     }
 }

@@ -1,0 +1,49 @@
+<?php
+
+namespace App\Models\Concerns;
+
+use App\Models\AuditLog;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Request;
+
+/**
+ * Journalise chaque création/modification/suppression dans `audit_logs`.
+ * Le modèle doit exposer `agency_id` (ou une méthode `auditAgencyId()`) pour le rattachement.
+ */
+trait Auditable
+{
+    public static function bootAuditable(): void
+    {
+        static::created(fn ($model) => $model->recordAudit('created', null, $model->getAttributes()));
+
+        static::updated(function ($model) {
+            $changes = $model->getChanges();
+            unset($changes['updated_at']);
+            if ($changes !== []) {
+                $model->recordAudit('updated', $model->only(array_keys($changes)) === [] ? null : $model->getOriginal(), $changes);
+            }
+        });
+
+        static::deleted(fn ($model) => $model->recordAudit('deleted', $model->getAttributes(), null));
+    }
+
+    protected function recordAudit(string $action, ?array $old, ?array $new): void
+    {
+        AuditLog::query()->create([
+            'agency_id' => $this->auditAgencyId(),
+            'user_id' => Auth::id(),
+            'action' => static::class.'.'.$action,
+            'auditable_type' => static::class,
+            'auditable_id' => $this->getKey(),
+            'old_values' => $old,
+            'new_values' => $new,
+            'ip_address' => Request::ip(),
+            'user_agent' => Request::userAgent(),
+        ]);
+    }
+
+    protected function auditAgencyId(): ?int
+    {
+        return $this->getAttribute('agency_id');
+    }
+}

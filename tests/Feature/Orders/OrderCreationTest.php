@@ -60,4 +60,51 @@ class OrderCreationTest extends TestCase
         $this->assertSame($first->json('id'), $second->json('id'));
         $this->assertSame(1, Order::where('client_local_uuid', $localUuid)->count());
     }
+
+    public function test_promised_at_is_auto_computed_from_the_longest_service_duration(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $fastService = Service::factory()->create(['estimated_duration_hours' => 6]);
+        $slowService = Service::factory()->create(['estimated_duration_hours' => 48]);
+        $agency->services()->attach([$fastService->id, $slowService->id], ['is_active' => true]);
+
+        $this->travelTo(now()->startOfSecond());
+        $frozenNow = now();
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [
+                ['service_id' => $fastService->id, 'quantity' => 1],
+                ['service_id' => $slowService->id, 'quantity' => 1],
+            ],
+        ]);
+
+        $response->assertCreated();
+        $this->assertTrue($frozenNow->clone()->addHours(48)->equalTo($response->json('promised_at')));
+    }
+
+    public function test_an_explicitly_provided_promised_at_is_not_overridden(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['estimated_duration_hours' => 48]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+        $chosenDate = now()->addDays(3)->startOfSecond();
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'promised_at' => $chosenDate->toISOString(),
+            'items' => [
+                ['service_id' => $service->id, 'quantity' => 1],
+            ],
+        ]);
+
+        $response->assertCreated();
+        $this->assertTrue($chosenDate->equalTo($response->json('promised_at')));
+    }
 }

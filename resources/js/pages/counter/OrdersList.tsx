@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, ClipboardList, CloudUpload, Package, Zap } from 'lucide-react';
+import { ChevronRight, ClipboardList, Clock, CloudUpload, Package, Zap } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
 import { api } from '../../lib/api';
@@ -21,6 +21,7 @@ export default function OrdersList() {
     const pending = useSyncQueue();
     const [orders, setOrders] = useState<Order[]>([]);
     const [status, setStatus] = useState<OrderStatus | ''>('');
+    const [readyToday, setReadyToday] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -28,6 +29,7 @@ export default function OrdersList() {
         // Pour un rôle global, l'agence choisie dans l'en-tête filtre la liste (vide = toutes les agences).
         const params = new URLSearchParams();
         if (status) params.set('status', status);
+        if (readyToday) params.set('ready_today', '1');
         if (activeAgencyId) params.set('agency_id', String(activeAgencyId));
         const query = params.toString() ? `?${params}` : '';
         api
@@ -35,7 +37,7 @@ export default function OrdersList() {
             .then((res) => setOrders(res.data))
             .catch(() => setOrders([]))
             .finally(() => setLoading(false));
-    }, [status, activeAgencyId]);
+    }, [status, readyToday, activeAgencyId]);
 
     const filterClass = (active: boolean) =>
         cx(
@@ -67,6 +69,15 @@ export default function OrdersList() {
                         {t(`status.${s}`)}
                     </button>
                 ))}
+                <button
+                    type="button"
+                    aria-pressed={readyToday}
+                    onClick={() => setReadyToday((current) => !current)}
+                    className={cx(filterClass(readyToday), 'inline-flex items-center gap-1.5')}
+                >
+                    <Clock aria-hidden="true" className="h-4 w-4" />
+                    {t('order.readyToday')}
+                </button>
             </div>
 
             {pending.length > 0 && (
@@ -132,6 +143,14 @@ export default function OrdersList() {
                                                 <>
                                                     <span aria-hidden="true"> · </span>
                                                     {t('order.itemsCount', { count: order.items.reduce((sum, item) => sum + item.quantity, 0) })}
+                                                </>
+                                            )}
+                                            {order.promised_at && (
+                                                <>
+                                                    <span aria-hidden="true"> · </span>
+                                                    <span className="font-medium text-brand-700 dark:text-brand-300">
+                                                        {t('order.promisedAt')} {dateTime(order.promised_at)}
+                                                    </span>
                                                 </>
                                             )}
                                         </p>

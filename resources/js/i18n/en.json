@@ -51,6 +51,8 @@
     "order.items": "Items",
     "order.filterByStatus": "Filter by status",
     "order.all": "All",
+    "order.readyToday": "Ready today",
+    "order.promisedAt": "Expected pickup",
     "order.pending": "Pending sync",
     "order.createInvoice": "Generate invoice",
     "order.invoice": "Invoice",

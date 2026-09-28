@@ -4,6 +4,7 @@ namespace Tests\Feature\Orders;
 
 use App\Models\Agency;
 use App\Models\Client;
+use App\Models\Order;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\SeedsRbac;
 use Tests\TestCase;
@@ -50,5 +51,22 @@ class AgencyScopingTest extends TestCase
 
         $response->assertOk();
         $this->assertCount(1, $response->json('data'));
+    }
+
+    public function test_the_ready_today_filter_only_returns_orders_promised_for_today(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $dueToday = Order::factory()->create(['agency_id' => $agency->id, 'client_id' => $client->id, 'promised_at' => now()->addHours(3)]);
+        Order::factory()->create(['agency_id' => $agency->id, 'client_id' => $client->id, 'promised_at' => now()->addDays(2)]);
+        Order::factory()->create(['agency_id' => $agency->id, 'client_id' => $client->id, 'promised_at' => null]);
+
+        $response = $this->actingAs($accueil)->getJson('/api/orders?ready_today=1');
+
+        $response->assertOk();
+        $this->assertCount(1, $response->json('data'));
+        $this->assertSame($dueToday->id, $response->json('data.0.id'));
     }
 }

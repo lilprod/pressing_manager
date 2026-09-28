@@ -34,6 +34,7 @@ class OrderController extends ApiController
             ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
             ->when($request->filled('client_id'), fn ($query) => $query->where('client_id', $request->integer('client_id')))
+            ->when($request->boolean('ready_today'), fn ($query) => $query->whereDate('promised_at', now()->toDateString()))
             ->latest()
             ->paginate($request->integer('per_page', 20));
 
@@ -88,9 +89,11 @@ class OrderController extends ApiController
             ]);
 
             $total = 0;
+            $maxDurationHours = 0;
             foreach ($data['items'] as $itemData) {
                 $service = $agency->services()->findOrFail($itemData['service_id']);
                 $unitPrice = $service->pivot->price_override ?? $service->base_price;
+                $maxDurationHours = max($maxDurationHours, $service->estimated_duration_hours);
 
                 $item = $order->items()->create([
                     'agency_id' => $agencyId,
@@ -111,6 +114,9 @@ class OrderController extends ApiController
             }
 
             $order->total_amount = $total;
+            if ($order->promised_at === null) {
+                $order->promised_at = now()->addHours($maxDurationHours);
+            }
             $order->save();
 
             $activeSubscription = CustomerSubscription::where('client_id', $data['client_id'])

@@ -51,6 +51,8 @@
     "order.items": "Articles",
     "order.filterByStatus": "Filtrer par statut",
     "order.all": "Toutes",
+    "order.readyToday": "À retirer aujourd'hui",
+    "order.promisedAt": "Retrait prévu le",
     "order.pending": "En attente de synchronisation",
     "order.createInvoice": "Générer la facture",
     "order.invoice": "Facture",

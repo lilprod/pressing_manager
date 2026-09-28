@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, FileQuestion, Phone, Printer, StickyNote, Zap } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Clock, FileQuestion, Phone, Printer, StickyNote, Zap } from 'lucide-react';
 import { useI18n } from '../../contexts/I18nContext';
 import { api } from '../../lib/api';
 import { useFormat } from '../../lib/format';
@@ -115,6 +115,12 @@ export default function OrderDetail() {
                                 <CalendarDays aria-hidden="true" className="h-4 w-4" />
                                 {dateTime(order.created_at)}
                             </span>
+                            {order.promised_at && (
+                                <span className="inline-flex items-center gap-1.5 font-semibold text-brand-700 dark:text-brand-300">
+                                    <Clock aria-hidden="true" className="h-4 w-4" />
+                                    {t('order.promisedAt')} {dateTime(order.promised_at)}
+                                </span>
+                            )}
                         </div>
                         {order.notes && (
                             <p className="inline-flex items-start gap-1.5 text-sm text-ink-700 dark:text-ink-300">

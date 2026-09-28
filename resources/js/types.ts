@@ -109,6 +109,7 @@ export interface Order {
     discount_amount: number;
     notes: string | null;
     created_at: string;
+    promised_at: string | null;
     items: OrderItem[];
     invoice?: Invoice[];
 }

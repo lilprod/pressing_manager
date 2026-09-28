@@ -18,6 +18,7 @@ import InvoicesOutstandingPage from './pages/InvoicesOutstandingPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import UsersPage from './pages/UsersPage';
+import RolesPermissionsPage from './pages/RolesPermissionsPage';
 import StockPage from './pages/StockPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import RhPage from './pages/RhPage';
@@ -74,6 +75,7 @@ export default function App() {
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/users" element={<UsersPage />} />
+                    <Route path="/roles-permissions" element={<RolesPermissionsPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

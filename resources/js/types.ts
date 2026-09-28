@@ -20,6 +20,7 @@ export interface Permission {
     id: number;
     slug: string;
     name: string;
+    group: string;
 }
 
 export interface Role {

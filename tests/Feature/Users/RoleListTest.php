@@ -21,6 +21,10 @@ class RoleListTest extends TestCase
         $slugs = collect($response->json())->pluck('slug');
         $this->assertTrue($slugs->contains('accueil'));
         $this->assertTrue($slugs->contains('admin'));
+
+        $adminRole = collect($response->json())->firstWhere('slug', 'admin');
+        $permissionSlugs = collect($adminRole['permissions'])->pluck('slug');
+        $this->assertTrue($permissionSlugs->contains('users.manage'));
     }
 
     public function test_listing_roles_requires_the_users_manage_permission(): void

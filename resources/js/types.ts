@@ -43,7 +43,17 @@ export interface Client {
     email: string | null;
     address: string | null;
     loyalty_points: number;
+    loyalty_discount_rate: number;
+    loyalty_tier_name: string | null;
     notes: string | null;
+}
+
+export interface LoyaltyTier {
+    id: number;
+    name: string;
+    min_points: number;
+    discount_rate: number;
+    is_active: boolean;
 }
 
 export interface Service {

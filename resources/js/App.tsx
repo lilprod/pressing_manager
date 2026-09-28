@@ -12,6 +12,7 @@ import Scan from './pages/Scan';
 import ClientsList from './pages/clients/ClientsList';
 import LicensePage from './pages/LicensePage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
+import LoyaltyPage from './pages/LoyaltyPage';
 import StockPage from './pages/StockPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import RhPage from './pages/RhPage';
@@ -51,6 +52,7 @@ export default function App() {
                     <Route path="/scan" element={<Scan />} />
                     <Route path="/clients" element={<ClientsList />} />
                     <Route path="/subscriptions" element={<SubscriptionsPage />} />
+                    <Route path="/loyalty" element={<LoyaltyPage />} />
                     <Route path="/stock" element={<StockPage />} />
                     <Route path="/deliveries" element={<DeliveriesPage />} />
                     <Route path="/hr" element={<RhPage />} />

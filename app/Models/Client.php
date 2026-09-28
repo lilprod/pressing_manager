@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\Auditable;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,6 +17,28 @@ class Client extends Model
     protected $fillable = [
         'agency_id', 'first_name', 'last_name', 'phone', 'email', 'address', 'loyalty_points', 'notes',
     ];
+
+    protected $appends = ['loyalty_discount_rate', 'loyalty_tier_name'];
+
+    /** Le palier le plus élevé atteint par le nombre de points actuel du client, s'il y en a un. */
+    public function currentLoyaltyTier(): ?LoyaltyTier
+    {
+        return LoyaltyTier::query()
+            ->where('is_active', true)
+            ->where('min_points', '<=', $this->loyalty_points)
+            ->orderByDesc('min_points')
+            ->first();
+    }
+
+    protected function loyaltyDiscountRate(): Attribute
+    {
+        return Attribute::get(fn () => $this->currentLoyaltyTier()?->discount_rate ?? 0.0);
+    }
+
+    protected function loyaltyTierName(): Attribute
+    {
+        return Attribute::get(fn () => $this->currentLoyaltyTier()?->name);
+    }
 
     public function agency(): BelongsTo
     {

@@ -27,6 +27,7 @@ import {
     Shirt,
     ShoppingBag,
     ShoppingBasket,
+    Star,
     StickyNote,
     Tag,
     Trash2,
@@ -66,6 +67,8 @@ export default function NewOrder() {
     const [cart, setCart] = useState<CartLine[]>([]);
     const [isExpress, setIsExpress] = useState(false);
     const [notes, setNotes] = useState('');
+    const [discount, setDiscount] = useState(0);
+    const [discountEdited, setDiscountEdited] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -136,6 +139,16 @@ export default function NewOrder() {
         [cart, services],
     );
 
+    // Pré-remplit la remise à partir du palier de fidélité du client tant que le personnel
+    // n'a pas modifié la valeur manuellement ; reste éditable à tout moment.
+    useEffect(() => {
+        if (discountEdited) return;
+        const rate = selectedClient?.loyalty_discount_rate ?? 0;
+        setDiscount(rate > 0 ? Math.round(total * rate) : 0);
+    }, [selectedClient, total, discountEdited]);
+
+    const grandTotal = Math.max(0, total - discount);
+
     function addLine(serviceId: number) {
         setCart((current) => {
             const existing = current.find((l) => l.service_id === serviceId);
@@ -171,6 +184,7 @@ export default function NewOrder() {
             client_local_uuid: clientLocalUuid,
             is_express: isExpress,
             notes: notes || null,
+            discount_amount: discount > 0 ? discount : undefined,
             items: cart.map((l) => ({
                 service_id: l.service_id,
                 quantity: l.quantity,
@@ -200,7 +214,7 @@ export default function NewOrder() {
                     status: 'pending',
                     preview: {
                         client_label: `${selectedClient.first_name} ${selectedClient.last_name}`,
-                        total_amount: total,
+                        total_amount: grandTotal,
                         items_count: cart.length,
                     },
                 });
@@ -220,6 +234,8 @@ export default function NewOrder() {
         setIsExpress(false);
         setNotes('');
         setExpandedLine(null);
+        setDiscount(0);
+        setDiscountEdited(false);
     }
 
     function toggleIntakeCondition(serviceId: number, conditionId: number) {
@@ -267,6 +283,11 @@ export default function NewOrder() {
                                         <Pill tone="accent" icon={Award}>
                                             {t('client.pointsCount', { count: selectedClient.loyalty_points })}
                                         </Pill>
+                                        {selectedClient.loyalty_tier_name && (
+                                            <Pill tone="amber" icon={Star}>
+                                                {selectedClient.loyalty_tier_name}
+                                            </Pill>
+                                        )}
                                     </p>
                                 </div>
                                 <button type="button" onClick={() => setSelectedClient(null)} className={button('secondary', 'sm')}>
@@ -562,10 +583,27 @@ export default function NewOrder() {
                             />
                         </label>
 
+                        <label className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-semibold text-ink-700 dark:text-ink-200">{t('order.discount')}</span>
+                            <span className="relative">
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={total}
+                                    value={discount}
+                                    onChange={(e) => {
+                                        setDiscountEdited(true);
+                                        setDiscount(Math.max(0, Math.min(total, Number(e.target.value))));
+                                    }}
+                                    className={cx(inputSm, 'h-9 w-28 text-right tabular-nums')}
+                                />
+                            </span>
+                        </label>
+
                         <div className="flex items-end justify-between gap-3">
                             <span className="text-sm font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('common.total')}</span>
                             <span className="font-display text-3xl font-extrabold tabular-nums text-ink-900 dark:text-white" aria-live="polite">
-                                {money(total)}
+                                {money(grandTotal)}
                             </span>
                         </div>
 

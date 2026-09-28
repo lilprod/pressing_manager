@@ -17,6 +17,10 @@ use Illuminate\Support\Str;
  */
 class PaymentService
 {
+    public function __construct(
+        private readonly LoyaltyService $loyalty,
+    ) {}
+
     /**
      * Encaissement espèces : toujours immédiat, jamais hors-ligne pour cette version.
      */
@@ -36,6 +40,7 @@ class PaymentService
             ]);
 
             $this->applyToInvoiceIfPaid($payment);
+            $this->loyalty->creditPointsForPayment($payment);
 
             return $payment;
         });
@@ -95,6 +100,9 @@ class PaymentService
             $payment->save();
 
             $this->applyToInvoiceIfPaid($payment);
+            if ($payment->status === 'complete') {
+                $this->loyalty->creditPointsForPayment($payment);
+            }
 
             return $payment;
         });

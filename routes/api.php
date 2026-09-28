@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\IntakeConditionController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\LicenseController;
+use App\Http\Controllers\Api\LoyaltyTierController;
 use App\Http\Controllers\Api\NotificationLogController;
 use App\Http\Controllers\Api\NotificationSettingController;
 use App\Http\Controllers\Api\OrderController;
@@ -49,6 +50,10 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/services', [ServiceController::class, 'index']);
 
     Route::get('/intake-conditions', [IntakeConditionController::class, 'index']);
+
+    Route::get('/loyalty-tiers', [LoyaltyTierController::class, 'index']);
+    Route::post('/loyalty-tiers', [LoyaltyTierController::class, 'store']);
+    Route::patch('/loyalty-tiers/{loyaltyTier}', [LoyaltyTierController::class, 'update']);
 
     Route::get('/orders', [OrderController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'store']);

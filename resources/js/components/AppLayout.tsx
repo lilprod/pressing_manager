@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Bell, Boxes, Building2, ClipboardList, Crown, KeyRound, Languages, LogOut, Moon, ScanLine, ShoppingBag, Sun, Truck, UsersRound, Users, WifiOff, LayoutDashboard, type LucideIcon } from 'lucide-react';
+import { Award, Bell, Boxes, Building2, ClipboardList, Crown, KeyRound, Languages, LogOut, Moon, ScanLine, ShoppingBag, Sun, Truck, UsersRound, Users, WifiOff, LayoutDashboard, type LucideIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -126,6 +126,7 @@ export default function AppLayout() {
                     {/* Relation client */}
                     {hasPermission(user, 'clients.manage') && <NavItem to="/clients" icon={Users} label={t('nav.clients')} />}
                     {hasPermission(user, 'subscriptions.manage') && <NavItem to="/subscriptions" icon={Crown} label={t('subscription.title')} />}
+                    {hasPermission(user, 'clients.manage') && <NavItem to="/loyalty" icon={Award} label={t('loyalty.title')} />}
 
                     {/* Ressources & back-office */}
                     {hasPermission(user, 'stocks.manage') && <NavItem to="/stock" icon={Boxes} label={t('nav.stock')} />}

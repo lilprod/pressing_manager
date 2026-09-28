@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             AgencySeeder::class,
             ServiceSeeder::class,
             IntakeConditionSeeder::class,
+            LoyaltyTierSeeder::class,
             UserSeeder::class,
             ClientSeeder::class,
             LicenseSeeder::class,

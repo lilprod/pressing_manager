@@ -17,7 +17,8 @@ class InvoiceService
 
             $subtotal = $order->items->sum(fn ($item) => $item->quantity * $item->unit_price);
             $discount = $order->discount_amount;
-            $total = max($subtotal - $discount, 0);
+            $taxAmount = (int) round(max($subtotal - $discount, 0) * config('invoicing.tax_rate'));
+            $total = max($subtotal - $discount, 0) + $taxAmount;
 
             // PostgreSQL interdit FOR UPDATE combiné à un agrégat : on verrouille la ligne
             // de l'agence elle-même pour sérialiser les créations concurrentes de factures.
@@ -31,7 +32,7 @@ class InvoiceService
                 'invoice_number' => ($invoiceNumber ?? 0) + 1,
                 'subtotal' => $subtotal,
                 'discount_amount' => $discount,
-                'tax_amount' => 0,
+                'tax_amount' => $taxAmount,
                 'total_amount' => $total,
                 'status' => 'emise',
                 'issued_at' => now(),

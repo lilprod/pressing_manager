@@ -367,5 +367,8 @@
     "intake.notes": "Note (optional)",
     "intake.notesPlaceholder": "E.g. left sleeve fraying",
     "intake.none": "No condition reported at drop-off",
-    "intake.toggle": "Condition at drop-off"
+    "intake.toggle": "Condition at drop-off",
+    "invoice.subtotal": "Subtotal",
+    "invoice.discount": "Discount",
+    "invoice.tax": "Tax"
 }

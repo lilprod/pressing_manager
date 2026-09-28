@@ -57,6 +57,10 @@
             <td>-{{ number_format($invoice->discount_amount, 0, ',', ' ') }} FCFA</td>
         </tr>
         <tr>
+            <td class="label" colspan="4">TVA ({{ number_format(config('invoicing.tax_rate') * 100, 0) }}%)</td>
+            <td>{{ number_format($invoice->tax_amount, 0, ',', ' ') }} FCFA</td>
+        </tr>
+        <tr>
             <td class="label" colspan="4"><strong>Total à payer</strong></td>
             <td><strong>{{ number_format($invoice->total_amount, 0, ',', ' ') }} FCFA</strong></td>
         </tr>

@@ -113,17 +113,35 @@ export default function InvoicePanel({ order }: { order: Order }) {
                     </div>
                 ) : (
                     <div className="space-y-5">
-                        <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl bg-ink-50 px-4 py-3.5 dark:bg-ink-950/60">
-                            <div>
-                                <p className="text-xs font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('invoice.amountDue')}</p>
-                                <p className="whitespace-nowrap font-display text-2xl font-extrabold tabular-nums text-ink-900 dark:text-white">{money(invoice.total_amount)}</p>
+                        <div className="space-y-3 rounded-xl bg-ink-50 px-4 py-3.5 dark:bg-ink-950/60">
+                            <dl className="space-y-1 text-sm">
+                                <div className="flex items-center justify-between text-ink-600 dark:text-ink-350">
+                                    <dt>{t('invoice.subtotal')}</dt>
+                                    <dd className="tabular-nums">{money(invoice.subtotal)}</dd>
+                                </div>
+                                {invoice.discount_amount > 0 && (
+                                    <div className="flex items-center justify-between text-ink-600 dark:text-ink-350">
+                                        <dt>{t('invoice.discount')}</dt>
+                                        <dd className="tabular-nums">-{money(invoice.discount_amount)}</dd>
+                                    </div>
+                                )}
+                                <div className="flex items-center justify-between text-ink-600 dark:text-ink-350">
+                                    <dt>{t('invoice.tax')}</dt>
+                                    <dd className="tabular-nums">{money(invoice.tax_amount)}</dd>
+                                </div>
+                            </dl>
+                            <div className="flex flex-wrap items-end justify-between gap-3 border-t border-ink-200/80 pt-3 dark:border-ink-800">
+                                <div>
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('invoice.amountDue')}</p>
+                                    <p className="whitespace-nowrap font-display text-2xl font-extrabold tabular-nums text-ink-900 dark:text-white">{money(invoice.total_amount)}</p>
+                                </div>
+                                {invoice.pdf_path && (
+                                    <button type="button" onClick={() => void downloadPdf()} className={button('secondary', 'sm')}>
+                                        <FileDown aria-hidden="true" className="h-4 w-4" />
+                                        {t('order.downloadPdf')}
+                                    </button>
+                                )}
                             </div>
-                            {invoice.pdf_path && (
-                                <button type="button" onClick={() => void downloadPdf()} className={button('secondary', 'sm')}>
-                                    <FileDown aria-hidden="true" className="h-4 w-4" />
-                                    {t('order.downloadPdf')}
-                                </button>
-                            )}
                         </div>
 
                         {invoice.status === 'payee' ? (

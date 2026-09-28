@@ -367,5 +367,8 @@
     "intake.notes": "Note (optionnel)",
     "intake.notesPlaceholder": "Ex. : manche gauche effilochée",
     "intake.none": "Aucun état signalé à la réception",
-    "intake.toggle": "État à la réception"
+    "intake.toggle": "État à la réception",
+    "invoice.subtotal": "Sous-total",
+    "invoice.discount": "Remise",
+    "invoice.tax": "TVA"
 }

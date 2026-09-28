@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentWebhookController;
 use App\Http\Controllers\Api\PerformanceController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\ShiftController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\StockItemController;
@@ -34,10 +35,18 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,
 // Callbacks des opérateurs de paiement : pas d'authentification Sanctum (voir secret partagé dans le contrôleur).
 Route::post('/webhooks/payments/{method}', [PaymentWebhookController::class, 'handle']);
 
+// Identité du pressing (nom, adresse, logo, favicon) : publique, utilisée avant connexion
+// (écran de connexion, titre de l'onglet, favicon, reçus imprimés).
+Route::get('/settings', [SettingsController::class, 'show']);
+Route::get('/settings/logo', [SettingsController::class, 'logo']);
+Route::get('/settings/favicon', [SettingsController::class, 'favicon']);
+
 Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::get('/agencies', [AgencyController::class, 'index']);
+
+    Route::post('/settings', [SettingsController::class, 'update']);
 
     Route::get('/license', [LicenseController::class, 'show']);
     Route::get('/license/history', [LicenseController::class, 'history']);

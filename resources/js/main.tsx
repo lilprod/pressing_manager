@@ -4,6 +4,7 @@ import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
 import { I18nProvider } from './contexts/I18nContext';
 import { LicenseProvider } from './contexts/LicenseContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import './lib/sync';
 
@@ -17,11 +18,13 @@ createRoot(root).render(
     <StrictMode>
         <I18nProvider>
             <ThemeProvider>
-                <AuthProvider>
-                    <LicenseProvider>
-                        <App />
-                    </LicenseProvider>
-                </AuthProvider>
+                <SettingsProvider>
+                    <AuthProvider>
+                        <LicenseProvider>
+                            <App />
+                        </LicenseProvider>
+                    </AuthProvider>
+                </SettingsProvider>
             </ThemeProvider>
         </I18nProvider>
     </StrictMode>,

@@ -14,6 +14,7 @@ import LicensePage from './pages/LicensePage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
 import LoyaltyPage from './pages/LoyaltyPage';
 import InvoicesOutstandingPage from './pages/InvoicesOutstandingPage';
+import SettingsPage from './pages/SettingsPage';
 import StockPage from './pages/StockPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import RhPage from './pages/RhPage';
@@ -61,6 +62,7 @@ export default function App() {
                     <Route path="/kpi" element={<KpiPage />} />
                     <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/license" element={<LicensePage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

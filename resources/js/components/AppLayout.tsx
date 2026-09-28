@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Award, Bell, Boxes, Building2, CircleDollarSign, ClipboardList, Crown, KeyRound, Languages, LogOut, Moon, ScanLine, ShoppingBag, Sun, Truck, UsersRound, Users, WifiOff, LayoutDashboard, type LucideIcon } from 'lucide-react';
+import { Award, Bell, Boxes, Building2, CircleDollarSign, ClipboardList, Crown, KeyRound, Languages, LogOut, Moon, ScanLine, Settings as SettingsIcon, ShoppingBag, Sun, Truck, UsersRound, Users, WifiOff, LayoutDashboard, type LucideIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -137,6 +137,7 @@ export default function AppLayout() {
                     {hasPermission(user, 'reports.view') && <NavItem to="/kpi" icon={LayoutDashboard} label={t('nav.kpi')} />}
                     {hasPermission(user, 'notifications.manage') && <NavItem to="/notifications" icon={Bell} label={t('nav.notifications')} />}
                     {hasPermission(user, 'licenses.manage') && <NavItem to="/license" icon={KeyRound} label={t('nav.license')} />}
+                    {hasPermission(user, 'agencies.manage') && <NavItem to="/settings" icon={SettingsIcon} label={t('settings.title')} />}
                 </nav>
             </header>
 

@@ -149,6 +149,6 @@ class OrderController extends ApiController
     {
         $this->authorizeAgency($request->user(), $order->agency_id);
 
-        return response()->json($order->load('items.service', 'items.intakeConditions', 'client', 'invoice'));
+        return response()->json($order->load('items.service', 'items.intakeConditions', 'client', 'invoice', 'agency'));
     }
 }

@@ -1,11 +1,25 @@
 import { useId } from 'react';
 import { useI18n } from '../contexts/I18nContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { cx } from './ui/styles';
 
-/** Pictogramme de marque : un cintre stylisé dans un carré arrondi. */
+/** Pictogramme de marque : le logo configuré dans les Paramètres, sinon un cintre stylisé par défaut. */
 export function BrandLogo({ className }: { className?: string }) {
+    const { settings } = useSettings();
     // Identifiant unique par instance : un dégradé défini dans un parent masqué (display:none) ne serait pas rendu ailleurs.
     const gradientId = `pm-logo-${useId().replace(/:/g, '')}`;
+
+    if (settings?.logo_url) {
+        return (
+            <img
+                src={settings.logo_url}
+                alt=""
+                aria-hidden="true"
+                className={cx('shrink-0 rounded-xl object-cover', className ?? 'h-9 w-9')}
+            />
+        );
+    }
+
     return (
         <svg viewBox="0 0 32 32" aria-hidden="true" className={cx('shrink-0', className ?? 'h-9 w-9')}>
             <defs>
@@ -31,12 +45,13 @@ export function BrandLogo({ className }: { className?: string }) {
 /** Logo + nom de l'application. */
 export default function BrandMark({ inverted = false, collapse = false, className }: { inverted?: boolean; collapse?: boolean; className?: string }) {
     const { t } = useI18n();
+    const { settings } = useSettings();
     return (
         <span className={cx('inline-flex items-center gap-2.5', className)}>
             <BrandLogo />
             <span className={cx('flex-col leading-none', collapse ? 'hidden sm:flex' : 'flex')}>
                 <span className={cx('font-display text-[15px] font-extrabold', inverted ? 'text-white' : 'text-ink-900 dark:text-white')}>
-                    {t('app.title')}
+                    {settings?.pressing_name || t('app.title')}
                 </span>
                 <span className={cx('mt-1 text-[11px] font-medium', inverted ? 'text-brand-100' : 'text-ink-600 dark:text-ink-350')}>
                     {t('app.tagline')}

@@ -1,3 +1,10 @@
+export interface AppSettings {
+    pressing_name: string | null;
+    address: string | null;
+    logo_url: string | null;
+    favicon_url: string | null;
+}
+
 export type RoleSlug = 'admin' | 'manager' | 'accueil' | 'technicien' | 'livreur' | 'client';
 
 export interface Permission {
@@ -111,6 +118,7 @@ export interface Order {
     agency_id: number;
     client_id: number;
     client?: Client;
+    agency?: Agency;
     order_number: number;
     client_local_uuid: string | null;
     status: OrderStatus;

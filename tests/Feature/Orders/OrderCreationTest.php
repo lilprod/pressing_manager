@@ -107,4 +107,18 @@ class OrderCreationTest extends TestCase
         $response->assertCreated();
         $this->assertTrue($chosenDate->equalTo($response->json('promised_at')));
     }
+
+    public function test_showing_an_order_includes_its_agency_for_the_printed_ticket(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create(['name' => 'Pressing Lomé Centre', 'address' => 'Boulevard du 13 janvier']);
+        $accueil = $this->makeUser('accueil', $agency);
+        $order = Order::factory()->create(['agency_id' => $agency->id]);
+
+        $response = $this->actingAs($accueil)->getJson("/api/orders/{$order->id}");
+
+        $response->assertOk();
+        $response->assertJsonPath('agency.name', 'Pressing Lomé Centre');
+        $response->assertJsonPath('agency.address', 'Boulevard du 13 janvier');
+    }
 }

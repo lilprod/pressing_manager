@@ -1,6 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { useLicense } from './contexts/LicenseContext';
+import { useSettings } from './contexts/SettingsContext';
+import { useIdleLogout } from './lib/useIdleLogout';
 import AppLayout from './components/AppLayout';
 import ForcedPasswordChangeScreen from './components/ForcedPasswordChangeScreen';
 import LicenseBlockedScreen from './components/LicenseBlockedScreen';
@@ -26,8 +28,11 @@ import KpiPage from './pages/KpiPage';
 import NotificationsPage from './pages/NotificationsPage';
 
 function ProtectedLayout() {
-    const { user, loading } = useAuth();
+    const { user, loading, logout } = useAuth();
     const { license, loading: licenseLoading } = useLicense();
+    const { settings } = useSettings();
+
+    useIdleLogout(settings?.session_timeout_minutes, logout, !!user);
 
     if (loading || licenseLoading) {
         return <SplashScreen />;

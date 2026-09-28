@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -24,10 +25,13 @@ class User extends Authenticatable
         'name',
         'email',
         'phone',
+        'photo_path',
         'password',
         'role_id',
         'agency_id',
         'is_active',
+        'must_change_password',
+        'password_changed_at',
     ];
 
     /**
@@ -40,6 +44,8 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected $appends = ['photo_url', 'password_expired'];
+
     /**
      * Get the attributes that should be cast.
      *
@@ -51,7 +57,27 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'must_change_password' => 'boolean',
+            'password_changed_at' => 'datetime',
         ];
+    }
+
+    protected function photoUrl(): Attribute
+    {
+        return Attribute::get(fn () => $this->photo_path !== null ? url("/api/users/{$this->id}/photo") : null);
+    }
+
+    /** true si la politique d'expiration est activée et que le mot de passe n'a pas été changé depuis. */
+    protected function passwordExpired(): Attribute
+    {
+        return Attribute::get(function () {
+            $days = AppSetting::current()->password_expiry_days;
+            if (! $days || $this->password_changed_at === null) {
+                return false;
+            }
+
+            return $this->password_changed_at->addDays($days)->isPast();
+        });
     }
 
     public function role(): BelongsTo

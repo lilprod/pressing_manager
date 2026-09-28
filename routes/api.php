@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentWebhookController;
 use App\Http\Controllers\Api\PerformanceController;
+use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\ShiftController;
@@ -44,6 +45,10 @@ Route::get('/settings/favicon', [SettingsController::class, 'favicon']);
 Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+
+    Route::post('/profile', [ProfileController::class, 'update']);
+    Route::post('/profile/password', [ProfileController::class, 'changePassword']);
+    Route::get('/users/{user}/photo', [ProfileController::class, 'photo']);
     Route::get('/agencies', [AgencyController::class, 'index']);
 
     Route::post('/settings', [SettingsController::class, 'update']);

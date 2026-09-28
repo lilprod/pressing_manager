@@ -93,13 +93,16 @@ export default function AppLayout() {
                         </button>
 
                         {user && (
-                            <div className="ml-1 hidden items-center gap-2.5 border-l border-ink-200 pl-3 md:flex dark:border-ink-800">
-                                <Avatar firstName={firstName} lastName={lastName} size="sm" />
+                            <Link
+                                to="/profile"
+                                className="ml-1 hidden items-center gap-2.5 rounded-xl border-l border-ink-200 pl-3 transition hover:bg-ink-100 md:flex dark:border-ink-800 dark:hover:bg-ink-800"
+                            >
+                                <Avatar firstName={firstName} lastName={lastName} photoUrl={user.photo_url} size="sm" />
                                 <div className="hidden max-w-[12rem] leading-tight lg:block">
                                     <p className="truncate text-sm font-semibold text-ink-900 dark:text-ink-50">{user.name}</p>
                                     <p className="truncate text-xs text-ink-600 dark:text-ink-350">{user.agency?.name ?? user.role?.name}</p>
                                 </div>
-                            </div>
+                            </Link>
                         )}
 
                         <button

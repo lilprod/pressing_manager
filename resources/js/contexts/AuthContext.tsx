@@ -10,6 +10,8 @@ interface AuthContextValue {
     loading: boolean;
     login: (email: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
+    /** Recharge l'utilisateur courant (ex. après modification du profil ou changement de mot de passe). */
+    refreshUser: () => Promise<void>;
     /** Agence effective : forcée pour un rôle local, sélectionnée pour un rôle global. */
     activeAgencyId: number | null;
     setActiveAgencyId: (id: number | null) => void;
@@ -80,6 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAgencies([]);
     }, []);
 
+    const refreshUser = useCallback(async () => {
+        const me = await api.get<User>('/me');
+        setUser(me);
+    }, []);
+
     const setActiveAgencyId = useCallback((id: number | null) => {
         setActiveAgencyIdState(id);
         if (id) {
@@ -90,8 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const value = useMemo(
-        () => ({ user, agencies, loading, login, logout, activeAgencyId, setActiveAgencyId }),
-        [user, agencies, loading, login, logout, activeAgencyId, setActiveAgencyId],
+        () => ({ user, agencies, loading, login, logout, refreshUser, activeAgencyId, setActiveAgencyId }),
+        [user, agencies, loading, login, logout, refreshUser, activeAgencyId, setActiveAgencyId],
     );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

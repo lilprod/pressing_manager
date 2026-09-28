@@ -32,17 +32,44 @@ export default function PageHeader({ title, subtitle, icon: Icon, actions, class
     );
 }
 
-export function Avatar({ firstName, lastName, size = 'md', className }: { firstName?: string; lastName?: string; size?: 'sm' | 'md' | 'lg'; className?: string }) {
+export function Avatar({
+    firstName,
+    lastName,
+    photoUrl,
+    size = 'md',
+    className,
+}: {
+    firstName?: string;
+    lastName?: string;
+    photoUrl?: string | null;
+    size?: 'sm' | 'md' | 'lg';
+    className?: string;
+}) {
     const initials = `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.toUpperCase() || '?';
+    const sizeClasses = cx(
+        size === 'sm' && 'h-8 w-8 text-xs',
+        size === 'md' && 'h-10 w-10 text-sm',
+        size === 'lg' && 'h-14 w-14 text-lg',
+    );
+
+    if (photoUrl) {
+        return (
+            <img
+                src={photoUrl}
+                alt=""
+                aria-hidden="true"
+                className={cx('shrink-0 rounded-full object-cover ring-2 ring-white dark:ring-ink-900', sizeClasses, className)}
+            />
+        );
+    }
+
     return (
         <span
             aria-hidden="true"
             className={cx(
                 'inline-flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-100 to-brand-200 font-display font-bold text-brand-800 ring-2 ring-white',
                 'dark:from-brand-400/25 dark:to-brand-400/10 dark:text-brand-200 dark:ring-ink-900',
-                size === 'sm' && 'h-8 w-8 text-xs',
-                size === 'md' && 'h-10 w-10 text-sm',
-                size === 'lg' && 'h-14 w-14 text-lg',
+                sizeClasses,
                 className,
             )}
         >

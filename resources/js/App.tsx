@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { useLicense } from './contexts/LicenseContext';
 import AppLayout from './components/AppLayout';
+import ForcedPasswordChangeScreen from './components/ForcedPasswordChangeScreen';
 import LicenseBlockedScreen from './components/LicenseBlockedScreen';
 import SplashScreen from './components/SplashScreen';
 import Login from './pages/Login';
@@ -15,6 +16,7 @@ import SubscriptionsPage from './pages/SubscriptionsPage';
 import LoyaltyPage from './pages/LoyaltyPage';
 import InvoicesOutstandingPage from './pages/InvoicesOutstandingPage';
 import SettingsPage from './pages/SettingsPage';
+import ProfilePage from './pages/ProfilePage';
 import StockPage from './pages/StockPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import RhPage from './pages/RhPage';
@@ -37,6 +39,12 @@ function ProtectedLayout() {
     // période de grâce dépassée — voir CheckLicenseStatus côté API.
     if (license?.status === 'expired') {
         return <LicenseBlockedScreen />;
+    }
+
+    // Compte créé par un administrateur (premier login) ou mot de passe arrivé à expiration :
+    // bloque le reste de l'application tant que l'utilisateur n'a pas défini un nouveau mot de passe.
+    if (user.must_change_password || user.password_expired) {
+        return <ForcedPasswordChangeScreen expired={user.password_expired && !user.must_change_password} />;
     }
 
     return <AppLayout />;
@@ -63,6 +71,7 @@ export default function App() {
                     <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/license" element={<LicensePage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

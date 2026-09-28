@@ -35,6 +35,8 @@ class UserSeeder extends Seeder
             'role_id' => $role->id,
             'agency_id' => $agencyId,
             'is_active' => true,
+            'must_change_password' => false,
+            'password_changed_at' => now(),
             'email_verified_at' => now(),
         ]);
     }

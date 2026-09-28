@@ -33,6 +33,8 @@ class UserFactory extends Factory
             'role_id' => Role::where('slug', 'accueil')->value('id'),
             'agency_id' => null,
             'is_active' => true,
+            'must_change_password' => false,
+            'password_changed_at' => now(),
             'remember_token' => Str::random(10),
         ];
     }

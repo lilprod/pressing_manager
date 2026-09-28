@@ -126,6 +126,7 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/users', [UserController::class, 'index']);
     Route::post('/users', [UserController::class, 'store']);
     Route::patch('/users/{user}', [UserController::class, 'update']);
+    Route::post('/users/{user}/photo', [UserController::class, 'updatePhoto']);
     Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
 
     Route::get('/shifts', [ShiftController::class, 'index']);

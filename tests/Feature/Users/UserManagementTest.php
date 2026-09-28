@@ -6,6 +6,7 @@ use App\Models\Agency;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Tests\Concerns\SeedsRbac;
 use Tests\TestCase;
@@ -185,6 +186,92 @@ class UserManagementTest extends TestCase
             'email' => 'test.refuse@pressing.tg',
             'role_id' => $accueilRole->id,
             'agency_id' => $agency->id,
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_an_admin_can_create_a_user_with_a_profile_photo(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+        $agency = Agency::factory()->create();
+        $accueilRole = Role::where('slug', 'accueil')->firstOrFail();
+
+        $response = $this->actingAs($admin)->post('/api/users', [
+            'name' => 'Avec Photo',
+            'email' => 'avec.photo@pressing.tg',
+            'role_id' => $accueilRole->id,
+            'agency_id' => $agency->id,
+            'photo' => UploadedFile::fake()->image('avatar.jpg'),
+        ]);
+
+        $response->assertCreated();
+        $this->assertNotNull($response->json('photo_url'));
+        $this->get($response->json('photo_url'))->assertOk();
+    }
+
+    public function test_a_user_created_without_a_photo_has_no_photo_url(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+        $agency = Agency::factory()->create();
+        $accueilRole = Role::where('slug', 'accueil')->firstOrFail();
+
+        $response = $this->actingAs($admin)->postJson('/api/users', [
+            'name' => 'Sans Photo',
+            'email' => 'sans.photo@pressing.tg',
+            'role_id' => $accueilRole->id,
+            'agency_id' => $agency->id,
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('photo_url', null);
+    }
+
+    public function test_an_admin_can_change_an_existing_users_photo(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+        $agency = Agency::factory()->create();
+        $user = $this->makeUser('accueil', $agency);
+
+        $response = $this->actingAs($admin)->post("/api/users/{$user->id}/photo", [
+            'photo' => UploadedFile::fake()->image('avatar.jpg'),
+        ]);
+
+        $response->assertOk();
+        $this->assertNotNull($response->json('photo_url'));
+        $this->get($response->json('photo_url'))->assertOk();
+    }
+
+    public function test_uploading_a_new_photo_for_a_user_replaces_the_previous_one(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+        $agency = Agency::factory()->create();
+        $user = $this->makeUser('accueil', $agency);
+
+        $this->actingAs($admin)->post("/api/users/{$user->id}/photo", ['photo' => UploadedFile::fake()->image('first.jpg')]);
+        $firstPath = $user->fresh()->photo_path;
+
+        $this->actingAs($admin)->post("/api/users/{$user->id}/photo", ['photo' => UploadedFile::fake()->image('second.jpg')]);
+        $secondPath = $user->fresh()->photo_path;
+
+        $this->assertNotSame($firstPath, $secondPath);
+        $this->assertFalse(\Illuminate\Support\Facades\Storage::disk(config('filesystems.default'))->exists($firstPath));
+    }
+
+    public function test_a_local_manager_cannot_change_the_photo_of_a_user_from_another_agency(): void
+    {
+        $this->seedRbac();
+        $agencyA = Agency::factory()->create();
+        $agencyB = Agency::factory()->create();
+        $localManager = $this->makeUser('manager', $agencyA);
+        $otherUser = $this->makeUser('accueil', $agencyB);
+
+        $response = $this->actingAs($localManager)->post("/api/users/{$otherUser->id}/photo", [
+            'photo' => UploadedFile::fake()->image('avatar.jpg'),
         ]);
 
         $response->assertStatus(403);

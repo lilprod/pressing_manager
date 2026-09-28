@@ -28,7 +28,7 @@ class SettingsController extends ApiController
 
         $data = $request->safe()->only([
             'pressing_name', 'address', 'phone', 'email', 'tax_id',
-            'password_expiry_days', 'session_timeout_minutes',
+            'password_expiry_days', 'password_expiry_warning_days', 'session_timeout_minutes',
             'password_min_length', 'password_require_uppercase', 'password_require_number', 'password_require_symbol',
         ]);
 
@@ -82,6 +82,7 @@ class SettingsController extends ApiController
             'logo_url' => $settings->logo_path !== null ? url('/api/settings/logo') : null,
             'favicon_url' => $settings->favicon_path !== null ? url('/api/settings/favicon') : null,
             'password_expiry_days' => $settings->password_expiry_days,
+            'password_expiry_warning_days' => $settings->password_expiry_warning_days,
             'session_timeout_minutes' => $settings->session_timeout_minutes,
             'password_min_length' => $settings->password_min_length,
             'password_require_uppercase' => $settings->password_require_uppercase,

@@ -6,7 +6,7 @@ import PageHeader, { Avatar } from '../components/ui/PageHeader';
 import { Alert, EmptyState, LoadingState, Spinner } from '../components/ui/Feedback';
 import { Pill } from '../components/ui/StatusBadge';
 import { button, card, cardPadded, cx, input, label, select, sectionTitle } from '../components/ui/styles';
-import { Copy, KeyRound, TriangleAlert, UsersRound } from 'lucide-react';
+import { Copy, KeyRound, Pencil, TriangleAlert, UsersRound, X } from 'lucide-react';
 import type { Role, User } from '../types';
 
 export default function UsersPage() {
@@ -16,6 +16,7 @@ export default function UsersPage() {
     const [roles, setRoles] = useState<Role[]>([]);
     const [loading, setLoading] = useState(true);
     const [temporaryPassword, setTemporaryPassword] = useState<{ email: string; password: string } | null>(null);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
 
     function reload() {
         setLoading(true);
@@ -93,6 +94,10 @@ export default function UsersPage() {
                                             </p>
                                         </div>
                                         <div className="flex shrink-0 items-center gap-2">
+                                            <button type="button" onClick={() => setEditingUser(u)} className={button('secondary', 'sm')}>
+                                                <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+                                                {t('common.edit')}
+                                            </button>
                                             {u.id !== me?.id && (
                                                 <button type="button" onClick={() => void toggleActive(u)} className={button('secondary', 'sm')}>
                                                     {u.is_active ? t('users.deactivate') : t('users.activate')}
@@ -111,6 +116,18 @@ export default function UsersPage() {
 
                     <CreateUserForm roles={roles} onCreated={(email, password) => { setTemporaryPassword({ email, password }); reload(); }} />
                 </div>
+            )}
+
+            {editingUser && (
+                <EditUserModal
+                    user={editingUser}
+                    roles={roles}
+                    onClose={() => setEditingUser(null)}
+                    onSaved={() => {
+                        setEditingUser(null);
+                        reload();
+                    }}
+                />
             )}
         </div>
     );
@@ -156,6 +173,7 @@ function CreateUserForm({ roles, onCreated }: { roles: Role[]; onCreated: (email
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
+    const [photoFile, setPhotoFile] = useState<File | null>(null);
     const [roleId, setRoleId] = useState<number | ''>('');
     const [agencyId, setAgencyId] = useState<number | ''>('');
     const [error, setError] = useState<string | null>(null);
@@ -163,22 +181,26 @@ function CreateUserForm({ roles, onCreated }: { roles: Role[]; onCreated: (email
 
     const selectedRole = roles.find((r) => r.id === roleId);
     const needsAgencyPicker = me?.agency_id === null && selectedRole && selectedRole.scope !== 'global';
+    const photoPreview = photoFile ? URL.createObjectURL(photoFile) : null;
 
     async function submit() {
         setBusy(true);
         setError(null);
         try {
-            const result = await api.post<{ email: string; temporary_password: string }>('/users', {
-                name,
-                email,
-                phone: phone || undefined,
-                role_id: roleId,
-                agency_id: needsAgencyPicker && agencyId ? agencyId : undefined,
-            });
+            const formData = new FormData();
+            formData.append('name', name);
+            formData.append('email', email);
+            if (phone) formData.append('phone', phone);
+            formData.append('role_id', String(roleId));
+            if (needsAgencyPicker && agencyId) formData.append('agency_id', String(agencyId));
+            if (photoFile) formData.append('photo', photoFile);
+
+            const result = await api.postForm<{ email: string; temporary_password: string }>('/users', formData);
             onCreated(result.email, result.temporary_password);
             setName('');
             setEmail('');
             setPhone('');
+            setPhotoFile(null);
             setRoleId('');
             setAgencyId('');
         } catch (err) {
@@ -194,6 +216,20 @@ function CreateUserForm({ roles, onCreated }: { roles: Role[]; onCreated: (email
         <section className={cx(cardPadded, 'space-y-4')}>
             <h2 className={sectionTitle}>{t('users.newUser')}</h2>
             {error && <Alert tone="error">{error}</Alert>}
+
+            <div className="flex items-center gap-4">
+                <Avatar firstName={name.split(' ')[0] || '?'} lastName={name.split(' ').slice(1).join(' ')} photoUrl={photoPreview} size="lg" />
+                <label className="block">
+                    <span className={label}>{t('profile.photo')}</span>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        aria-label={t('profile.photo')}
+                        onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+                        className="mt-1 block text-sm text-ink-700 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-ink-800 hover:file:bg-ink-200 dark:text-ink-200 dark:file:bg-ink-800 dark:file:text-ink-100 dark:hover:file:bg-ink-700"
+                    />
+                </label>
+            </div>
 
             <label className="block">
                 <span className={label}>{t('profile.name')}</span>
@@ -239,5 +275,126 @@ function CreateUserForm({ roles, onCreated }: { roles: Role[]; onCreated: (email
                 {t('common.create')}
             </button>
         </section>
+    );
+}
+
+function EditUserModal({ user, roles, onClose, onSaved }: { user: User; roles: Role[]; onClose: () => void; onSaved: () => void }) {
+    const { t } = useI18n();
+    const { agencies, user: me } = useAuth();
+    const [name, setName] = useState(user.name);
+    const [email, setEmail] = useState(user.email);
+    const [phone, setPhone] = useState(user.phone ?? '');
+    const [roleId, setRoleId] = useState<number | ''>(user.role?.id ?? '');
+    const [agencyId, setAgencyId] = useState<number | ''>(user.agency_id ?? '');
+    const [photoFile, setPhotoFile] = useState<File | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const selectedRole = roles.find((r) => r.id === roleId);
+    const needsAgencyPicker = me?.agency_id === null && selectedRole && selectedRole.scope !== 'global';
+    const photoPreview = photoFile ? URL.createObjectURL(photoFile) : user.photo_url;
+    const [firstName, ...rest] = name.split(' ');
+    const lastName = rest.join(' ');
+
+    async function submit() {
+        setBusy(true);
+        setError(null);
+        try {
+            await api.patch(`/users/${user.id}`, {
+                name,
+                email,
+                phone: phone || null,
+                role_id: roleId,
+                agency_id: needsAgencyPicker && agencyId ? agencyId : undefined,
+            });
+            if (photoFile) {
+                const formData = new FormData();
+                formData.append('photo', photoFile);
+                await api.postForm(`/users/${user.id}/photo`, formData);
+            }
+            onSaved();
+        } catch (err) {
+            setError(err instanceof ApiError ? err.message : t('common.error'));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    const canSubmit = name !== '' && email !== '' && roleId !== '';
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+            <section className={cx(cardPadded, 'w-full max-w-lg space-y-4')}>
+                <div className="flex items-center justify-between">
+                    <h2 className={sectionTitle}>{t('users.editUser')}</h2>
+                    <button type="button" onClick={onClose} aria-label={t('common.close')} className={button('ghost', 'sm')}>
+                        <X aria-hidden="true" className="h-4 w-4" />
+                    </button>
+                </div>
+                {error && <Alert tone="error">{error}</Alert>}
+
+                <div className="flex items-center gap-4">
+                    <Avatar firstName={firstName || '?'} lastName={lastName} photoUrl={photoPreview} size="lg" />
+                    <label className="block">
+                        <span className={label}>{t('profile.photo')}</span>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            aria-label={t('profile.photo')}
+                            onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
+                            className="mt-1 block text-sm text-ink-700 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-ink-800 hover:file:bg-ink-200 dark:text-ink-200 dark:file:bg-ink-800 dark:file:text-ink-100 dark:hover:file:bg-ink-700"
+                        />
+                    </label>
+                </div>
+
+                <label className="block">
+                    <span className={label}>{t('profile.name')}</span>
+                    <input value={name} onChange={(e) => setName(e.target.value)} className={cx(input, 'w-full')} />
+                </label>
+                <label className="block">
+                    <span className={label}>{t('profile.email')}</span>
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={cx(input, 'w-full')} />
+                </label>
+                <label className="block">
+                    <span className={label}>{t('profile.phone')}</span>
+                    <input value={phone} onChange={(e) => setPhone(e.target.value)} className={cx(input, 'w-full')} />
+                </label>
+                <label className="block">
+                    <span className={label}>{t('users.role')}</span>
+                    <select value={roleId} onChange={(e) => setRoleId(e.target.value ? Number(e.target.value) : '')} className={cx(select, 'w-full')}>
+                        {roles
+                            .filter((r) => r.slug !== 'client')
+                            .map((r) => (
+                                <option key={r.id} value={r.id}>
+                                    {r.name}
+                                </option>
+                            ))}
+                    </select>
+                </label>
+                {needsAgencyPicker && (
+                    <label className="block">
+                        <span className={label}>{t('users.agency')}</span>
+                        <select value={agencyId} onChange={(e) => setAgencyId(e.target.value ? Number(e.target.value) : '')} className={cx(select, 'w-full')}>
+                            <option value="">{t('users.selectAgency')}</option>
+                            {agencies.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                    {a.name}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
+
+                <div className="flex justify-end gap-2">
+                    <button type="button" onClick={onClose} className={button('secondary', 'md')}>
+                        {t('common.cancel')}
+                    </button>
+                    <button type="button" onClick={() => void submit()} disabled={!canSubmit || busy} className={button('primary', 'md')}>
+                        {busy ? <Spinner className="h-4 w-4" /> : null}
+                        {t('common.save')}
+                    </button>
+                </div>
+            </section>
+        </div>
     );
 }

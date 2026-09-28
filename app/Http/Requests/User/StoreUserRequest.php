@@ -21,6 +21,7 @@ class StoreUserRequest extends FormRequest
             'role_id' => ['required', 'integer', 'exists:roles,id'],
             // Ignoré si l'administrateur agit depuis une agence : son agence s'applique alors d'office.
             'agency_id' => ['nullable', 'integer', 'exists:agencies,id'],
+            'photo' => ['nullable', 'image', 'max:2048'],
         ];
     }
 

@@ -8,7 +8,7 @@ class AppSetting extends Model
 {
     protected $fillable = [
         'pressing_name', 'address', 'phone', 'email', 'tax_id', 'logo_path', 'favicon_path',
-        'password_expiry_days', 'session_timeout_minutes',
+        'password_expiry_days', 'password_expiry_warning_days', 'session_timeout_minutes',
         'password_min_length', 'password_require_uppercase', 'password_require_number', 'password_require_symbol',
     ];
 
@@ -16,6 +16,7 @@ class AppSetting extends Model
     {
         return [
             'password_expiry_days' => 'integer',
+            'password_expiry_warning_days' => 'integer',
             'session_timeout_minutes' => 'integer',
             'password_min_length' => 'integer',
             'password_require_uppercase' => 'boolean',

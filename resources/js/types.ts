@@ -7,6 +7,7 @@ export interface AppSettings {
     logo_url: string | null;
     favicon_url: string | null;
     password_expiry_days: number | null;
+    password_expiry_warning_days: number;
     session_timeout_minutes: number | null;
     password_min_length: number;
     password_require_uppercase: boolean;
@@ -53,6 +54,7 @@ export interface User {
     is_active: boolean;
     must_change_password: boolean;
     password_expired: boolean;
+    password_expires_at: string | null;
 }
 
 export interface Client {

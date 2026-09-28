@@ -44,7 +44,7 @@ class User extends Authenticatable
         'remember_token',
     ];
 
-    protected $appends = ['photo_url', 'password_expired'];
+    protected $appends = ['photo_url', 'password_expired', 'password_expires_at'];
 
     /**
      * Get the attributes that should be cast.
@@ -77,6 +77,19 @@ class User extends Authenticatable
             }
 
             return $this->password_changed_at->addDays($days)->isPast();
+        });
+    }
+
+    /** Date d'expiration calculée du mot de passe, si la politique d'expiration est activée. */
+    protected function passwordExpiresAt(): Attribute
+    {
+        return Attribute::get(function () {
+            $days = AppSetting::current()->password_expiry_days;
+            if (! $days || $this->password_changed_at === null) {
+                return null;
+            }
+
+            return $this->password_changed_at->addDays($days);
         });
     }
 

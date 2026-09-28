@@ -24,6 +24,7 @@ class UpdateAppSettingsRequest extends FormRequest
 
             // Politique de sécurité : null/0 pour password_expiry_days désactive l'expiration.
             'password_expiry_days' => ['nullable', 'integer', 'min:0', 'max:3650'],
+            'password_expiry_warning_days' => ['nullable', 'integer', 'min:1', 'max:90'],
             'session_timeout_minutes' => ['nullable', 'integer', 'min:5', 'max:1440'],
             'password_min_length' => ['nullable', 'integer', 'min:6', 'max:64'],
             'password_require_uppercase' => ['boolean'],

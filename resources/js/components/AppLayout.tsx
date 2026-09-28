@@ -6,6 +6,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useOnlineStatus } from '../lib/useOnlineStatus';
 import { hasPermission } from '../lib/permissions';
 import LicenseBanner from './LicenseBanner';
+import PasswordExpiryBanner from './PasswordExpiryBanner';
 import BrandMark from './BrandMark';
 import { Avatar } from './ui/PageHeader';
 import { cx, iconButton } from './ui/styles';
@@ -51,6 +52,7 @@ export default function AppLayout() {
             )}
 
             <LicenseBanner />
+            <PasswordExpiryBanner />
 
             <header className="sticky top-0 z-40 border-b border-ink-200/80 bg-white/85 backdrop-blur-md dark:border-ink-800 dark:bg-ink-950/85">
                 <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-6">

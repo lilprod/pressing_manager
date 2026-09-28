@@ -22,6 +22,7 @@ export default function SettingsPage() {
 
     const [expiryEnabled, setExpiryEnabled] = useState(false);
     const [passwordExpiryDays, setPasswordExpiryDays] = useState(90);
+    const [passwordExpiryWarningDays, setPasswordExpiryWarningDays] = useState(14);
     const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState(30);
     const [passwordMinLength, setPasswordMinLength] = useState(8);
     const [requireUppercase, setRequireUppercase] = useState(true);
@@ -41,6 +42,7 @@ export default function SettingsPage() {
         setTaxId(settings.tax_id ?? '');
         setExpiryEnabled(!!settings.password_expiry_days);
         setPasswordExpiryDays(settings.password_expiry_days || 90);
+        setPasswordExpiryWarningDays(settings.password_expiry_warning_days ?? 14);
         setSessionTimeoutMinutes(settings.session_timeout_minutes ?? 30);
         setPasswordMinLength(settings.password_min_length);
         setRequireUppercase(settings.password_require_uppercase);
@@ -66,6 +68,7 @@ export default function SettingsPage() {
             if (faviconFile) formData.append('favicon', faviconFile);
 
             formData.append('password_expiry_days', String(expiryEnabled ? passwordExpiryDays : 0));
+            formData.append('password_expiry_warning_days', String(passwordExpiryWarningDays));
             formData.append('session_timeout_minutes', String(sessionTimeoutMinutes));
             formData.append('password_min_length', String(passwordMinLength));
             formData.append('password_require_uppercase', requireUppercase ? '1' : '0');
@@ -157,17 +160,31 @@ export default function SettingsPage() {
                         <div className="rounded-xl bg-ink-50 p-3.5 dark:bg-ink-950/50">
                             <Toggle checked={expiryEnabled} onChange={setExpiryEnabled} label={t('settings.passwordExpiryEnabled')} />
                             {expiryEnabled && (
-                                <label className="mt-3 block">
-                                    <span className={label}>{t('settings.passwordExpiryDays')}</span>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={3650}
-                                        value={passwordExpiryDays}
-                                        onChange={(e) => setPasswordExpiryDays(Number(e.target.value))}
-                                        className={cx(inputSm, 'w-32')}
-                                    />
-                                </label>
+                                <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                                    <label className="block">
+                                        <span className={label}>{t('settings.passwordExpiryDays')}</span>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={3650}
+                                            value={passwordExpiryDays}
+                                            onChange={(e) => setPasswordExpiryDays(Number(e.target.value))}
+                                            className={cx(inputSm, 'w-32')}
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className={label}>{t('settings.passwordExpiryWarningDays')}</span>
+                                        <p className="mb-1.5 text-xs text-ink-600 dark:text-ink-350">{t('settings.passwordExpiryWarningDaysHint')}</p>
+                                        <input
+                                            type="number"
+                                            min={1}
+                                            max={90}
+                                            value={passwordExpiryWarningDays}
+                                            onChange={(e) => setPasswordExpiryWarningDays(Number(e.target.value))}
+                                            className={cx(inputSm, 'w-32')}
+                                        />
+                                    </label>
+                                </div>
                             )}
                         </div>
 

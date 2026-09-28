@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -84,6 +85,10 @@ class UserController extends ApiController
             'must_change_password' => true,
         ]);
 
+        if ($request->hasFile('photo')) {
+            $user->update(['photo_path' => $request->file('photo')->store("users/{$user->id}", ['disk' => config('filesystems.default')])]);
+        }
+
         return response()->json([
             ...$user->load('role', 'agency')->toArray(),
             'temporary_password' => $temporaryPassword,
@@ -103,6 +108,21 @@ class UserController extends ApiController
         }
 
         $user->update($data);
+
+        return response()->json($user->fresh()->load('role', 'agency'));
+    }
+
+    public function updatePhoto(Request $request, User $user): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'users.manage');
+        $this->authorizeUserAccess($request, $user);
+        $request->validate(['photo' => ['required', 'image', 'max:2048']]);
+
+        $disk = Storage::disk(config('filesystems.default'));
+        if ($user->photo_path !== null) {
+            $disk->delete($user->photo_path);
+        }
+        $user->update(['photo_path' => $request->file('photo')->store("users/{$user->id}", ['disk' => config('filesystems.default')])]);
 
         return response()->json($user->fresh()->load('role', 'agency'));
     }

@@ -153,4 +153,30 @@ class ProfileTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('password_expired', false);
     }
+
+    public function test_me_exposes_the_computed_password_expiry_date(): void
+    {
+        $this->seedRbac();
+        AppSetting::current()->update(['password_expiry_days' => 90]);
+        $user = $this->makeUser('accueil');
+        $changedAt = now()->subDays(80)->startOfSecond();
+        $user->update(['password_changed_at' => $changedAt]);
+
+        $response = $this->actingAs($user)->getJson('/api/me');
+
+        $response->assertOk();
+        $this->assertTrue($changedAt->clone()->addDays(90)->equalTo($response->json('password_expires_at')));
+    }
+
+    public function test_password_expires_at_is_null_when_expiry_is_disabled(): void
+    {
+        $this->seedRbac();
+        AppSetting::current()->update(['password_expiry_days' => null]);
+        $user = $this->makeUser('accueil');
+
+        $response = $this->actingAs($user)->getJson('/api/me');
+
+        $response->assertOk();
+        $response->assertJsonPath('password_expires_at', null);
+    }
 }

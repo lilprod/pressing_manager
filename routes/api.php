@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentWebhookController;
 use App\Http\Controllers\Api\PerformanceController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SettingsController;
@@ -118,7 +119,12 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/deliveries/{delivery}/photo', [DeliveryController::class, 'photo']);
     Route::get('/deliveries/{delivery}/signature', [DeliveryController::class, 'signature']);
 
+    Route::get('/roles', [RoleController::class, 'index']);
+
     Route::get('/users', [UserController::class, 'index']);
+    Route::post('/users', [UserController::class, 'store']);
+    Route::patch('/users/{user}', [UserController::class, 'update']);
+    Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
 
     Route::get('/shifts', [ShiftController::class, 'index']);
     Route::post('/shifts', [ShiftController::class, 'store']);

@@ -134,6 +134,7 @@ export default function AppLayout() {
                     {/* Ressources & back-office */}
                     {hasPermission(user, 'stocks.manage') && <NavItem to="/stock" icon={Boxes} label={t('nav.stock')} />}
                     {(hasPermission(user, 'hr.manage') || hasPermission(user, 'hr.clock')) && <NavItem to="/hr" icon={UsersRound} label={t('nav.hr')} />}
+                    {hasPermission(user, 'users.manage') && <NavItem to="/users" icon={UsersRound} label={t('users.title')} />}
 
                     {/* Pilotage */}
                     {hasPermission(user, 'invoices.manage') && <NavItem to="/invoices/outstanding" icon={CircleDollarSign} label={t('invoice.outstandingTitle')} />}

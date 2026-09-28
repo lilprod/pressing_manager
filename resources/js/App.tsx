@@ -17,6 +17,7 @@ import LoyaltyPage from './pages/LoyaltyPage';
 import InvoicesOutstandingPage from './pages/InvoicesOutstandingPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
+import UsersPage from './pages/UsersPage';
 import StockPage from './pages/StockPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import RhPage from './pages/RhPage';
@@ -72,6 +73,7 @@ export default function App() {
                     <Route path="/license" element={<LicensePage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/users" element={<UsersPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

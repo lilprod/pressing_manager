@@ -97,4 +97,67 @@ class AppSettingsTest extends TestCase
 
         $response->assertStatus(404);
     }
+
+    public function test_settings_have_sane_security_defaults(): void
+    {
+        $response = $this->getJson('/api/settings');
+
+        $response->assertOk();
+        $response->assertJsonPath('session_timeout_minutes', 30);
+        $response->assertJsonPath('password_min_length', 8);
+        $response->assertJsonPath('password_require_uppercase', true);
+        $response->assertJsonPath('password_require_number', true);
+        $response->assertJsonPath('password_require_symbol', false);
+        $response->assertJsonPath('password_expiry_days', null);
+    }
+
+    public function test_an_admin_can_update_contact_information(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+
+        $response = $this->actingAs($admin)->post('/api/settings', [
+            'phone' => '+228 90 00 00 00',
+            'email' => 'contact@pressing-etoile.tg',
+            'tax_id' => 'NIF-123456',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('phone', '+228 90 00 00 00');
+        $response->assertJsonPath('email', 'contact@pressing-etoile.tg');
+        $response->assertJsonPath('tax_id', 'NIF-123456');
+    }
+
+    public function test_an_admin_can_configure_the_security_policy(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+
+        $response = $this->actingAs($admin)->post('/api/settings', [
+            'password_expiry_days' => 90,
+            'session_timeout_minutes' => 15,
+            'password_min_length' => 10,
+            'password_require_uppercase' => '1',
+            'password_require_number' => '1',
+            'password_require_symbol' => '1',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('password_expiry_days', 90);
+        $response->assertJsonPath('session_timeout_minutes', 15);
+        $response->assertJsonPath('password_min_length', 10);
+        $response->assertJsonPath('password_require_symbol', true);
+    }
+
+    public function test_the_session_timeout_must_stay_within_reasonable_bounds(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+
+        $response = $this->actingAs($admin)->postJson('/api/settings', [
+            'session_timeout_minutes' => 2,
+        ]);
+
+        $response->assertStatus(422);
+    }
 }

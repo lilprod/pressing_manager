@@ -1,8 +1,17 @@
 export interface AppSettings {
     pressing_name: string | null;
     address: string | null;
+    phone: string | null;
+    email: string | null;
+    tax_id: string | null;
     logo_url: string | null;
     favicon_url: string | null;
+    password_expiry_days: number | null;
+    session_timeout_minutes: number | null;
+    password_min_length: number;
+    password_require_uppercase: boolean;
+    password_require_number: boolean;
+    password_require_symbol: boolean;
 }
 
 export type RoleSlug = 'admin' | 'manager' | 'accueil' | 'technicien' | 'livreur' | 'client';

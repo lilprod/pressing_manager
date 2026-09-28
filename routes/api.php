@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\IntakeConditionController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\LicenseController;
+use App\Http\Controllers\Api\LicensePlanController;
 use App\Http\Controllers\Api\LoyaltyTierController;
 use App\Http\Controllers\Api\NotificationLogController;
 use App\Http\Controllers\Api\NotificationSettingController;
@@ -59,6 +60,11 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/license/history', [LicenseController::class, 'history']);
     Route::get('/license/plans', [LicenseController::class, 'plans']);
     Route::post('/license/renew', [LicenseController::class, 'renew']);
+
+    Route::get('/license-plans', [LicensePlanController::class, 'index']);
+    Route::post('/license-plans', [LicensePlanController::class, 'store']);
+    Route::patch('/license-plans/{licensePlan}', [LicensePlanController::class, 'update']);
+    Route::delete('/license-plans/{licensePlan}', [LicensePlanController::class, 'destroy']);
 
     Route::apiResource('clients', ClientController::class)->except(['destroy'])->parameters(['clients' => 'client']);
     Route::delete('/clients/{client}', [ClientController::class, 'destroy']);

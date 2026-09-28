@@ -147,7 +147,7 @@ class ServiceSeeder extends Seeder
                 ['code' => "LAV-{$article['id']}"],
                 [
                     'name' => "Lavage - {$article['title']}",
-                    'category' => 'nettoyage',
+                    'category' => 'lavage',
                     'description' => "Article historique #{$article['id']}",
                     'base_price' => $article['lavage_price'],
                     'estimated_duration_hours' => self::DURATIONS['lavage'],

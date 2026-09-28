@@ -5,12 +5,13 @@ import { useFormat } from '../lib/format';
 import { api, ApiError } from '../lib/api';
 import PageHeader from '../components/ui/PageHeader';
 import { Alert, EmptyState, LoadingState, Spinner } from '../components/ui/Feedback';
+import Pagination from '../components/ui/Pagination';
 import { Pill } from '../components/ui/StatusBadge';
-import { button, card, cardPadded, cx, input, inputSm, label, select, sectionTitle } from '../components/ui/styles';
-import { Pencil, Plus, Shirt, Sparkles, X } from 'lucide-react';
-import type { Service, ServiceCategory } from '../types';
+import { button, card, cardPadded, cx, input, inputLg, inputSm, label, select, sectionTitle } from '../components/ui/styles';
+import { Pencil, Plus, Search, Shirt, Sparkles, X } from 'lucide-react';
+import type { Paginated, Service, ServiceCategory } from '../types';
 
-const CATEGORIES: ServiceCategory[] = ['nettoyage', 'repassage', 'retouche', 'teinture', 'autre'];
+const CATEGORIES: ServiceCategory[] = ['nettoyage', 'lavage', 'repassage', 'retouche', 'teinture', 'autre'];
 
 export default function ServicesPage() {
     const { t } = useI18n();
@@ -18,31 +19,98 @@ export default function ServicesPage() {
     const agencyId = user?.agency_id ?? activeAgencyId;
 
     const [services, setServices] = useState<Service[]>([]);
+    const [meta, setMeta] = useState<Pick<Paginated<Service>, 'current_page' | 'last_page' | 'total'>>({
+        current_page: 1,
+        last_page: 1,
+        total: 0,
+    });
+    const [page, setPage] = useState(1);
+    const [category, setCategory] = useState<ServiceCategory | ''>('');
+    const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState<Service | null>(null);
 
     function reload() {
         setLoading(true);
-        const params = new URLSearchParams();
+        const params = new URLSearchParams({ page: String(page) });
         if (agencyId) params.set('agency_id', String(agencyId));
+        if (category) params.set('category', category);
+        if (search) params.set('search', search);
         api
-            .get<Service[]>(`/services/catalog?${params}`)
-            .then(setServices)
+            .get<Paginated<Service>>(`/services/catalog?${params}`)
+            .then((res) => {
+                setServices(res.data);
+                setMeta({ current_page: res.current_page, last_page: res.last_page, total: res.total });
+            })
             .finally(() => setLoading(false));
     }
 
-    useEffect(reload, [agencyId]);
+    useEffect(reload, [agencyId, page, category]);
+
+    useEffect(() => {
+        setPage(1);
+        const timeout = setTimeout(reload, 250);
+        return () => clearTimeout(timeout);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search]);
 
     return (
         <div className="space-y-6">
             <PageHeader title={t('service.title')} subtitle={t('service.subtitle')} icon={Shirt} />
 
-            {loading ? (
-                <LoadingState />
-            ) : (
-                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+                <div className="space-y-4">
+                    <div className="relative">
+                        <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-500 dark:text-ink-350" />
+                        <input
+                            type="search"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder={t('service.search')}
+                            className={cx(inputLg, 'pl-12')}
+                        />
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setCategory('');
+                                setPage(1);
+                            }}
+                            className={cx(
+                                'inline-flex h-9 items-center rounded-full px-3.5 text-sm font-semibold transition duration-150',
+                                category === ''
+                                    ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-950'
+                                    : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-50 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
+                            )}
+                        >
+                            {t('service.allCategories')}
+                        </button>
+                        {CATEGORIES.map((c) => (
+                            <button
+                                key={c}
+                                type="button"
+                                onClick={() => {
+                                    setCategory(c);
+                                    setPage(1);
+                                }}
+                                className={cx(
+                                    'inline-flex h-9 items-center rounded-full px-3.5 text-sm font-semibold transition duration-150',
+                                    category === c
+                                        ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-950'
+                                        : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-50 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
+                                )}
+                            >
+                                {t(`service.category.${c}`)}
+                            </button>
+                        ))}
+                    </div>
+
                     <div className={cx(card, 'overflow-hidden')}>
-                        {services.length === 0 ? (
+                        {loading ? (
+                            <LoadingState />
+                        ) : services.length === 0 ? (
                             <EmptyState icon={Shirt} title={t('service.none')} />
                         ) : (
                             <ul className="divide-y divide-ink-100 dark:divide-ink-800">
@@ -51,11 +119,12 @@ export default function ServicesPage() {
                                 ))}
                             </ul>
                         )}
+                        <Pagination meta={meta} onPageChange={setPage} />
                     </div>
-
-                    <CreateServiceForm onCreated={reload} />
                 </div>
-            )}
+
+                <CreateServiceForm onCreated={reload} />
+            </div>
 
             {editing && <EditServiceModal service={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
         </div>

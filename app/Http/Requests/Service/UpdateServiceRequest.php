@@ -17,7 +17,7 @@ class UpdateServiceRequest extends FormRequest
         return [
             'code' => ['sometimes', 'string', 'max:30', Rule::unique('services', 'code')->ignore($this->route('service'))],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'category' => ['sometimes', 'required', 'in:nettoyage,repassage,retouche,teinture,autre'],
+            'category' => ['sometimes', 'required', 'in:nettoyage,lavage,repassage,retouche,teinture,autre'],
             'description' => ['nullable', 'string'],
             'base_price' => ['sometimes', 'required', 'integer', 'min:0'],
             'estimated_duration_hours' => ['sometimes', 'required', 'integer', 'min:1'],

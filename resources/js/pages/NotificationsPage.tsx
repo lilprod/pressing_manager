@@ -6,9 +6,10 @@ import { api, ApiError } from '../lib/api';
 import PageHeader from '../components/ui/PageHeader';
 import { Alert, EmptyState, LoadingState } from '../components/ui/Feedback';
 import StatusBadge from '../components/ui/StatusBadge';
+import Pagination from '../components/ui/Pagination';
 import { card, cardPadded, cx, sectionTitle } from '../components/ui/styles';
 import { Bell, Building2, Info, Mail, MessageSquare, Truck, XCircle } from 'lucide-react';
-import type { NotificationEvent, NotificationLog, NotificationSetting } from '../types';
+import type { NotificationEvent, NotificationLog, NotificationSetting, Paginated } from '../types';
 
 const EVENT_ICONS: Record<NotificationEvent, typeof Truck> = {
     order_ready: Bell,
@@ -23,6 +24,12 @@ export default function NotificationsPage() {
 
     const [settings, setSettings] = useState<NotificationSetting[]>([]);
     const [logs, setLogs] = useState<NotificationLog[]>([]);
+    const [logsMeta, setLogsMeta] = useState<Pick<Paginated<NotificationLog>, 'current_page' | 'last_page' | 'total'>>({
+        current_page: 1,
+        last_page: 1,
+        total: 0,
+    });
+    const [logsPage, setLogsPage] = useState(1);
     const [eventFilter, setEventFilter] = useState<NotificationEvent | ''>('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -34,22 +41,28 @@ export default function NotificationsPage() {
         }
         setLoading(true);
         setError(null);
-        const logsParams = new URLSearchParams({ agency_id: String(agencyId), per_page: '20' });
+        const logsParams = new URLSearchParams({ agency_id: String(agencyId), per_page: '20', page: String(logsPage) });
         if (eventFilter) logsParams.set('event', eventFilter);
 
         Promise.all([
             api.get<NotificationSetting[]>(`/notification-settings?agency_id=${agencyId}`),
-            api.get<{ data: NotificationLog[] }>(`/notification-logs?${logsParams}`),
+            api.get<Paginated<NotificationLog>>(`/notification-logs?${logsParams}`),
         ])
             .then(([settingsRes, logsRes]) => {
                 setSettings(settingsRes);
                 setLogs(logsRes.data);
+                setLogsMeta({ current_page: logsRes.current_page, last_page: logsRes.last_page, total: logsRes.total });
             })
             .catch((err) => setError(err instanceof ApiError ? err.message : t('common.error')))
             .finally(() => setLoading(false));
     }
 
-    useEffect(reload, [agencyId, eventFilter]);
+    useEffect(reload, [agencyId, eventFilter, logsPage]);
+
+    function changeEventFilter(next: NotificationEvent | '') {
+        setEventFilter(next);
+        setLogsPage(1);
+    }
 
     if (!agencyId) {
         return (
@@ -73,7 +86,7 @@ export default function NotificationsPage() {
             ) : (
                 <>
                     <SettingsPanel agencyId={agencyId} settings={settings} onSaved={reload} />
-                    <LogsPanel logs={logs} eventFilter={eventFilter} onEventFilter={setEventFilter} />
+                    <LogsPanel logs={logs} eventFilter={eventFilter} onEventFilter={changeEventFilter} meta={logsMeta} onPageChange={setLogsPage} />
                 </>
             )}
         </div>
@@ -203,10 +216,14 @@ function LogsPanel({
     logs,
     eventFilter,
     onEventFilter,
+    meta,
+    onPageChange,
 }: {
     logs: NotificationLog[];
     eventFilter: NotificationEvent | '';
     onEventFilter: (event: NotificationEvent | '') => void;
+    meta: Pick<Paginated<NotificationLog>, 'current_page' | 'last_page' | 'total'>;
+    onPageChange: (page: number) => void;
 }) {
     const { t } = useI18n();
     const { dateTime } = useFormat();
@@ -276,6 +293,7 @@ function LogsPanel({
                     </table>
                 </div>
             )}
+            <Pagination meta={meta} onPageChange={onPageChange} />
         </section>
     );
 }

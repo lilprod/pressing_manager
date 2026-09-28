@@ -43,7 +43,8 @@ class ServiceController extends ApiController
 
     /**
      * Catalogue complet de services (tous, actifs ou non), pour l'écran de gestion
-     * back-office. Si un agency_id est fourni, chaque service embarque la surcharge
+     * back-office. Paginé, filtrable par catégorie et par recherche (nom/code).
+     * Si un agency_id est fourni, chaque service embarque la surcharge
      * (price_override/is_active) de cette agence sous "agency_pivot".
      */
     public function catalog(Request $request): JsonResponse
@@ -52,7 +53,16 @@ class ServiceController extends ApiController
 
         $agencyId = $request->integer('agency_id') ?: null;
 
-        $services = Service::query()->orderBy('name')->get();
+        $paginated = Service::query()
+            ->when($request->filled('category'), fn ($query) => $query->where('category', $request->string('category')->value()))
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $term = '%'.$request->string('search')->value().'%';
+                $query->where(fn ($q) => $q->where('name', 'ilike', $term)->orWhere('code', 'ilike', $term));
+            })
+            ->orderBy('name')
+            ->paginate($request->integer('per_page', 20));
+
+        $services = $paginated->getCollection();
 
         if ($agencyId) {
             $this->authorizeAgency($request->user(), $agencyId);
@@ -67,7 +77,9 @@ class ServiceController extends ApiController
             });
         }
 
-        return response()->json($services);
+        $paginated->setCollection($services);
+
+        return response()->json($paginated);
     }
 
     public function store(StoreServiceRequest $request): JsonResponse

@@ -56,7 +56,7 @@ class UserController extends ApiController
             })
             ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
             ->orderBy('name')
-            ->get();
+            ->paginate($request->integer('per_page', 20));
 
         return response()->json($users);
     }

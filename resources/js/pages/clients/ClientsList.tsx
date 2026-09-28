@@ -8,12 +8,19 @@ import { Award, ChevronRight, Mail, MapPin, Pencil, Phone, Search, Trash2, UserP
 import PageHeader, { Avatar } from '../../components/ui/PageHeader';
 import StatusBadge, { Pill } from '../../components/ui/StatusBadge';
 import { Alert, EmptyState, LoadingState } from '../../components/ui/Feedback';
+import Pagination from '../../components/ui/Pagination';
 import { button, card, cx, iconButton, inputLg, sectionTitle } from '../../components/ui/styles';
 
 export default function ClientsList() {
     const { t } = useI18n();
     const [search, setSearch] = useState('');
     const [clients, setClients] = useState<Client[]>([]);
+    const [meta, setMeta] = useState<Pick<Paginated<Client>, 'current_page' | 'last_page' | 'total'>>({
+        current_page: 1,
+        last_page: 1,
+        total: 0,
+    });
+    const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState<Client | null | 'new'>(null);
     const [selected, setSelected] = useState<Client | null>(null);
@@ -22,15 +29,24 @@ export default function ClientsList() {
 
     function reload() {
         setLoading(true);
-        const query = search ? `?search=${encodeURIComponent(search)}` : '';
+        const params = new URLSearchParams({ page: String(page) });
+        if (search) params.set('search', search);
         api
-            .get<Paginated<Client>>(`/clients${query}`)
-            .then((res) => setClients(res.data))
+            .get<Paginated<Client>>(`/clients?${params}`)
+            .then((res) => {
+                setClients(res.data);
+                setMeta({ current_page: res.current_page, last_page: res.last_page, total: res.total });
+            })
             .finally(() => setLoading(false));
     }
 
+    useEffect(reload, [page]);
+
     useEffect(() => {
-        const timeout = setTimeout(reload, 250);
+        const timeout = setTimeout(() => {
+            if (page === 1) reload();
+            else setPage(1);
+        }, 250);
         return () => clearTimeout(timeout);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [search]);
@@ -149,6 +165,7 @@ export default function ClientsList() {
                                 ))}
                             </ul>
                         )}
+                        <Pagination meta={meta} onPageChange={setPage} />
                     </div>
                 </div>
 

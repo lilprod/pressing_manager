@@ -5,6 +5,7 @@ import { useFormat } from '../lib/format';
 import { api, ApiError } from '../lib/api';
 import PageHeader from '../components/ui/PageHeader';
 import { Alert, EmptyState, LoadingState } from '../components/ui/Feedback';
+import Pagination from '../components/ui/Pagination';
 import { Pill } from '../components/ui/StatusBadge';
 import { button, card, cardPadded, cx, input, inputSm, label, select, sectionTitle } from '../components/ui/styles';
 import {
@@ -30,6 +31,12 @@ export default function StockPage() {
     const [levels, setLevels] = useState<StockLevel[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [movements, setMovements] = useState<StockMovement[]>([]);
+    const [movementsMeta, setMovementsMeta] = useState<Pick<Paginated<StockMovement>, 'current_page' | 'last_page' | 'total'>>({
+        current_page: 1,
+        last_page: 1,
+        total: 0,
+    });
+    const [movementsPage, setMovementsPage] = useState(1);
     const [loading, setLoading] = useState(true);
 
     function reload() {
@@ -41,17 +48,26 @@ export default function StockPage() {
         Promise.all([
             api.get<StockLevel[]>(`/stock?agency_id=${agencyId}`),
             api.get<Supplier[]>(`/suppliers?agency_id=${agencyId}`),
-            api.get<Paginated<StockMovement>>(`/stock-movements?agency_id=${agencyId}&per_page=10`),
+            api.get<Paginated<StockMovement>>(`/stock-movements?agency_id=${agencyId}&per_page=10&page=${movementsPage}`),
         ])
             .then(([levelsRes, suppliersRes, movementsRes]) => {
                 setLevels(levelsRes);
                 setSuppliers(suppliersRes);
                 setMovements(movementsRes.data);
+                setMovementsMeta({ current_page: movementsRes.current_page, last_page: movementsRes.last_page, total: movementsRes.total });
             })
             .finally(() => setLoading(false));
     }
 
-    useEffect(reload, [agencyId]);
+    useEffect(reload, [agencyId, movementsPage]);
+
+    function handleMovementRecorded() {
+        if (movementsPage === 1) {
+            reload();
+        } else {
+            setMovementsPage(1);
+        }
+    }
 
     if (!agencyId) {
         return (
@@ -76,12 +92,12 @@ export default function StockPage() {
                         <StockLevelsPanel levels={levels} />
 
                         <div className="space-y-6">
-                            <MovementForm requestAgencyId={requestAgencyId} levels={levels} suppliers={suppliers} onRecorded={reload} />
+                            <MovementForm requestAgencyId={requestAgencyId} levels={levels} suppliers={suppliers} onRecorded={handleMovementRecorded} />
                             <SuppliersPanel agencyId={agencyId} suppliers={suppliers} onCreated={reload} />
                         </div>
                     </div>
 
-                    <MovementHistoryPanel movements={movements} />
+                    <MovementHistoryPanel movements={movements} meta={movementsMeta} onPageChange={setMovementsPage} />
                 </>
             )}
         </div>
@@ -342,7 +358,15 @@ function SuppliersPanel({ agencyId, suppliers, onCreated }: { agencyId: number; 
     );
 }
 
-function MovementHistoryPanel({ movements }: { movements: StockMovement[] }) {
+function MovementHistoryPanel({
+    movements,
+    meta,
+    onPageChange,
+}: {
+    movements: StockMovement[];
+    meta: Pick<Paginated<StockMovement>, 'current_page' | 'last_page' | 'total'>;
+    onPageChange: (page: number) => void;
+}) {
     const { t } = useI18n();
     const { dateTime } = useFormat();
 
@@ -393,6 +417,7 @@ function MovementHistoryPanel({ movements }: { movements: StockMovement[] }) {
                     </table>
                 </div>
             )}
+            <Pagination meta={meta} onPageChange={onPageChange} />
         </section>
     );
 }

@@ -85,7 +85,7 @@ export interface LoyaltyTier {
     is_active: boolean;
 }
 
-export type ServiceCategory = 'nettoyage' | 'repassage' | 'retouche' | 'teinture' | 'autre';
+export type ServiceCategory = 'nettoyage' | 'lavage' | 'repassage' | 'retouche' | 'teinture' | 'autre';
 
 export interface Service {
     id: number;
@@ -217,9 +217,13 @@ export interface LicensePayment {
 
 export type LicensePlanSlug = string;
 
-export interface LicensePlanConfig {
+export interface LicensePlan {
+    id: number;
+    slug: string;
+    name: string;
     days: number;
     price: number;
+    is_active: boolean;
 }
 
 export interface SubscriptionPlan {

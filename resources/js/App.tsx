@@ -16,6 +16,7 @@ import ClientsList from './pages/clients/ClientsList';
 import LicensePage from './pages/LicensePage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
 import LoyaltyPage from './pages/LoyaltyPage';
+import ServicesPage from './pages/ServicesPage';
 import InvoicesOutstandingPage from './pages/InvoicesOutstandingPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
@@ -70,6 +71,7 @@ export default function App() {
                     <Route path="/clients" element={<ClientsList />} />
                     <Route path="/subscriptions" element={<SubscriptionsPage />} />
                     <Route path="/loyalty" element={<LoyaltyPage />} />
+                    <Route path="/services" element={<ServicesPage />} />
                     <Route path="/invoices/outstanding" element={<InvoicesOutstandingPage />} />
                     <Route path="/stock" element={<StockPage />} />
                     <Route path="/deliveries" element={<DeliveriesPage />} />

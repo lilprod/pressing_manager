@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { api, ApiError } from '../../lib/api';
 import { queuePendingOrder } from '../../lib/offlineDb';
 import { readCachedServices, writeCachedServices } from '../../lib/servicesCache';
@@ -54,7 +55,9 @@ export default function NewOrder() {
     const { user, activeAgencyId } = useAuth();
     const { t } = useI18n();
     const { money } = useFormat();
+    const { settings } = useSettings();
     const navigate = useNavigate();
+    const taxRate = settings?.tax_rate ?? 0;
 
     const agencyId = user?.agency_id ?? activeAgencyId;
 
@@ -147,7 +150,11 @@ export default function NewOrder() {
         setDiscount(rate > 0 ? Math.round(total * rate) : 0);
     }, [selectedClient, total, discountEdited]);
 
-    const grandTotal = Math.max(0, total - discount);
+    // Même formule que InvoiceService::createFromOrder côté back, pour que le total annoncé
+    // au comptoir corresponde exactement à celui de la facture générée ensuite (TVA incluse).
+    const taxableBase = Math.max(0, total - discount);
+    const taxAmount = Math.round(taxableBase * taxRate);
+    const grandTotal = taxableBase + taxAmount;
 
     function addLine(serviceId: number) {
         setCart((current) => {
@@ -263,7 +270,7 @@ export default function NewOrder() {
             {feedback && <Alert tone="success">{feedback}</Alert>}
             {error && <Alert tone="error">{error}</Alert>}
 
-            <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_320px] lg:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_340px] lg:grid-cols-[minmax(0,1fr)_420px]">
                 <div className="min-w-0 space-y-6">
                     <section aria-labelledby="client-heading" className={cardPadded}>
                         <StepHeading id="client-heading" step={1} title={t('order.client')} />
@@ -400,7 +407,7 @@ export default function NewOrder() {
 
                 <aside
                     aria-labelledby="cart-heading"
-                    className={cx(card, 'flex flex-col overflow-hidden md:sticky md:top-32 md:max-h-[calc(100vh-13.5rem)] md:min-h-[26rem]')}
+                    className={cx(card, 'flex flex-col overflow-hidden md:sticky md:top-20 md:max-h-[calc(100vh-9rem)] md:min-h-[26rem]')}
                 >
                     <div className="flex items-center justify-between gap-2 border-b border-ink-200/80 px-5 py-3.5 dark:border-ink-800">
                         <h2 id="cart-heading" className="flex scroll-mt-40 items-center gap-2 font-display text-base font-bold text-ink-900 dark:text-ink-50">
@@ -583,6 +590,11 @@ export default function NewOrder() {
                             />
                         </label>
 
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                            <span className="text-ink-600 dark:text-ink-350">{t('order.subtotal')}</span>
+                            <span className="tabular-nums font-semibold text-ink-800 dark:text-ink-100">{money(total)}</span>
+                        </div>
+
                         <label className="flex items-center justify-between gap-3">
                             <span className="text-sm font-semibold text-ink-700 dark:text-ink-200">{t('order.discount')}</span>
                             <span className="relative">
@@ -600,8 +612,15 @@ export default function NewOrder() {
                             </span>
                         </label>
 
-                        <div className="flex items-end justify-between gap-3">
-                            <span className="text-sm font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('common.total')}</span>
+                        {taxRate > 0 && (
+                            <div className="flex items-center justify-between gap-3 text-sm">
+                                <span className="text-ink-600 dark:text-ink-350">{t('order.tax', { rate: Math.round(taxRate * 100) })}</span>
+                                <span className="tabular-nums font-semibold text-ink-800 dark:text-ink-100">{money(taxAmount)}</span>
+                            </div>
+                        )}
+
+                        <div className="flex items-end justify-between gap-3 border-t border-ink-200/80 pt-3 dark:border-ink-800">
+                            <span className="text-sm font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('order.totalTtc')}</span>
                             <span className="font-display text-3xl font-extrabold tabular-nums text-ink-900 dark:text-white" aria-live="polite">
                                 {money(grandTotal)}
                             </span>
@@ -629,7 +648,7 @@ export default function NewOrder() {
                         <div className="flex items-center gap-3">
                             <div className="min-w-0 flex-1">
                                 <p className="text-xs font-semibold text-ink-600 dark:text-ink-350">{t('order.itemsCount', { count: cartCount })}</p>
-                                <p className="font-display text-xl font-extrabold tabular-nums text-ink-900 dark:text-white">{money(total)}</p>
+                                <p className="font-display text-xl font-extrabold tabular-nums text-ink-900 dark:text-white">{money(grandTotal)}</p>
                             </div>
                             <a href="#cart-heading" className={button('primary', 'md')}>
                                 <Receipt aria-hidden="true" className="h-4 w-4" />

@@ -88,6 +88,7 @@ class SettingsController extends ApiController
             'password_require_uppercase' => $settings->password_require_uppercase,
             'password_require_number' => $settings->password_require_number,
             'password_require_symbol' => $settings->password_require_symbol,
+            'tax_rate' => (float) config('invoicing.tax_rate'),
         ];
     }
 }

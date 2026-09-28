@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import ClientForm from './ClientForm';
 import type { Client, Order, Paginated } from '../../types';
 import { Link } from 'react-router-dom';
-import { Award, ChevronRight, Mail, MapPin, Pencil, Phone, Search, UserPlus, Users, X } from 'lucide-react';
+import { Award, ChevronRight, Mail, MapPin, Pencil, Phone, Search, Trash2, UserPlus, Users, X } from 'lucide-react';
 import PageHeader, { Avatar } from '../../components/ui/PageHeader';
-import StatusBadge from '../../components/ui/StatusBadge';
-import { EmptyState, LoadingState } from '../../components/ui/Feedback';
+import StatusBadge, { Pill } from '../../components/ui/StatusBadge';
+import { Alert, EmptyState, LoadingState } from '../../components/ui/Feedback';
 import { button, card, cx, iconButton, inputLg, sectionTitle } from '../../components/ui/styles';
 
 export default function ClientsList() {
@@ -18,6 +18,7 @@ export default function ClientsList() {
     const [editing, setEditing] = useState<Client | null | 'new'>(null);
     const [selected, setSelected] = useState<Client | null>(null);
     const [selectedOrders, setSelectedOrders] = useState<Order[]>([]);
+    const [actionError, setActionError] = useState<string | null>(null);
 
     function reload() {
         setLoading(true);
@@ -39,6 +40,24 @@ export default function ClientsList() {
             api.get<Paginated<Order>>(`/orders?client_id=${selected.id}`).then((res) => setSelectedOrders(res.data));
         }
     }, [selected]);
+
+    async function toggleActive(client: Client) {
+        setActionError(null);
+        const updated = await api.patch<Client>(`/clients/${client.id}`, { is_active: !client.is_active });
+        setSelected(updated);
+        reload();
+    }
+
+    async function deleteClient(client: Client) {
+        setActionError(null);
+        try {
+            await api.delete(`/clients/${client.id}`);
+            setSelected(null);
+            reload();
+        } catch (err) {
+            setActionError(err instanceof ApiError ? err.message : t('common.error'));
+        }
+    }
 
     return (
         <div className="space-y-6">
@@ -105,8 +124,11 @@ export default function ClientsList() {
                                         >
                                             <Avatar firstName={client.first_name} lastName={client.last_name} />
                                             <span className="min-w-0 flex-1">
-                                                <span className="block truncate font-semibold text-ink-900 dark:text-ink-50">
-                                                    {client.first_name} {client.last_name}
+                                                <span className="flex items-center gap-2 truncate font-semibold text-ink-900 dark:text-ink-50">
+                                                    <span className="truncate">
+                                                        {client.first_name} {client.last_name}
+                                                    </span>
+                                                    {!client.is_active && <Pill tone="rose">{t('client.inactive')}</Pill>}
                                                 </span>
                                                 <span className="flex flex-wrap gap-x-3 text-sm text-ink-600 dark:text-ink-350">
                                                     <span>{client.phone}</span>
@@ -131,7 +153,7 @@ export default function ClientsList() {
                 </div>
 
                 {selected && (
-                    <aside aria-label={t('client.details')} className={cx(card, 'animate-fade-in overflow-hidden lg:sticky lg:top-32')}>
+                    <aside aria-label={t('client.details')} className={cx(card, 'animate-fade-in overflow-hidden lg:sticky lg:top-20')}>
                         <div className="relative flex flex-col items-center gap-3 bg-gradient-to-b from-brand-50 to-white px-5 pb-5 pt-7 text-center dark:from-brand-400/10 dark:to-ink-900">
                             <button type="button" onClick={() => setSelected(null)} aria-label={t('common.close')} className={cx(iconButton, 'absolute right-2 top-2')}>
                                 <X aria-hidden="true" className="h-5 w-5" />
@@ -144,6 +166,25 @@ export default function ClientsList() {
                                 <Award aria-hidden="true" className="h-4 w-4" />
                                 {t('client.loyaltyPoints')}: {selected.loyalty_points}
                             </span>
+                            {!selected.is_active && <Pill tone="rose">{t('client.inactive')}</Pill>}
+                        </div>
+
+                        {actionError && (
+                            <div className="px-5 pt-4">
+                                <Alert tone="error">{actionError}</Alert>
+                            </div>
+                        )}
+
+                        <div className="flex flex-wrap gap-2 px-5 pt-4">
+                            <button type="button" onClick={() => void toggleActive(selected)} className={button('secondary', 'sm')}>
+                                {selected.is_active ? t('client.deactivate') : t('client.activate')}
+                            </button>
+                            {selectedOrders.length === 0 && (
+                                <button type="button" onClick={() => void deleteClient(selected)} className={button('dangerGhost', 'sm')}>
+                                    <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                                    {t('common.delete')}
+                                </button>
+                            )}
                         </div>
 
                         <dl className="space-y-2.5 border-y border-ink-200/80 px-5 py-4 text-sm dark:border-ink-800">

@@ -158,7 +158,7 @@ export default function OrderDetail() {
                     </ul>
                 </section>
 
-                <div className="lg:sticky lg:top-32">
+                <div className="lg:sticky lg:top-20">
                     <InvoicePanel order={order} />
                 </div>
             </div>

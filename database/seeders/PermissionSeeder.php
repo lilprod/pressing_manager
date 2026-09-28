@@ -25,12 +25,13 @@ class PermissionSeeder extends Seeder
         ['slug' => 'hr.manage', 'name' => 'Gérer les plannings et consulter la performance', 'group' => 'hr'],
         ['slug' => 'hr.clock', 'name' => 'Pointer ses heures de présence', 'group' => 'hr'],
         ['slug' => 'notifications.manage', 'name' => 'Configurer les notifications SMS/email', 'group' => 'notifications'],
+        ['slug' => 'services.manage', 'name' => 'Gérer le catalogue de services et les tarifs', 'group' => 'catalog'],
     ];
 
     /** Rôle => permissions accordées. */
     public const ROLE_PERMISSIONS = [
-        'admin' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'licenses.manage', 'subscriptions.manage', 'reports.view', 'agencies.manage', 'users.manage', 'stocks.manage', 'deliveries.manage', 'deliveries.fulfill', 'hr.manage', 'hr.clock', 'notifications.manage'],
-        'manager' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'subscriptions.manage', 'reports.view', 'users.manage', 'stocks.manage', 'deliveries.manage', 'deliveries.fulfill', 'hr.manage', 'hr.clock', 'notifications.manage'],
+        'admin' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'licenses.manage', 'subscriptions.manage', 'reports.view', 'agencies.manage', 'users.manage', 'stocks.manage', 'deliveries.manage', 'deliveries.fulfill', 'hr.manage', 'hr.clock', 'notifications.manage', 'services.manage'],
+        'manager' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'subscriptions.manage', 'reports.view', 'users.manage', 'stocks.manage', 'deliveries.manage', 'deliveries.fulfill', 'hr.manage', 'hr.clock', 'notifications.manage', 'services.manage'],
         'accueil' => ['clients.manage', 'orders.manage', 'invoices.manage', 'payments.manage', 'subscriptions.manage', 'deliveries.manage', 'hr.clock'],
         'technicien' => ['orders.update_status', 'hr.clock'],
         'livreur' => ['orders.update_status', 'deliveries.fulfill', 'hr.clock'],

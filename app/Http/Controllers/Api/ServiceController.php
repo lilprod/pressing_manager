@@ -2,7 +2,11 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Requests\Service\StoreServiceRequest;
+use App\Http\Requests\Service\UpdateAgencyServicePricingRequest;
+use App\Http\Requests\Service\UpdateServiceRequest;
 use App\Models\Agency;
+use App\Models\Service;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -35,5 +39,65 @@ class ServiceController extends ApiController
             });
 
         return response()->json($services);
+    }
+
+    /**
+     * Catalogue complet de services (tous, actifs ou non), pour l'écran de gestion
+     * back-office. Si un agency_id est fourni, chaque service embarque la surcharge
+     * (price_override/is_active) de cette agence sous "agency_pivot".
+     */
+    public function catalog(Request $request): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'services.manage');
+
+        $agencyId = $request->integer('agency_id') ?: null;
+
+        $services = Service::query()->orderBy('name')->get();
+
+        if ($agencyId) {
+            $this->authorizeAgency($request->user(), $agencyId);
+
+            $overrides = Agency::findOrFail($agencyId)->services()->get()->keyBy('id');
+
+            $services = $services->map(function (Service $service) use ($overrides) {
+                $pivot = $overrides->get($service->id)?->pivot;
+                $service->agency_pivot = $pivot ? ['price_override' => $pivot->price_override, 'is_active' => $pivot->is_active] : null;
+
+                return $service;
+            });
+        }
+
+        return response()->json($services);
+    }
+
+    public function store(StoreServiceRequest $request): JsonResponse
+    {
+        return response()->json(Service::create($request->validated()), 201);
+    }
+
+    public function update(UpdateServiceRequest $request, Service $service): JsonResponse
+    {
+        $service->update($request->validated());
+
+        return response()->json($service);
+    }
+
+    /**
+     * Définit/retire la surcharge de tarif ou d'activation d'un service pour une agence
+     * donnée (table pivot agency_services).
+     */
+    public function updatePricing(UpdateAgencyServicePricingRequest $request, Agency $agency, Service $service): JsonResponse
+    {
+        $this->authorizeAgency($request->user(), $agency->id);
+
+        $agency->services()->syncWithoutDetaching([
+            $service->id => $request->validated(),
+        ]);
+
+        return response()->json([
+            'agency_id' => $agency->id,
+            'service_id' => $service->id,
+            ...$request->validated(),
+        ]);
     }
 }

@@ -15,10 +15,17 @@ class Client extends Model
     use Auditable, HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'agency_id', 'first_name', 'last_name', 'phone', 'email', 'address', 'loyalty_points', 'notes',
+        'agency_id', 'first_name', 'last_name', 'phone', 'email', 'address', 'loyalty_points', 'notes', 'is_active',
     ];
 
     protected $appends = ['loyalty_discount_rate', 'loyalty_tier_name'];
+
+    protected function casts(): array
+    {
+        return [
+            'is_active' => 'boolean',
+        ];
+    }
 
     /** Le palier le plus élevé atteint par le nombre de points actuel du client, s'il y en a un. */
     public function currentLoyaltyTier(): ?LoyaltyTier

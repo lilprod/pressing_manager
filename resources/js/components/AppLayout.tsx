@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet } from 'react-router-dom';
-import { Award, Bell, Boxes, Building2, ClipboardList, Crown, KeyRound, Languages, LogOut, Moon, ScanLine, ShoppingBag, Sun, Truck, UsersRound, Users, WifiOff, LayoutDashboard, type LucideIcon } from 'lucide-react';
+import { Award, Bell, Boxes, Building2, CircleDollarSign, ClipboardList, Crown, KeyRound, Languages, LogOut, Moon, ScanLine, ShoppingBag, Sun, Truck, UsersRound, Users, WifiOff, LayoutDashboard, type LucideIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -133,6 +133,7 @@ export default function AppLayout() {
                     {(hasPermission(user, 'hr.manage') || hasPermission(user, 'hr.clock')) && <NavItem to="/hr" icon={UsersRound} label={t('nav.hr')} />}
 
                     {/* Pilotage */}
+                    {hasPermission(user, 'invoices.manage') && <NavItem to="/invoices/outstanding" icon={CircleDollarSign} label={t('invoice.outstandingTitle')} />}
                     {hasPermission(user, 'reports.view') && <NavItem to="/kpi" icon={LayoutDashboard} label={t('nav.kpi')} />}
                     {hasPermission(user, 'notifications.manage') && <NavItem to="/notifications" icon={Bell} label={t('nav.notifications')} />}
                     {hasPermission(user, 'licenses.manage') && <NavItem to="/license" icon={KeyRound} label={t('nav.license')} />}

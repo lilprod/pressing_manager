@@ -15,6 +15,29 @@ class InvoiceController extends ApiController
 {
     public function __construct(private readonly InvoiceService $invoices) {}
 
+    /** Liste des factures non soldées (émises ou partiellement payées), avec le solde restant dû. */
+    public function index(Request $request): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'invoices.manage');
+        $agencyId = $this->resolveAgencyFilter($request, $request->user());
+
+        $invoices = Invoice::query()
+            ->with('client')
+            ->whereIn('status', ['emise', 'partiellement_payee'])
+            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->withSum(['payments as paid_amount' => fn ($query) => $query->where('status', 'complete')], 'amount')
+            ->oldest('issued_at')
+            ->paginate($request->integer('per_page', 20));
+
+        $invoices->getCollection()->transform(function (Invoice $invoice) {
+            $invoice->balance_due = $invoice->total_amount - (int) ($invoice->paid_amount ?? 0);
+
+            return $invoice;
+        });
+
+        return response()->json($invoices);
+    }
+
     public function storeForOrder(Request $request, Order $order): JsonResponse
     {
         $this->authorizeAgency($request->user(), $order->agency_id);

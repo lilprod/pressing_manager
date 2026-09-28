@@ -385,5 +385,12 @@
     "intake.toggle": "Condition at drop-off",
     "invoice.subtotal": "Subtotal",
     "invoice.discount": "Discount",
-    "invoice.tax": "Tax"
+    "invoice.tax": "Tax",
+    "invoice.number": "Invoice #",
+    "invoice.outstandingTitle": "Outstanding",
+    "invoice.outstandingSubtitle": "Issued or partially paid invoices, still to be settled.",
+    "invoice.noOutstanding": "No outstanding invoices",
+    "invoice.noOutstandingHint": "Every invoice for this agency is fully paid.",
+    "invoice.totalOutstanding": "Total balance due",
+    "invoice.balanceDue": "Balance due"
 }

@@ -385,5 +385,12 @@
     "intake.toggle": "État à la réception",
     "invoice.subtotal": "Sous-total",
     "invoice.discount": "Remise",
-    "invoice.tax": "TVA"
+    "invoice.tax": "TVA",
+    "invoice.number": "Facture n°",
+    "invoice.outstandingTitle": "Impayés",
+    "invoice.outstandingSubtitle": "Factures émises ou partiellement payées, à solder.",
+    "invoice.noOutstanding": "Aucune facture impayée",
+    "invoice.noOutstandingHint": "Toutes les factures de l'agence sont soldées.",
+    "invoice.totalOutstanding": "Total restant dû",
+    "invoice.balanceDue": "Reste à payer"
 }

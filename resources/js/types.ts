@@ -136,6 +136,9 @@ export interface Invoice {
     total_amount: number;
     status: 'brouillon' | 'emise' | 'payee' | 'partiellement_payee' | 'annulee';
     pdf_path: string | null;
+    issued_at: string | null;
+    balance_due?: number;
+    client?: Client;
     payments?: Payment[];
 }
 

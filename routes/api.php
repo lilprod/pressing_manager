@@ -64,6 +64,7 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/order-items/{orderItem}/qr-code', [OrderItemController::class, 'qrImage']);
     Route::get('/order-items/scan/{qrCode}', [OrderItemController::class, 'showByQrCode']);
 
+    Route::get('/invoices', [InvoiceController::class, 'index']);
     Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
     Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf']);
 

@@ -361,5 +361,11 @@
     "notifications.recipient": "Recipient",
     "notifications.status.sent": "Sent",
     "notifications.status.simulated": "Simulated",
-    "notifications.status.failed": "Failed"
+    "notifications.status.failed": "Failed",
+    "intake.title": "Condition at drop-off",
+    "intake.hint": "Tick any defect already present on the item before processing.",
+    "intake.notes": "Note (optional)",
+    "intake.notesPlaceholder": "E.g. left sleeve fraying",
+    "intake.none": "No condition reported at drop-off",
+    "intake.toggle": "Condition at drop-off"
 }

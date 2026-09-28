@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\CustomerSubscriptionController;
 use App\Http\Controllers\Api\DeliveryController;
 use App\Http\Controllers\Api\DeliveryZoneController;
+use App\Http\Controllers\Api\IntakeConditionController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\LicenseController;
@@ -46,6 +47,8 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::delete('/clients/{client}', [ClientController::class, 'destroy']);
 
     Route::get('/services', [ServiceController::class, 'index']);
+
+    Route::get('/intake-conditions', [IntakeConditionController::class, 'index']);
 
     Route::get('/orders', [OrderController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'store']);

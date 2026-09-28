@@ -5,14 +5,17 @@ import { useI18n } from '../../contexts/I18nContext';
 import { api, ApiError } from '../../lib/api';
 import { queuePendingOrder } from '../../lib/offlineDb';
 import { readCachedServices, writeCachedServices } from '../../lib/servicesCache';
+import { readCachedIntakeConditions, writeCachedIntakeConditions } from '../../lib/intakeConditionsCache';
 import { readRecentClients, rememberClients } from '../../lib/recentClientsCache';
 import { syncEvents } from '../../lib/sync';
-import type { Client, Order, Service } from '../../types';
+import type { Client, IntakeCondition, Order, Service } from '../../types';
 import {
     Award,
     Building2,
     Check,
+    ChevronDown,
     ChevronRight,
+    ClipboardList,
     Minus,
     Palette,
     Phone,
@@ -36,12 +39,14 @@ import { useFormat } from '../../lib/format';
 import PageHeader, { Avatar } from '../../components/ui/PageHeader';
 import { Alert, EmptyState, Spinner } from '../../components/ui/Feedback';
 import { Pill, TONES, type Tone } from '../../components/ui/StatusBadge';
-import { button, card, cardPadded, cx, inputLg, inputSm, sectionTitle } from '../../components/ui/styles';
+import { button, card, cardPadded, cx, inputLg, inputSm, label, sectionTitle } from '../../components/ui/styles';
 
 interface CartLine {
     service_id: number;
     quantity: number;
     description: string;
+    intake_condition_ids: number[];
+    intake_notes: string;
 }
 
 export default function NewOrder() {
@@ -53,6 +58,8 @@ export default function NewOrder() {
     const agencyId = user?.agency_id ?? activeAgencyId;
 
     const [services, setServices] = useState<(Service & { effective_price: number })[]>([]);
+    const [intakeConditions, setIntakeConditions] = useState<IntakeCondition[]>(readCachedIntakeConditions());
+    const [expandedLine, setExpandedLine] = useState<number | null>(null);
     const [clientQuery, setClientQuery] = useState('');
     const [clientResults, setClientResults] = useState<Client[]>(readRecentClients());
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -78,6 +85,18 @@ export default function NewOrder() {
                 // Hors-ligne : on garde le catalogue mis en cache lors du dernier chargement réussi.
             });
     }, [agencyId]);
+
+    useEffect(() => {
+        api
+            .get<IntakeCondition[]>('/intake-conditions')
+            .then((list) => {
+                setIntakeConditions(list);
+                writeCachedIntakeConditions(list);
+            })
+            .catch(() => {
+                // Hors-ligne : on garde le catalogue mis en cache lors du dernier chargement réussi.
+            });
+    }, []);
 
     useEffect(() => {
         if (clientQuery.trim().length < 2) {
@@ -123,7 +142,7 @@ export default function NewOrder() {
             if (existing) {
                 return current.map((l) => (l.service_id === serviceId ? { ...l, quantity: l.quantity + 1 } : l));
             }
-            return [...current, { service_id: serviceId, quantity: 1, description: '' }];
+            return [...current, { service_id: serviceId, quantity: 1, description: '', intake_condition_ids: [], intake_notes: '' }];
         });
     }
 
@@ -156,6 +175,8 @@ export default function NewOrder() {
                 service_id: l.service_id,
                 quantity: l.quantity,
                 description: l.description || null,
+                intake_condition_ids: l.intake_condition_ids.length > 0 ? l.intake_condition_ids : undefined,
+                intake_notes: l.intake_notes || null,
             })),
         };
 
@@ -198,6 +219,22 @@ export default function NewOrder() {
         setClientQuery('');
         setIsExpress(false);
         setNotes('');
+        setExpandedLine(null);
+    }
+
+    function toggleIntakeCondition(serviceId: number, conditionId: number) {
+        setCart((current) =>
+            current.map((l) => {
+                if (l.service_id !== serviceId) return l;
+                const has = l.intake_condition_ids.includes(conditionId);
+                return {
+                    ...l,
+                    intake_condition_ids: has
+                        ? l.intake_condition_ids.filter((id) => id !== conditionId)
+                        : [...l.intake_condition_ids, conditionId],
+                };
+            }),
+        );
     }
 
     const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
@@ -418,6 +455,59 @@ export default function NewOrder() {
                                                     <Trash2 aria-hidden="true" className="h-[18px] w-[18px]" />
                                                 </button>
                                             </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => setExpandedLine((current) => (current === line.service_id ? null : line.service_id))}
+                                                className="flex w-full items-center gap-1.5 text-xs font-semibold text-ink-600 transition hover:text-ink-900 dark:text-ink-350 dark:hover:text-white"
+                                            >
+                                                <ClipboardList aria-hidden="true" className="h-3.5 w-3.5" />
+                                                {t('intake.toggle')}
+                                                {line.intake_condition_ids.length > 0 && (
+                                                    <Pill tone="amber">{line.intake_condition_ids.length}</Pill>
+                                                )}
+                                                <ChevronDown
+                                                    aria-hidden="true"
+                                                    className={cx('ml-auto h-4 w-4 transition-transform', expandedLine === line.service_id && 'rotate-180')}
+                                                />
+                                            </button>
+
+                                            {expandedLine === line.service_id && (
+                                                <div className="animate-fade-in space-y-2.5 rounded-xl bg-ink-50 p-3 dark:bg-ink-950/50">
+                                                    <p className="text-xs text-ink-600 dark:text-ink-350">{t('intake.hint')}</p>
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {intakeConditions.map((condition) => {
+                                                            const checked = line.intake_condition_ids.includes(condition.id);
+                                                            return (
+                                                                <button
+                                                                    key={condition.id}
+                                                                    type="button"
+                                                                    aria-pressed={checked}
+                                                                    onClick={() => toggleIntakeCondition(line.service_id, condition.id)}
+                                                                    className={cx(
+                                                                        'inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold transition duration-150',
+                                                                        checked
+                                                                            ? 'bg-amber-600 text-white dark:bg-amber-400 dark:text-ink-950'
+                                                                            : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-100 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
+                                                                    )}
+                                                                >
+                                                                    {condition.label}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    <label className="block">
+                                                        <span className={cx(label, 'mb-1')}>{t('intake.notes')}</span>
+                                                        <input
+                                                            type="text"
+                                                            placeholder={t('intake.notesPlaceholder')}
+                                                            value={line.intake_notes}
+                                                            onChange={(e) => updateLine(line.service_id, { intake_notes: e.target.value })}
+                                                            className={cx(inputSm, 'w-full')}
+                                                        />
+                                                    </label>
+                                                </div>
+                                            )}
                                         </li>
                                     );
                                 })}

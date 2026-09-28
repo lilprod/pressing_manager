@@ -361,5 +361,11 @@
     "notifications.recipient": "Destinataire",
     "notifications.status.sent": "Envoyé",
     "notifications.status.simulated": "Simulé",
-    "notifications.status.failed": "Échec"
+    "notifications.status.failed": "Échec",
+    "intake.title": "État à la réception",
+    "intake.hint": "Cochez les défauts déjà présents sur l'article avant traitement.",
+    "intake.notes": "Note (optionnel)",
+    "intake.notesPlaceholder": "Ex. : manche gauche effilochée",
+    "intake.none": "Aucun état signalé à la réception",
+    "intake.toggle": "État à la réception"
 }

@@ -66,6 +66,13 @@ export type OrderItemStatus =
     | 'non_recupere'
     | 'perdu';
 
+export interface IntakeCondition {
+    id: number;
+    code: string;
+    label: string;
+    is_active: boolean;
+}
+
 export interface OrderItem {
     id: number;
     order_id: number;
@@ -74,6 +81,8 @@ export interface OrderItem {
     service?: Service;
     qr_code: string;
     description: string | null;
+    intake_notes: string | null;
+    intake_conditions?: IntakeCondition[];
     quantity: number;
     unit_price: number;
     status: OrderItemStatus;

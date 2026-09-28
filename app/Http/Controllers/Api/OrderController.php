@@ -60,7 +60,7 @@ class OrderController extends ApiController
         if (! empty($data['client_local_uuid'])) {
             $existing = Order::where('client_local_uuid', $data['client_local_uuid'])->first();
             if ($existing !== null) {
-                return response()->json($existing->load('items'), 200);
+                return response()->json($existing->load('items.intakeConditions'), 200);
             }
         }
 
@@ -92,15 +92,20 @@ class OrderController extends ApiController
                 $service = $agency->services()->findOrFail($itemData['service_id']);
                 $unitPrice = $service->pivot->price_override ?? $service->base_price;
 
-                $order->items()->create([
+                $item = $order->items()->create([
                     'agency_id' => $agencyId,
                     'service_id' => $service->id,
                     'qr_code' => $this->qrCodes->generateCode($agency->code),
                     'description' => $itemData['description'] ?? null,
+                    'intake_notes' => $itemData['intake_notes'] ?? null,
                     'quantity' => $itemData['quantity'],
                     'unit_price' => $unitPrice,
                     'status' => 'recu',
                 ]);
+
+                if (! empty($itemData['intake_condition_ids'])) {
+                    $item->intakeConditions()->sync($itemData['intake_condition_ids']);
+                }
 
                 $total += $unitPrice * $itemData['quantity'];
             }
@@ -131,13 +136,13 @@ class OrderController extends ApiController
             return $order;
         });
 
-        return response()->json($order->load('items'), 201);
+        return response()->json($order->load('items.intakeConditions'), 201);
     }
 
     public function show(Request $request, Order $order): JsonResponse
     {
         $this->authorizeAgency($request->user(), $order->agency_id);
 
-        return response()->json($order->load('items.service', 'client', 'invoice'));
+        return response()->json($order->load('items.service', 'items.intakeConditions', 'client', 'invoice'));
     }
 }

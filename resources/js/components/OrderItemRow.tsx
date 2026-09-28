@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { ArrowRight, Check, Printer, QrCode, ShieldCheck, TriangleAlert, X } from 'lucide-react';
+import { ArrowRight, Check, ClipboardList, Printer, QrCode, ShieldCheck, TriangleAlert, X } from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
 import { api, ApiError } from '../lib/api';
 import { useFormat } from '../lib/format';
 import { ALLOWED_TRANSITIONS } from '../lib/orderWorkflow';
 import type { OrderItem, OrderItemStatus } from '../types';
-import StatusBadge from './ui/StatusBadge';
+import StatusBadge, { Pill } from './ui/StatusBadge';
 import { Alert, Spinner } from './ui/Feedback';
 import { button, card, cx, input, label } from './ui/styles';
 
@@ -65,6 +65,17 @@ export default function OrderItemRow({ item, onUpdated, onPrintLabel }: Props) {
                         <span className="tabular-nums text-ink-600 dark:text-ink-350">{money(item.unit_price * item.quantity)}</span>
                     </div>
                     {item.description && <p className="text-sm text-ink-600 dark:text-ink-350">{item.description}</p>}
+                    {((item.intake_conditions && item.intake_conditions.length > 0) || item.intake_notes) && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                            <ClipboardList aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-300" />
+                            {item.intake_conditions?.map((condition) => (
+                                <Pill key={condition.id} tone="amber">
+                                    {condition.label}
+                                </Pill>
+                            ))}
+                            {item.intake_notes && <span className="text-xs italic text-ink-600 dark:text-ink-350">{item.intake_notes}</span>}
+                        </div>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     <StatusBadge kind="order" status={item.status} />

@@ -123,47 +123,70 @@ export default function ClientsList() {
                         ) : clients.length === 0 ? (
                             <EmptyState icon={Users} title={t('client.noResults')} description={t('client.noResultsHint')} />
                         ) : (
-                            <ul className="divide-y divide-ink-100 dark:divide-ink-800">
-                                {clients.map((client) => (
-                                    <li
-                                        key={client.id}
-                                        className={cx(
-                                            'flex items-center gap-2 pr-3 transition',
-                                            selected?.id === client.id ? 'bg-brand-50/70 dark:bg-brand-400/10' : 'hover:bg-ink-50 dark:hover:bg-ink-800/50',
-                                        )}
-                                    >
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelected(client)}
-                                            aria-pressed={selected?.id === client.id}
-                                            className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left sm:px-5"
+                            <div>
+                                <div
+                                    role="row"
+                                    className="hidden items-center gap-4 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
+                                >
+                                    <span className="w-10 shrink-0" aria-hidden="true" />
+                                    <span className="min-w-0 flex-1">{t('client.table.identity')}</span>
+                                    <span className="w-36 shrink-0">{t('client.table.tier')}</span>
+                                    <span className="w-24 shrink-0">{t('client.table.status')}</span>
+                                    <span className="w-20 shrink-0" aria-hidden="true" />
+                                </div>
+
+                                <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                                    {clients.map((client) => (
+                                        <li
+                                            key={client.id}
+                                            className={cx(
+                                                'flex flex-wrap items-center gap-3 px-4 py-3 transition sm:flex-nowrap sm:gap-4 sm:px-5',
+                                                selected?.id === client.id ? 'bg-brand-50/70 dark:bg-brand-400/10' : 'hover:bg-ink-50 dark:hover:bg-ink-800/50',
+                                            )}
                                         >
-                                            <Avatar firstName={client.first_name} lastName={client.last_name} />
-                                            <span className="min-w-0 flex-1">
-                                                <span className="flex items-center gap-2 truncate font-semibold text-ink-900 dark:text-ink-50">
-                                                    <span className="truncate">
+                                            <button
+                                                type="button"
+                                                onClick={() => setSelected(client)}
+                                                aria-pressed={selected?.id === client.id}
+                                                className="flex min-w-0 basis-full items-center gap-3 text-left sm:flex-1 sm:basis-auto"
+                                            >
+                                                <Avatar firstName={client.first_name} lastName={client.last_name} size="sm" />
+                                                <span className="min-w-0 flex-1">
+                                                    <span className="block truncate font-semibold text-ink-900 dark:text-ink-50">
                                                         {client.first_name} {client.last_name}
                                                     </span>
-                                                    {!client.is_active && <Pill tone="rose">{t('client.inactive')}</Pill>}
+                                                    <span className="flex flex-wrap gap-x-3 text-sm text-ink-600 dark:text-ink-350">
+                                                        <span>{client.phone}</span>
+                                                        {client.email && <span className="hidden truncate sm:inline">{client.email}</span>}
+                                                    </span>
                                                 </span>
-                                                <span className="flex flex-wrap gap-x-3 text-sm text-ink-600 dark:text-ink-350">
-                                                    <span>{client.phone}</span>
-                                                    {client.email && <span className="hidden truncate sm:inline">{client.email}</span>}
-                                                </span>
-                                            </span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditing(client)}
-                                            className={button('ghost', 'sm')}
-                                        >
-                                            <Pencil aria-hidden="true" className="h-4 w-4" />
-                                            <span className="hidden sm:inline">{t('common.edit')}</span>
-                                            <span className="sr-only sm:hidden">{t('common.edit')}</span>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
+                                            </button>
+
+                                            <div className="w-auto shrink-0 sm:w-36">
+                                                {client.loyalty_tier_name ? (
+                                                    <Pill tone="accent">{client.loyalty_tier_name}</Pill>
+                                                ) : (
+                                                    <span className="hidden text-sm text-ink-500 sm:inline dark:text-ink-400">—</span>
+                                                )}
+                                            </div>
+
+                                            <div className="w-auto shrink-0 sm:w-24">
+                                                {client.is_active ? (
+                                                    <Pill tone="emerald">{t('client.activeStatus')}</Pill>
+                                                ) : (
+                                                    <Pill tone="rose">{t('client.inactive')}</Pill>
+                                                )}
+                                            </div>
+
+                                            <button type="button" onClick={() => setEditing(client)} className={cx(button('ghost', 'sm'), 'w-auto shrink-0 sm:w-20')}>
+                                                <Pencil aria-hidden="true" className="h-4 w-4" />
+                                                <span className="hidden sm:inline">{t('common.edit')}</span>
+                                                <span className="sr-only sm:hidden">{t('common.edit')}</span>
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
                         )}
                         <Pagination meta={meta} onPageChange={setPage} />
                     </div>

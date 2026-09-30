@@ -41,6 +41,12 @@ honnête sur ce que l'API expose déjà ; voir le commit `408e94e` pour l'exempl
 colonnes/tableau : un enfant `flex-1` sans `basis-full sm:basis-auto` se fait
 écraser par ses voisins au lieu de passer à la ligne (bug rencontré et corrigé sur
 `ClientsList.tsx`, commit `08a8922`).
+**Pages avec panneau latéral permanent** (formulaire de création à côté de la liste,
+comme `ClientsList.tsx`/`ServicesPage.tsx`) : la colonne de liste est nettement plus
+étroite qu'une page pleine largeur (`OrdersList.tsx`). Un tableau y dépasse vite —
+enrober `<div className="overflow-x-auto">` + `min-w-[...]` sur l'en-tête et la
+liste plutôt que de laisser les colonnes `flex-1` s'écraser (bug rencontré et
+corrigé sur `ServicesPage.tsx`, commit `fc75065`).
 
 | Section Figma | Écran(s) | Page(s) actuelle(s) | État |
 |---|---|---|---|
@@ -49,9 +55,9 @@ colonnes/tableau : un enfant `flex-1` sans `basis-full sm:basis-auto` se fait
 | 02 Dépôts & POS | Gestion des dépôts (liste) | `pages/counter/OrdersList.tsx` | **fait** (commit `408e94e`) |
 | 02 Dépôts & POS | Nouveau dépôt (formulaire) | `pages/counter/NewOrder.tsx` | jugé déjà conforme le 2026-09-30 — hérite des tokens, structure (client→catalogue groupé par catégorie→panier sticky) déjà proche de Figma et plus riche (recherche live, remise fidélité auto, conditions de réception, file offline). Ne pas réécrire sans raison concrète. |
 | 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`) |
-| 03 Clients & fidélité | Nouveau/Modifier/Fiche client | `pages/clients/ClientForm.tsx`, panneau détail dans `ClientsList.tsx` | à faire (le panneau détail est déjà proche du pattern Figma) |
+| 03 Clients & fidélité | Nouveau/Modifier/Fiche client | `pages/clients/ClientForm.tsx`, panneau détail dans `ClientsList.tsx` | **fait** (commit `11de473`) — a aussi exposé le champ `notes` (backend déjà prêt, jamais affiché côté front) |
 | 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | **absent, voir §2** | bloqué (module à construire) |
-| 07 Articles & tarifs | Catalogue, Création/édition article | `pages/ServicesPage.tsx` (existe déjà) | à faire |
+| 07 Articles & tarifs | Catalogue, Création/édition article | `pages/ServicesPage.tsx` (existe déjà) | **fait** (liste, commit `fc75065`) — formulaires création/édition (modale) pas encore repris |
 | 08 Rapports & bilans | Rapports, Bilan journalier | `pages/KpiPage.tsx` | à faire |
 | 09 Paramètres | Paramètres, Promotions/fidélité, Branding, Notifications | `pages/SettingsPage.tsx`, `pages/LoyaltyPage.tsx`, `pages/NotificationsPage.tsx` | à faire |
 | 11 Équipe | Utilisateurs, Rôles & permissions, Profil | `pages/UsersPage.tsx`, `pages/RolesPermissionsPage.tsx`, `pages/ProfilePage.tsx` | à faire |

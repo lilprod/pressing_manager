@@ -25,6 +25,7 @@ import {
     Wallet,
     WifiOff,
     LayoutDashboard,
+    ChartNoAxesCombined,
     X,
     type LucideIcon,
 } from 'lucide-react';
@@ -71,6 +72,11 @@ function useSidebarSections(onNavigate?: () => void) {
 
     return (
         <>
+            {hasPermission(user, 'reports.view') && (
+                <div className="pt-2">
+                    <NavItem to="/dashboard" icon={LayoutDashboard} label={t('dashboard.title')} onClick={onNavigate} />
+                </div>
+            )}
             <NavSection label={t('nav.section.counter')}>
                 <NavItem to="/" end icon={ShoppingBag} label={t('nav.newOrder')} onClick={onNavigate} />
                 <NavItem to="/orders" icon={ClipboardList} label={t('nav.orders')} onClick={onNavigate} />
@@ -118,7 +124,7 @@ function useSidebarSections(onNavigate?: () => void) {
                     {hasPermission(user, 'invoices.manage') && (
                         <NavItem to="/invoices/outstanding" icon={CircleDollarSign} label={t('invoice.outstandingTitle')} onClick={onNavigate} />
                     )}
-                    {hasPermission(user, 'reports.view') && <NavItem to="/kpi" icon={LayoutDashboard} label={t('nav.kpi')} onClick={onNavigate} />}
+                    {hasPermission(user, 'reports.view') && <NavItem to="/kpi" icon={ChartNoAxesCombined} label={t('nav.kpi')} onClick={onNavigate} />}
                     {hasPermission(user, 'notifications.manage') && (
                         <NavItem to="/notifications" icon={Bell} label={t('nav.notifications')} onClick={onNavigate} />
                     )}
@@ -202,7 +208,7 @@ export default function AppLayout() {
                 <PasswordExpiryBanner />
 
                 <header className="sticky top-0 z-40 border-b border-ink-200/80 bg-white/85 backdrop-blur-md dark:border-ink-800 dark:bg-ink-950/85">
-                    <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
+                    <div className="flex h-16 items-center gap-2 px-4 sm:gap-3 sm:px-6">
                         <button
                             type="button"
                             onClick={() => setMobileNavOpen(true)}
@@ -224,7 +230,7 @@ export default function AppLayout() {
                                     <select
                                         value={activeAgencyId ?? ''}
                                         onChange={(e) => setActiveAgencyId(e.target.value ? Number(e.target.value) : null)}
-                                        className="h-10 max-w-[9.5rem] rounded-xl border border-ink-400 bg-white pl-9 pr-8 text-sm font-medium text-ink-800 transition hover:border-ink-500 focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-500/15 sm:max-w-[14rem] dark:border-ink-500 dark:bg-ink-900 dark:text-ink-100"
+                                        className="h-10 max-w-[7.5rem] rounded-xl border border-ink-400 bg-white pl-9 pr-8 text-sm font-medium text-ink-800 transition hover:border-ink-500 focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-500/15 sm:max-w-[14rem] dark:border-ink-500 dark:bg-ink-900 dark:text-ink-100"
                                     >
                                         <option value="">{t('nav.allAgencies')}</option>
                                         {agencies.map((agency) => (

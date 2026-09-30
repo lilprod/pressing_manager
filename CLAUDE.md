@@ -62,8 +62,8 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 
 | Section Figma | Écran(s) | Page(s) actuelle(s) | État |
 |---|---|---|---|
-| 00 Vue d'ensemble | Dashboard SPARK PRESSING | `pages/KpiPage.tsx` | à faire |
-| 01 Authentification | Authentification staff | `pages/Login.tsx` | à faire |
+| 00 Vue d'ensemble | Dashboard SPARK PRESSING | `pages/DashboardPage.tsx` (route `/dashboard`, 1er lien de la sidebar, permission `reports.view`) | **fait** (2026-09-30) — écran distinct de `/kpi` (la maquette sépare section 00 et section 08). Uniquement des données existantes : `/kpi` période courante + précédente (variations), compteurs `/orders?status=…` (total paginé), `/cash/summary`, `/invoices` (`total_outstanding`), file hors ligne IndexedDB. Blocs sans agrégat backend omis (voir §2). `/` reste « Nouvelle commande » (flux comptoir inchangé). |
+| 01 Authentification | Authentification staff | `pages/Login.tsx` | **fait** (2026-09-30) — carte de connexion, pastille réseau réelle, alerte d'inactivité alimentée par `session_timeout_minutes` ; choix d'agence / « se souvenir de moi » / réinitialisation libre-service omis (§2) |
 | 02 Dépôts & POS | Gestion des dépôts (liste) | `pages/counter/OrdersList.tsx` | **fait** (commit `408e94e`) |
 | 02 Dépôts & POS | Nouveau dépôt (formulaire) | `pages/counter/NewOrder.tsx` | jugé déjà conforme le 2026-09-30 — hérite des tokens, structure (client→catalogue groupé par catégorie→panier sticky) déjà proche de Figma et plus riche (recherche live, remise fidélité auto, conditions de réception, file offline). Ne pas réécrire sans raison concrète. |
 | 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`) |
@@ -72,7 +72,8 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait** — construit sans accès Figma direct (rate-limit MCP atteint), à partir de la description du gap dans ce fichier + conventions POS standards (mouvements manuels entrée/sortie, clôture = comptage vs théorique avec écart) ; à comparer visuellement à la maquette si l'accès Figma est rétabli |
 | 07 Articles & tarifs | Catalogue (liste) | `pages/ServicesPage.tsx` | **fait** (commit `fc75065`, écrans séparés depuis commit `d52b79b`) |
 | 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait** (commit `d52b79b`) — retour utilisateur du 2026-09-30 : le design a des écrans dédiés séparés de la liste, pas un panneau/modale inline ; voir convention ci-dessous |
-| 08 Rapports & bilans | Rapports, Bilan journalier | `pages/KpiPage.tsx` | à faire |
+| 08 Rapports & bilans | Rapports et bilans | `pages/KpiPage.tsx` (route `/kpi`, libellé nav « Rapports & bilans ») | **fait** (2026-09-30) — filtres période + raccourcis, 4 KPI avec variation vs période précédente, tableau « Performance des agences », indicateurs opérationnels existants conservés (hors maquette mais déjà exposés par l'API), raccourcis vers les écrans détaillés. Histogramme CA / répartition paiements / synthèse fidélité / planification omis (§2) |
+| 08 Rapports & bilans | Bilan journalier et performance caissiers | — | **non construit** : quasi intégralement dépendant d'agrégats absents (recettes par mode de paiement et par heure, performance par caissier, remises du jour). Les données existantes (clôture de caisse théorique/compté/écart) sont déjà sur `/cash/closures/:id` ; lien depuis « Rapports détaillés ». Voir §2 |
 | 09 Paramètres | Paramètres, Promotions/fidélité, Branding, Notifications | `pages/SettingsPage.tsx`, `pages/LoyaltyPage.tsx`, `pages/NotificationsPage.tsx` | à faire |
 | 11 Équipe | Utilisateurs, Rôles & permissions, Profil | `pages/UsersPage.tsx`, `pages/RolesPermissionsPage.tsx`, `pages/ProfilePage.tsx` | à faire |
 
@@ -101,6 +102,86 @@ Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
   section sans clarifier au préalable si c'est une réinterprétation (l'admin global
   actuel = ce superadmin) ou un vrai chantier multi-tenant — décision produit à
   prendre avec l'utilisateur avant tout code.
+
+#### Éléments de maquette omis faute de données (refonte écran par écran, 2026-09-30)
+
+Relevés pendant le restylage des écrans restants. Rien de tout cela n'a été simulé
+côté front : chaque élément a été **omis** et attend le backend décrit ici.
+
+**01 Authentification** (node `43:3`)
+- Sélecteur d'agence à la connexion : `POST /login` n'accepte pas d'`agency_id`
+  (l'agence découle de `users.agency_id`, un global la choisit après connexion dans
+  l'en-tête). Il faudrait un champ optionnel `agency_id` validé contre les agences
+  autorisées + une notion d'« agence de session » côté API.
+- Case « Se souvenir de moi » : jetons Sanctum sans expiration différenciée ; il
+  faudrait une durée de vie de jeton paramétrable (courte vs longue) choisie au login.
+- Carte « Réinitialisation » (lien de reset par e-mail ou code SMS) : aucun flux
+  mot de passe oublié en libre-service. Il faudrait `POST /password/forgot`
+  (e-mail/SMS, jeton à durée limitée, throttling) + `POST /password/reset`, et un
+  canal SMS réel (seul un envoi simulé existe dans `NotificationService`).
+- Visuel photo « Atelier premium » du panneau de marque : asset Figma non
+  récupérable (quota MCP) — remplacé par le dégradé de marque existant.
+
+**00 Vue d'ensemble** (node `1:13`)
+- Graphique « Revenus réseau » (courbe sur 7 dates + infobulle) : il faudrait
+  `GET /kpi/revenue-series?from&to&granularity=day|week|month[&agency_id]` renvoyant
+  `[{date, revenue}]` (somme des `payments.amount` complets groupée par jour de `paid_at`).
+- Évolution sur les cartes « Prêts à retirer » et « Abonnements actifs » : ce sont
+  des instantanés ; une variation demanderait un historique (snapshots quotidiens).
+- Libellé exact de la 4e carte (icône heart-handshake) inconnu (textes Figma non
+  lisibles hors quota) : affiché = abonnements actifs, seule donnée « fidélisation »
+  agrégée existante.
+- Pipeline atelier : la maquette compte des **pièces** par étape et a une étape
+  « finition » (sparkles) ; l'API ne filtre que des **commandes** par statut et le
+  workflow n'a pas d'étape finition. Il faudrait `GET /order-items/counts-by-status`
+  (et une étape `finition` si le métier la veut).
+- Alerte de délai (« X dépôts en retard ») : pas de filtre « en retard ». Il faudrait
+  `GET /orders?overdue=1` (`promised_at < now()` et statut ∉ {pret, livre, annule}) ou
+  un compteur dédié.
+- Flux de caisse — répartition par mode de paiement (3 barres) : il faudrait un
+  agrégat `payments` complets groupés par `method` sur la période
+  (`GET /kpi` → `payments_by_method: {espece, carte, flooz, tmoney}` — valeurs de
+  l'enum `payments.method`).
+- Flux de caisse sans agence sélectionnée : `/cash/summary` exige une agence ; pas de
+  vue consolidée multi-agences de la caisse.
+- Impayés — « dépôts en retard », « à traiter aujourd'hui » et tranches d'ancienneté
+  0-30 / 31-89 / 90+ jours : il faudrait que `GET /invoices` renvoie
+  `aging: [{bucket, amount, count}]` calculé sur `issued_at`.
+- Journal « Activité récente » multi-évènements (dépôt, prêt, scan, reçu, finition) :
+  pas de flux d'évènements ; remplacé par « Derniers dépôts » (`/orders`). Il faudrait
+  une table d'audit/évènements + `GET /activity?limit=`.
+- Synchronisation — « dernière synchro » et opérations autres que des dépôts
+  (encaissements, fiches client) : la file hors ligne ne stocke que des commandes et
+  n'horodate pas les synchronisations réussies.
+
+**08 Rapports et bilans** (node `43:774`)
+- Bouton « Planifier » (envoi programmé de rapports) : aucun planificateur. Il faudrait
+  un modèle `ReportSchedule` + commande planifiée + envoi e-mail.
+- Histogramme « Évolution du chiffre d'affaires » (onglets jour/semaine/mois, 12 barres,
+  légende) : même série temporelle que ci-dessus (`/kpi/revenue-series`).
+- Carte « Répartition — Paiements » (donut 4 modes) et « Caisse » (3 légendes) :
+  agrégat par mode de paiement sur la période (voir ci-dessus).
+- Tableau « Performance des agences » — colonne statut (pastille) : remplacée par la
+  variation réelle du CA vs période précédente ; la règle métier du statut
+  (« En hausse », « À surveiller »…) n'est pas définie.
+- Carte « Fidélité » (valeur + 3 légendes) : il faudrait un agrégat clients par palier
+  et points émis/consommés sur la période (voir section 09).
+- Sélecteur « comparer à » / 3e filtre : la comparaison est fixée à la période
+  précédente de même durée.
+
+**08 Bilan journalier et performance caissiers** (node `43:1144`) — écran non construit :
+- Recettes par mode de paiement et par tranche horaire (histogramme 8 barres + 4
+  totaux mobile money / espèces / carte / virement) : `GET /reports/daily?date&agency_id`
+  avec `payments_by_method` et `payments_by_hour`.
+- Mouvements « hors dépôt » (entrées, sorties, livraisons, ajustements) et écart de
+  caisse du jour : partiellement disponibles (`/cash/movements`, `/cash/closures`)
+  mais pas agrégés par jour ; à inclure dans le même endpoint.
+- Soldés / impayés du jour et remises accordées : agrégats factures du jour + somme
+  des remises (colonne `orders.discount_amount`, déjà en base) par jour.
+- Tableau « Performance des caissiers » (CA encaissé, nb tickets, panier moyen,
+  progression vs objectif, statut de session) : la colonne `payments.received_by`
+  existe, il faudrait l'agréger par utilisateur dans un endpoint ; la notion de
+  session de caisse par caissier et les objectifs n'existent pas du tout.
 
 Le catalogue articles/tarifs (CRUD) et la sidebar de navigation groupée, qui étaient
 dans une version précédente de cette liste, sont **déjà faits** (commits `7dd2fae`,

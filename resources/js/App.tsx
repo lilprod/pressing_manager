@@ -32,6 +32,7 @@ import StockPage from './pages/StockPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import RhPage from './pages/RhPage';
 import KpiPage from './pages/KpiPage';
+import DashboardPage from './pages/DashboardPage';
 import NotificationsPage from './pages/NotificationsPage';
 
 function ProtectedLayout() {
@@ -90,6 +91,7 @@ export default function App() {
                     <Route path="/stock" element={<StockPage />} />
                     <Route path="/deliveries" element={<DeliveriesPage />} />
                     <Route path="/hr" element={<RhPage />} />
+                    <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/kpi" element={<KpiPage />} />
                     <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/license" element={<LicensePage />} />

@@ -6,6 +6,7 @@ use App\Models\Agency;
 use App\Models\Client;
 use App\Models\Order;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\Concerns\SeedsRbac;
 use Tests\TestCase;
 
@@ -55,6 +56,11 @@ class AgencyScopingTest extends TestCase
 
     public function test_the_ready_today_filter_only_returns_orders_promised_for_today(): void
     {
+        // Horloge figée à midi : un test lancé près de minuit UTC verrait "+3h" ou
+        // "+2 jours" traverser une frontière de jour calendaire de façon imprévisible
+        // (déjà rencontré : échec réel aux alentours de 23h54 UTC).
+        Carbon::setTestNow(Carbon::parse('2026-01-15 12:00:00', 'UTC'));
+
         $this->seedRbac();
         $agency = Agency::factory()->create();
         $accueil = $this->makeUser('accueil', $agency);
@@ -68,5 +74,7 @@ class AgencyScopingTest extends TestCase
         $response->assertOk();
         $this->assertCount(1, $response->json('data'));
         $this->assertSame($dueToday->id, $response->json('data.0.id'));
+
+        Carbon::setTestNow();
     }
 }

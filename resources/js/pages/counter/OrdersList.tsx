@@ -136,58 +136,79 @@ export default function OrdersList() {
                 ) : orders.length === 0 ? (
                     <EmptyState icon={Package} title={t('order.noOrders')} description={t('order.noOrdersHint')} />
                 ) : (
-                    <ul className="divide-y divide-ink-100 dark:divide-ink-800">
-                        {orders.map((order) => (
-                            <li key={order.id}>
-                                <Link
-                                    to={`/orders/${order.id}`}
-                                    className="group flex items-center gap-3 px-4 py-3.5 transition hover:bg-ink-50 focus-visible:bg-ink-50 sm:gap-4 sm:px-5 dark:hover:bg-ink-800/50 dark:focus-visible:bg-ink-800/50"
-                                >
-                                    <Avatar firstName={order.client?.first_name} lastName={order.client?.last_name} className="hidden sm:inline-flex" />
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                            <span className="font-display font-bold text-ink-900 dark:text-white">
+                    <div>
+                        <div
+                            role="row"
+                            className="hidden items-center gap-4 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
+                        >
+                            <span className="w-8 shrink-0" aria-hidden="true" />
+                            <span className="w-28 shrink-0">{t('order.table.code')}</span>
+                            <span className="min-w-0 flex-1">{t('order.client')}</span>
+                            <span className="w-24 shrink-0">{t('order.table.service')}</span>
+                            <span className="w-24 shrink-0">{t('order.items')}</span>
+                            <span className="w-24 shrink-0 text-right">{t('common.total')}</span>
+                            <span className="w-32 shrink-0">{t('order.table.status')}</span>
+                            <span className="w-36 shrink-0">{t('order.table.promised')}</span>
+                            <span className="w-5 shrink-0" aria-hidden="true" />
+                        </div>
+
+                        <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                            {orders.map((order) => (
+                                <li key={order.id}>
+                                    <Link
+                                        to={`/orders/${order.id}`}
+                                        className="group flex flex-wrap items-center gap-x-4 gap-y-1.5 px-4 py-3.5 transition hover:bg-ink-50 focus-visible:bg-ink-50 sm:flex-nowrap sm:px-5 sm:py-3 dark:hover:bg-ink-800/50 dark:focus-visible:bg-ink-800/50"
+                                    >
+                                        <Avatar firstName={order.client?.first_name} lastName={order.client?.last_name} size="sm" className="hidden sm:inline-flex" />
+
+                                        <div className="w-full shrink-0 sm:w-28">
+                                            <p className="font-display font-bold text-ink-900 dark:text-white">
                                                 {t('order.number')}
                                                 {order.order_number}
-                                            </span>
-                                            {order.is_express && (
+                                            </p>
+                                            <p className="text-xs text-ink-500 dark:text-ink-400">{dateTime(order.created_at)}</p>
+                                        </div>
+
+                                        <div className="min-w-0 flex-1 basis-full sm:basis-auto">
+                                            <p className="truncate font-medium text-ink-900 dark:text-white">
+                                                {order.client?.first_name} {order.client?.last_name}
+                                            </p>
+                                            {order.client?.phone && <p className="truncate text-xs text-ink-500 dark:text-ink-400">{order.client.phone}</p>}
+                                        </div>
+
+                                        <div className="w-24 shrink-0">
+                                            {order.is_express ? (
                                                 <Pill tone="accent" icon={Zap}>
                                                     {t('order.expressShort')}
                                                 </Pill>
+                                            ) : (
+                                                <Pill tone="neutral">{t('order.standard')}</Pill>
                                             )}
                                         </div>
-                                        <p className="truncate text-sm text-ink-600 dark:text-ink-350">
-                                            {order.client?.first_name} {order.client?.last_name}
-                                            <span aria-hidden="true"> · </span>
-                                            {dateTime(order.created_at)}
-                                            {order.items && (
-                                                <>
-                                                    <span aria-hidden="true"> · </span>
-                                                    {t('order.itemsCount', { count: order.items.reduce((sum, item) => sum + item.quantity, 0) })}
-                                                </>
-                                            )}
-                                            {order.promised_at && (
-                                                <>
-                                                    <span aria-hidden="true"> · </span>
-                                                    <span className="font-medium text-brand-700 dark:text-brand-300">
-                                                        {t('order.promisedAt')} {dateTime(order.promised_at)}
-                                                    </span>
-                                                </>
-                                            )}
+
+                                        <p className="w-24 shrink-0 text-sm text-ink-700 dark:text-ink-200">
+                                            {order.items ? t('order.itemsCount', { count: order.items.reduce((sum, item) => sum + item.quantity, 0) }) : '—'}
                                         </p>
-                                    </div>
-                                    <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-4">
-                                        <span className="font-display font-bold tabular-nums text-ink-900 dark:text-white">{money(order.total_amount)}</span>
-                                        <StatusBadge kind="order" status={order.status} />
-                                    </div>
-                                    <ChevronRight
-                                        aria-hidden="true"
-                                        className="hidden h-5 w-5 shrink-0 text-ink-400 transition group-hover:translate-x-0.5 group-hover:text-brand-700 sm:block dark:group-hover:text-brand-300"
-                                    />
-                                </Link>
-                            </li>
-                        ))}
-                    </ul>
+
+                                        <span className="w-24 shrink-0 text-right font-display font-bold tabular-nums text-ink-900 dark:text-white">
+                                            {money(order.total_amount)}
+                                        </span>
+
+                                        <div className="w-32 shrink-0">
+                                            <StatusBadge kind="order" status={order.status} />
+                                        </div>
+
+                                        <p className="w-36 shrink-0 text-sm text-ink-600 dark:text-ink-350">{order.promised_at ? dateTime(order.promised_at) : '—'}</p>
+
+                                        <ChevronRight
+                                            aria-hidden="true"
+                                            className="hidden h-5 w-5 shrink-0 text-ink-400 transition group-hover:translate-x-0.5 group-hover:text-brand-700 sm:block dark:group-hover:text-brand-300"
+                                        />
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
                 )}
                 <Pagination meta={meta} onPageChange={setPage} />
             </div>

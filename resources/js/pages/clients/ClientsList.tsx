@@ -4,7 +4,7 @@ import { api, ApiError } from '../../lib/api';
 import ClientForm from './ClientForm';
 import type { Client, Order, Paginated } from '../../types';
 import { Link } from 'react-router-dom';
-import { Award, ChevronRight, Mail, MapPin, Pencil, Phone, Search, Trash2, UserPlus, Users, X } from 'lucide-react';
+import { Award, ChevronRight, Mail, MapPin, Pencil, Phone, Search, StickyNote, Trash2, UserPlus, Users, X } from 'lucide-react';
 import PageHeader, { Avatar } from '../../components/ui/PageHeader';
 import StatusBadge, { Pill } from '../../components/ui/StatusBadge';
 import { Alert, EmptyState, LoadingState } from '../../components/ui/Feedback';
@@ -254,6 +254,16 @@ export default function ClientsList() {
                                 </div>
                             )}
                         </dl>
+
+                        {selected.notes && (
+                            <div className="space-y-2 border-b border-ink-200/80 p-5 dark:border-ink-800">
+                                <h3 className={cx(sectionTitle, 'flex items-center gap-2 text-sm')}>
+                                    <StickyNote aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-350" />
+                                    {t('client.notes')}
+                                </h3>
+                                <p className="whitespace-pre-line text-sm text-ink-700 dark:text-ink-200">{selected.notes}</p>
+                            </div>
+                        )}
 
                         <div className="space-y-2 p-5">
                             <h3 className={cx(sectionTitle, 'text-sm')}>{t('nav.orders')}</h3>

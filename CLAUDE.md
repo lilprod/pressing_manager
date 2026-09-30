@@ -99,9 +99,17 @@ Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
 - **Retraits en agence** (section 05) : pas de flux dédié comptoir (file "prêt à
   retirer", remise d'articles, encaissement du solde). Seule la livraison à domicile
   (`DeliveriesPage.tsx`) existe — flux différent.
-- **Gestion des agences** (section 10, Multi-agences) : `GET /agencies` est en
-  lecture seule, aucun CRUD. Pas de vue consolidée multi-agences ni de détail
-  d'agence.
+- ~~**Gestion des agences** (section 10, Multi-agences)~~ **fait** (2026-09-30) :
+  CRUD complet (`AgencyController::manage/show/store/update`, permission
+  `agencies.manage`), écrans `pages/agencies/AgenciesPage.tsx` (liste, avec
+  compteurs staff/clients par agence) et `pages/agencies/AgencyFormPage.tsx`
+  (création/édition séparées, routes `/agencies/new` et `/agencies/:id/edit`,
+  convention liste/création/édition habituelle). `GET /agencies` (actives
+  uniquement, utilisé par le sélecteur d'en-tête) reste inchangé et distinct de
+  `GET /agencies/manage` (toutes, paginé, pour cet écran). Construit sans accès
+  Figma direct (rate-limit MCP toujours actif) — à comparer visuellement si
+  l'accès est rétabli. Toujours **pas de vue consolidée multi-agences** (dashboard
+  cross-agences avec devise) — dépend du chantier multi-devise (§2 ci-dessus).
 - **Atelier en vue Kanban** (section 04) : `OrdersList.tsx` est une liste filtrable
   par statut, pas un tableau Kanban par étape. Amélioration UX, pas un gap de
   données (le modèle `OrderItemStatus` le permet déjà).

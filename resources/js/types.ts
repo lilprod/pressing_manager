@@ -44,7 +44,10 @@ export interface Agency {
     city: string | null;
     address: string | null;
     phone: string | null;
+    unclaimed_item_threshold_days: number;
     is_active: boolean;
+    users_count?: number;
+    clients_count?: number;
 }
 
 export interface User {

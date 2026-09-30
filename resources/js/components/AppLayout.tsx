@@ -101,7 +101,8 @@ function useSidebarSections(onNavigate?: () => void) {
                 hasPermission(user, 'stocks.manage') ||
                 hasPermission(user, 'hr.manage') ||
                 hasPermission(user, 'hr.clock') ||
-                hasPermission(user, 'users.manage')) && (
+                hasPermission(user, 'users.manage') ||
+                hasPermission(user, 'agencies.manage')) && (
                 <NavSection label={t('nav.section.resources')}>
                     {hasPermission(user, 'services.manage') && <NavItem to="/services" icon={Shirt} label={t('nav.services')} onClick={onNavigate} />}
                     {hasPermission(user, 'stocks.manage') && <NavItem to="/stock" icon={Boxes} label={t('nav.stock')} onClick={onNavigate} />}
@@ -111,6 +112,9 @@ function useSidebarSections(onNavigate?: () => void) {
                     {hasPermission(user, 'users.manage') && <NavItem to="/users" icon={UsersRound} label={t('users.title')} onClick={onNavigate} />}
                     {hasPermission(user, 'users.manage') && (
                         <NavItem to="/roles-permissions" icon={ShieldCheck} label={t('rbac.title')} onClick={onNavigate} />
+                    )}
+                    {hasPermission(user, 'agencies.manage') && (
+                        <NavItem to="/agencies" icon={Building2} label={t('agency.title')} onClick={onNavigate} />
                     )}
                 </NavSection>
             )}

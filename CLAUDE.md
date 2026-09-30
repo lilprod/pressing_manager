@@ -31,25 +31,30 @@ Maquette cible pour la refonte visuelle en cours :
 
 ## Chantiers restants (par priorité)
 
-### 1. Refonte visuelle écran par écran (en cours, non commencée au niveau page)
-Les tokens sont en place ; aucune page n'a encore été restructurée pour suivre les
-layouts Figma (cartes, tableaux, densité, composants de la page Design System).
-Procéder page par page, un `get_design_context` par écran Figma pertinent, en
-réutilisant les composants partagés (`resources/js/components/ui/`) plutôt qu'en
-recréant du HTML brut. Écrans desktop disponibles dans la maquette (node id de la
-frame top-level, à consommer un par un) :
+### 1. Refonte visuelle écran par écran (en cours)
+Les tokens sont en place. Procéder page par page, un `get_design_context` par écran
+Figma pertinent, en réutilisant les composants partagés (`resources/js/components/ui/`)
+plutôt qu'en recréant du HTML brut. **Ne pas fabriquer de données** (pas de cartes KPI
+ni de colonnes qui demanderaient de nouveaux agrégats backend non prévus) — rester
+honnête sur ce que l'API expose déjà ; voir le commit `408e94e` pour l'exemple suivi.
+**Vérifier systématiquement le rendu mobile (390px)** après un passage en layout
+colonnes/tableau : un enfant `flex-1` sans `basis-full sm:basis-auto` se fait
+écraser par ses voisins au lieu de passer à la ligne (bug rencontré et corrigé sur
+`ClientsList.tsx`, commit `08a8922`).
 
-| Section Figma | Écran(s) | Page(s) actuelle(s) |
-|---|---|---|
-| 00 Vue d'ensemble | Dashboard SPARK PRESSING | `pages/KpiPage.tsx` |
-| 01 Authentification | Authentification staff | `pages/Login.tsx` |
-| 02 Dépôts & POS | Gestion des dépôts, Détail, Ticket, Nouveau dépôt | `pages/counter/*` |
-| 03 Clients & fidélité | CRM clients, Nouveau/Modifier/Fiche client | `pages/clients/ClientsList.tsx` |
-| 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | **absent, voir §2** |
-| 07 Articles & tarifs | Catalogue, Création/édition article | `pages/ServicesPage.tsx` (existe déjà, juste à restyler) |
-| 08 Rapports & bilans | Rapports, Bilan journalier | `pages/KpiPage.tsx` |
-| 09 Paramètres | Paramètres, Promotions/fidélité, Branding, Notifications | `pages/SettingsPage.tsx`, `pages/LoyaltyPage.tsx`, `pages/NotificationsPage.tsx` |
-| 11 Équipe | Utilisateurs, Rôles & permissions, Profil | `pages/UsersPage.tsx`, `pages/RolesPermissionsPage.tsx`, `pages/ProfilePage.tsx` |
+| Section Figma | Écran(s) | Page(s) actuelle(s) | État |
+|---|---|---|---|
+| 00 Vue d'ensemble | Dashboard SPARK PRESSING | `pages/KpiPage.tsx` | à faire |
+| 01 Authentification | Authentification staff | `pages/Login.tsx` | à faire |
+| 02 Dépôts & POS | Gestion des dépôts (liste) | `pages/counter/OrdersList.tsx` | **fait** (commit `408e94e`) |
+| 02 Dépôts & POS | Nouveau dépôt (formulaire) | `pages/counter/NewOrder.tsx` | jugé déjà conforme le 2026-09-30 — hérite des tokens, structure (client→catalogue groupé par catégorie→panier sticky) déjà proche de Figma et plus riche (recherche live, remise fidélité auto, conditions de réception, file offline). Ne pas réécrire sans raison concrète. |
+| 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`) |
+| 03 Clients & fidélité | Nouveau/Modifier/Fiche client | `pages/clients/ClientForm.tsx`, panneau détail dans `ClientsList.tsx` | à faire (le panneau détail est déjà proche du pattern Figma) |
+| 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | **absent, voir §2** | bloqué (module à construire) |
+| 07 Articles & tarifs | Catalogue, Création/édition article | `pages/ServicesPage.tsx` (existe déjà) | à faire |
+| 08 Rapports & bilans | Rapports, Bilan journalier | `pages/KpiPage.tsx` | à faire |
+| 09 Paramètres | Paramètres, Promotions/fidélité, Branding, Notifications | `pages/SettingsPage.tsx`, `pages/LoyaltyPage.tsx`, `pages/NotificationsPage.tsx` | à faire |
+| 11 Équipe | Utilisateurs, Rôles & permissions, Profil | `pages/UsersPage.tsx`, `pages/RolesPermissionsPage.tsx`, `pages/ProfilePage.tsx` | à faire |
 
 ### 2. Écarts fonctionnels identifiés vs la maquette (backend + frontend à construire)
 

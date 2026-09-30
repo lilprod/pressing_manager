@@ -166,9 +166,12 @@ proposer de migration vers la stack du CDC.
 5. **QR par lot** (CDC §11.6) : le QR existant est généré par article (`order_items.qr_code`,
    toujours actif) mais pas regroupable en "lot" pour plusieurs vêtements d'un même
    dépôt, et pas configurable en option par agence comme le prévoit le CDC.
-6. **Blocage du retrait si impayé, configurable par agence** (EF-RET-05) — à vérifier
-   dans `OrderController`/`RetrieveController` si c'est aujourd'hui figé ou déjà
-   paramétrable ; non confirmé lors de l'analyse.
+6. **Blocage du retrait si impayé, configurable par agence** (EF-RET-05) — **confirmé
+   non implémenté** (captures Figma « Paramètres opérationnels » fournies par
+   l'utilisateur le 2026-09-30, cf. node `25:12525` ci-dessous : bascule explicite
+   « Bloquer le retrait en cas d'impayé »). Aucun champ en base pour ce jour ; fait
+   partie du même chantier « réglages par agence » que les codes dépôt et les modes
+   de tarification.
 
 Points notables où l'existant est **en avance** sur le phasage du CDC (construit avant
 que ce document n'existe, sur demande utilisateur directe) : file hors ligne au

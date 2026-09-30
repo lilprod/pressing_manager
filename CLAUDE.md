@@ -4,6 +4,15 @@ Laravel 12 (API) + React 19/TypeScript (SPA Vite) + PostgreSQL. Multi-agence,
 **mono-tenant par déploiement** (une base par client pressing — voir `docs/ARCHITECTURE.md`
 hypothèse H1, ne pas remettre en cause sans validation produit).
 
+**Décision d'architecture actée (2026-09-30)** : le Cahier des charges v3.0 vise
+Next.js + MySQL/MariaDB + Spatie Permission (voir analyse détaillée référencée en
+§2) ; l'utilisateur a tranché explicitement en faveur de la **stack existante**
+(React/Vite servi par Laravel, même origine, PostgreSQL, RBAC maison). **Ne pas
+migrer vers Next.js/MySQL/Spatie** sauf nouvelle instruction explicite — continuer
+tout développement sur la stack actuelle. Les écarts fonctionnels du CDC restent
+valides et à traiter (liste et priorités en §2) ; seul le socle technique du CDC
+est écarté.
+
 ## Référence design : Figma « SPARK PRESSING »
 
 Maquette cible pour la refonte visuelle en cours :
@@ -103,18 +112,20 @@ Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
   actuel = ce superadmin) ou un vrai chantier multi-tenant — décision produit à
   prendre avec l'utilisateur avant tout code. **Confirmé par le CDC v3.0** (EF-SUP-01
   à 04) : Spark (l'éditeur) y est bien un superadmin plateforme avec CRUD `pressings`
-  — le même arbitrage reste à trancher, voir ci-dessous.
+  — cette question (mono-tenant vs multi-tenant) reste ouverte, **distincte** du choix
+  de stack technique tranché ci-dessous (on peut garder React/Vite + PostgreSQL tout
+  en devenant multi-tenant, ou rester mono-tenant — les deux sont orthogonaux).
 
 ### Écarts identifiés par le Cahier des charges v3.0 (analyse du 2026-09-30)
 
 Le CDC (`Spark_Pressing_CDC_v3.0.pdf`, fourni par l'utilisateur) décrit une cible
 plus large que la maquette Figma seule. Analyse complète et argumentée :
 [Spark Pressing — CDC v3.0 vs existant](https://claude.ai/artifact/1KQnYZsD1joHDmYcZUDiCF).
-Point d'architecture à trancher **avant** tout le reste : le CDC §7 vise Next.js +
-MySQL/MariaDB + Spatie Permission (front/back découplés) ; l'existant est React/Vite
-(même origine que l'API Laravel) + PostgreSQL + RBAC maison. Ce n'est pas un détail
-technique mais le choix fondateur du document — à faire trancher par le Product
-Owner avant de prioriser le reste (réécriture complète vs écart assumé).
+**Point d'architecture tranché (2026-09-30)** : le CDC §7 visait Next.js +
+MySQL/MariaDB + Spatie Permission (front/back découplés) ; l'utilisateur a choisi de
+**continuer sur la stack existante** (React/Vite même origine que l'API Laravel,
+PostgreSQL, RBAC maison) — voir la décision actée en tête de ce fichier. Ne pas
+proposer de migration vers la stack du CDC.
 
 Écarts fonctionnels (hors question d'architecture), par ordre de priorité suggéré :
 

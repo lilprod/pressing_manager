@@ -42,11 +42,23 @@ colonnes/tableau : un enfant `flex-1` sans `basis-full sm:basis-auto` se fait
 écraser par ses voisins au lieu de passer à la ligne (bug rencontré et corrigé sur
 `ClientsList.tsx`, commit `08a8922`).
 **Pages avec panneau latéral permanent** (formulaire de création à côté de la liste,
-comme `ClientsList.tsx`/`ServicesPage.tsx`) : la colonne de liste est nettement plus
-étroite qu'une page pleine largeur (`OrdersList.tsx`). Un tableau y dépasse vite —
-enrober `<div className="overflow-x-auto">` + `min-w-[...]` sur l'en-tête et la
-liste plutôt que de laisser les colonnes `flex-1` s'écraser (bug rencontré et
-corrigé sur `ServicesPage.tsx`, commit `fc75065`).
+comme `ClientsList.tsx`) : la colonne de liste est nettement plus étroite qu'une
+page pleine largeur (`OrdersList.tsx`). Un tableau y dépasse vite — enrober
+`<div className="overflow-x-auto">` + `min-w-[...]` sur l'en-tête et la liste
+plutôt que de laisser les colonnes `flex-1` s'écraser (bug rencontré et corrigé
+sur `ServicesPage.tsx`, commit `fc75065`).
+**Convention liste/création/édition (écrans admin CRUD)** : quand le Figma montre
+un écran dédié distinct pour créer/éditer (pas une modale ni un panneau inline
+à côté de la liste), suivre le modèle `/orders/:id` → `OrderDetail.tsx` :
+routes `/<ressource>/new` et `/<ressource>/:id/edit` pointant vers un même
+composant de formulaire (`<Ressource>FormPage.tsx` dans `pages/<ressource>/`),
+avec un lien retour (`ArrowLeft` + texte) vers la liste. Endpoint `GET
+/<ressource>/{id}` (show) nécessaire pour charger l'entité de façon robuste au
+rechargement de page (ne pas supposer que le formulaire reçoit toujours les
+données via navigation React). Voir `ServiceFormPage.tsx` (commit `d52b79b`) —
+c'est une correction directe d'un écart introduit lors du premier passage de
+restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
+écrans CRUD (Utilisateurs, Rôles, etc.) plutôt que de refaire l'erreur.
 
 | Section Figma | Écran(s) | Page(s) actuelle(s) | État |
 |---|---|---|---|
@@ -57,7 +69,8 @@ corrigé sur `ServicesPage.tsx`, commit `fc75065`).
 | 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`) |
 | 03 Clients & fidélité | Nouveau/Modifier/Fiche client | `pages/clients/ClientForm.tsx`, panneau détail dans `ClientsList.tsx` | **fait** (commit `11de473`) — a aussi exposé le champ `notes` (backend déjà prêt, jamais affiché côté front) |
 | 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | **absent, voir §2** | bloqué (module à construire) |
-| 07 Articles & tarifs | Catalogue, Création/édition article | `pages/ServicesPage.tsx` (existe déjà) | **fait** (liste, commit `fc75065`) — formulaires création/édition (modale) pas encore repris |
+| 07 Articles & tarifs | Catalogue (liste) | `pages/ServicesPage.tsx` | **fait** (commit `fc75065`, écrans séparés depuis commit `d52b79b`) |
+| 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait** (commit `d52b79b`) — retour utilisateur du 2026-09-30 : le design a des écrans dédiés séparés de la liste, pas un panneau/modale inline ; voir convention ci-dessous |
 | 08 Rapports & bilans | Rapports, Bilan journalier | `pages/KpiPage.tsx` | à faire |
 | 09 Paramètres | Paramètres, Promotions/fidélité, Branding, Notifications | `pages/SettingsPage.tsx`, `pages/LoyaltyPage.tsx`, `pages/NotificationsPage.tsx` | à faire |
 | 11 Équipe | Utilisateurs, Rôles & permissions, Profil | `pages/UsersPage.tsx`, `pages/RolesPermissionsPage.tsx`, `pages/ProfilePage.tsx` | à faire |

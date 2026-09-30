@@ -13,6 +13,7 @@ import OrdersList from './pages/counter/OrdersList';
 import OrderDetail from './pages/counter/OrderDetail';
 import Scan from './pages/Scan';
 import ClientsList from './pages/clients/ClientsList';
+import ClientFormPage from './pages/clients/ClientFormPage';
 import LicensePage from './pages/LicensePage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
 import LoyaltyPage from './pages/LoyaltyPage';
@@ -70,6 +71,8 @@ export default function App() {
                     <Route path="/orders/:id" element={<OrderDetail />} />
                     <Route path="/scan" element={<Scan />} />
                     <Route path="/clients" element={<ClientsList />} />
+                    <Route path="/clients/new" element={<ClientFormPage />} />
+                    <Route path="/clients/:id/edit" element={<ClientFormPage />} />
                     <Route path="/subscriptions" element={<SubscriptionsPage />} />
                     <Route path="/loyalty" element={<LoyaltyPage />} />
                     <Route path="/services" element={<ServicesPage />} />

@@ -244,6 +244,8 @@
     "login.footer": "Conçu pour les pressings du Togo.",
     "client.details": "Fiche client",
     "client.edit": "Modifier le client",
+    "client.backToList": "Retour à la liste",
+    "client.notFound": "Ce client est introuvable.",
     "client.listSubtitle": "Retrouvez, créez et mettez à jour les fiches de vos clients.",
     "client.noResultsHint": "Vérifiez l'orthographe ou essayez le numéro de téléphone.",
     "client.pointsCount": "{count} pts",

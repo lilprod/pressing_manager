@@ -53,7 +53,7 @@ class ClientController extends ApiController
         $data = $request->validated();
         $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
 
-        $client = Client::create($data);
+        $client = Client::create($data)->refresh();
 
         return response()->json($client, 201);
     }

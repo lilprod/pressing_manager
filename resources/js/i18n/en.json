@@ -244,6 +244,8 @@
     "login.footer": "Built for dry cleaners in Togo.",
     "client.details": "Client details",
     "client.edit": "Edit client",
+    "client.backToList": "Back to list",
+    "client.notFound": "This client could not be found.",
     "client.listSubtitle": "Find, create and update your client records.",
     "client.noResultsHint": "Check the spelling or try the phone number.",
     "client.pointsCount": "{count} pts",

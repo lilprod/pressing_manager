@@ -52,7 +52,7 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
     const Icon = client ? UserPen : UserPlus;
 
     return (
-        <form onSubmit={handleSubmit} className={cx(cardPadded, 'animate-fade-in space-y-6 ring-2 ring-brand-500/20')} aria-label={client ? t('client.edit') : t('client.new')}>
+        <form onSubmit={handleSubmit} className={cx(cardPadded, 'animate-fade-in space-y-6')} aria-label={client ? t('client.edit') : t('client.new')}>
             <h2 className={cx(sectionTitle, 'flex items-center gap-2')}>
                 <Icon aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                 {client ? t('client.edit') : t('client.new')}

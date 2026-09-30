@@ -13,6 +13,27 @@ class ClientLifecycleTest extends TestCase
 {
     use RefreshDatabase, SeedsRbac;
 
+    public function test_an_accueil_can_create_a_client_without_specifying_loyalty_points(): void
+    {
+        // Régression : Client::create() ne reflète pas le défaut DB de loyalty_points (0) en
+        // mémoire, ce qui faisait planter l'accesseur loyaltyDiscountRate() (where('min_points',
+        // '<=', null) → "Illegal operator and value combination") lors de la sérialisation JSON
+        // de la réponse. Voir ClientController::store() (->refresh() après create()).
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+
+        $response = $this->actingAs($accueil)->postJson('/api/clients', [
+            'first_name' => 'Jean',
+            'last_name' => 'Dupont',
+            'phone' => '+228 90 11 22 33',
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('loyalty_points', 0);
+        $this->assertSame(0.0, (float) $response->json('loyalty_discount_rate'));
+    }
+
     public function test_a_client_without_orders_can_be_deleted(): void
     {
         $this->seedRbac();

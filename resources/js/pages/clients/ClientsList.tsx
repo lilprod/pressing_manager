@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
 import { api, ApiError } from '../../lib/api';
-import ClientForm from './ClientForm';
 import type { Client, Order, Paginated } from '../../types';
 import { Link } from 'react-router-dom';
 import { Award, ChevronRight, Mail, MapPin, Pencil, Phone, Search, StickyNote, Trash2, UserPlus, Users, X } from 'lucide-react';
@@ -22,7 +21,6 @@ export default function ClientsList() {
     });
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
-    const [editing, setEditing] = useState<Client | null | 'new'>(null);
     const [selected, setSelected] = useState<Client | null>(null);
     const [selectedOrders, setSelectedOrders] = useState<Order[]>([]);
     const [actionError, setActionError] = useState<string | null>(null);
@@ -82,10 +80,10 @@ export default function ClientsList() {
                 subtitle={t('client.listSubtitle')}
                 icon={Users}
                 actions={
-                    <button type="button" onClick={() => setEditing('new')} className={button('primary')}>
+                    <Link to="/clients/new" className={button('primary')}>
                         <UserPlus aria-hidden="true" className="h-4 w-4" />
                         {t('client.new')}
-                    </button>
+                    </Link>
                 }
             />
 
@@ -105,17 +103,6 @@ export default function ClientsList() {
                             className={cx(inputLg, 'pl-12')}
                         />
                     </div>
-
-                    {editing && (
-                        <ClientForm
-                            client={editing === 'new' ? null : editing}
-                            onCancel={() => setEditing(null)}
-                            onSaved={() => {
-                                setEditing(null);
-                                reload();
-                            }}
-                        />
-                    )}
 
                     <div className={cx(card, 'overflow-hidden')}>
                         {loading ? (
@@ -178,11 +165,11 @@ export default function ClientsList() {
                                                 )}
                                             </div>
 
-                                            <button type="button" onClick={() => setEditing(client)} className={cx(button('ghost', 'sm'), 'w-auto shrink-0 sm:w-20')}>
+                                            <Link to={`/clients/${client.id}/edit`} className={cx(button('ghost', 'sm'), 'w-auto shrink-0 sm:w-20')}>
                                                 <Pencil aria-hidden="true" className="h-4 w-4" />
                                                 <span className="hidden sm:inline">{t('common.edit')}</span>
                                                 <span className="sr-only sm:hidden">{t('common.edit')}</span>
-                                            </button>
+                                            </Link>
                                         </li>
                                     ))}
                                 </ul>

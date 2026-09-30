@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AgencyController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\CashController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\CustomerSubscriptionController;
 use App\Http\Controllers\Api\DeliveryController;
@@ -98,6 +99,13 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::post('/payments/cash', [PaymentController::class, 'storeCash']);
     Route::post('/payments/remote', [PaymentController::class, 'initiateRemote']);
     Route::get('/payments/{payment}', [PaymentController::class, 'show']);
+
+    Route::get('/cash/summary', [CashController::class, 'summary']);
+    Route::get('/cash/movements', [CashController::class, 'indexMovements']);
+    Route::post('/cash/movements', [CashController::class, 'storeMovement']);
+    Route::get('/cash/closures', [CashController::class, 'indexClosures']);
+    Route::get('/cash/closures/{closure}', [CashController::class, 'showClosure']);
+    Route::post('/cash/closures', [CashController::class, 'storeClosure']);
 
     Route::get('/subscription-plans', [SubscriptionPlanController::class, 'index']);
     Route::post('/subscription-plans', [SubscriptionPlanController::class, 'store']);

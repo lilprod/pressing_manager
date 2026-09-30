@@ -1,0 +1,129 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, Check } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useI18n } from '../../contexts/I18nContext';
+import { api, ApiError } from '../../lib/api';
+import { Alert, Spinner } from '../../components/ui/Feedback';
+import { button, cardPadded, cx, input, label, textLink } from '../../components/ui/styles';
+import type { CashMovementType } from '../../types';
+
+export default function CashMovementFormPage() {
+    const navigate = useNavigate();
+    const { t } = useI18n();
+    const { user, activeAgencyId } = useAuth();
+    const isGlobal = user?.agency_id === null;
+
+    const [type, setType] = useState<CashMovementType>('sortie');
+    const [amount, setAmount] = useState('');
+    const [reason, setReason] = useState('');
+    const [note, setNote] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    async function handleSubmit() {
+        setBusy(true);
+        setError(null);
+        if (isGlobal && !activeAgencyId) {
+            setError(t('client.selectAgency'));
+            setBusy(false);
+            return;
+        }
+        try {
+            await api.post('/cash/movements', {
+                type,
+                amount: Number(amount),
+                reason,
+                note: note || null,
+                ...(isGlobal ? { agency_id: activeAgencyId } : {}),
+            });
+            navigate('/cash');
+        } catch (err) {
+            setError(err instanceof ApiError ? err.message : t('common.error'));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    const canSubmit = amount !== '' && Number(amount) > 0 && reason.trim() !== '';
+
+    return (
+        <div className="max-w-xl space-y-4">
+            <Link to="/cash" className={cx(textLink, 'inline-flex items-center gap-1.5 text-sm')}>
+                <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+                {t('cash.backToRegister')}
+            </Link>
+
+            <section className={cx(cardPadded, 'space-y-5')}>
+                <div>
+                    <h1 className="font-display text-xl font-bold text-ink-900 dark:text-white">{t('cash.movementForm.title')}</h1>
+                    <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-350">{t('cash.movementForm.subtitle')}</p>
+                </div>
+
+                {error && <Alert tone="error">{error}</Alert>}
+
+                <div className="space-y-2">
+                    <span className={label}>{t('cash.movementForm.type')}</span>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setType('entree')}
+                            className={cx(
+                                'flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition',
+                                type === 'entree'
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-300'
+                                    : 'border-ink-200 bg-white text-ink-700 hover:bg-ink-50 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-200',
+                            )}
+                        >
+                            <ArrowUpCircle aria-hidden="true" className="h-4 w-4" />
+                            {t('cash.movement.entree')}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setType('sortie')}
+                            className={cx(
+                                'flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-semibold transition',
+                                type === 'sortie'
+                                    ? 'border-red-300 bg-red-50 text-red-800 dark:border-red-400/40 dark:bg-red-400/10 dark:text-red-300'
+                                    : 'border-ink-200 bg-white text-ink-700 hover:bg-ink-50 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-200',
+                            )}
+                        >
+                            <ArrowDownCircle aria-hidden="true" className="h-4 w-4" />
+                            {t('cash.movement.sortie')}
+                        </button>
+                    </div>
+                </div>
+
+                <label className="block">
+                    <span className={label}>{t('cash.movementForm.amount')}</span>
+                    <input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} className={cx(input, 'w-full')} />
+                </label>
+
+                <label className="block">
+                    <span className={label}>{t('cash.movementForm.reason')}</span>
+                    <input
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder={t('cash.movementForm.reasonPlaceholder')}
+                        className={cx(input, 'w-full')}
+                    />
+                </label>
+
+                <label className="block">
+                    <span className={label}>{t('cash.movementForm.note')}</span>
+                    <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className={cx(input, 'w-full')} />
+                </label>
+
+                <div className="flex justify-end gap-2 border-t border-ink-200/80 pt-5 dark:border-ink-800">
+                    <Link to="/cash" className={button('ghost', 'md')}>
+                        {t('common.cancel')}
+                    </Link>
+                    <button type="button" onClick={() => void handleSubmit()} disabled={!canSubmit || busy} className={button('primary', 'md')}>
+                        {busy ? <Spinner className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4" />}
+                        {t('common.save')}
+                    </button>
+                </div>
+            </section>
+        </div>
+    );
+}

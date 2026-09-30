@@ -85,6 +85,46 @@ export interface LoyaltyTier {
     is_active: boolean;
 }
 
+export type CashMovementType = 'entree' | 'sortie';
+
+export interface CashMovement {
+    id: number;
+    agency_id: number;
+    type: CashMovementType;
+    amount: number;
+    reason: string;
+    note: string | null;
+    created_by: number | null;
+    creator?: { id: number; name: string } | null;
+    occurred_at: string;
+}
+
+export interface CashSummary {
+    opening_balance: number;
+    cash_payments_total: number;
+    manual_in_total: number;
+    manual_out_total: number;
+    expected_balance: number;
+    since: string | null;
+}
+
+export interface CashClosure {
+    id: number;
+    agency_id: number;
+    business_date: string;
+    opening_balance: number;
+    cash_payments_total: number;
+    manual_in_total: number;
+    manual_out_total: number;
+    expected_balance: number;
+    counted_balance: number;
+    variance: number;
+    notes: string | null;
+    closed_by: number | null;
+    closer?: { id: number; name: string } | null;
+    closed_at: string;
+}
+
 export type ServiceCategory = 'nettoyage' | 'lavage' | 'repassage' | 'retouche' | 'teinture' | 'autre';
 
 export interface Service {

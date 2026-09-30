@@ -22,6 +22,7 @@ import {
     Truck,
     UsersRound,
     Users,
+    Wallet,
     WifiOff,
     LayoutDashboard,
     X,
@@ -74,6 +75,7 @@ function useSidebarSections(onNavigate?: () => void) {
                 <NavItem to="/" end icon={ShoppingBag} label={t('nav.newOrder')} onClick={onNavigate} />
                 <NavItem to="/orders" icon={ClipboardList} label={t('nav.orders')} onClick={onNavigate} />
                 <NavItem to="/scan" icon={ScanLine} label={t('nav.scan')} onClick={onNavigate} />
+                {hasPermission(user, 'payments.manage') && <NavItem to="/cash" icon={Wallet} label={t('nav.cash')} onClick={onNavigate} />}
                 {(hasPermission(user, 'deliveries.manage') || hasPermission(user, 'deliveries.fulfill')) && (
                     <NavItem to="/deliveries" icon={Truck} label={t('nav.deliveries')} onClick={onNavigate} />
                 )}

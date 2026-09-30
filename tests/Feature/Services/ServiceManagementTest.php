@@ -33,6 +33,46 @@ class ServiceManagementTest extends TestCase
         $updated->assertJsonPath('base_price', 1200);
     }
 
+    public function test_an_admin_can_fetch_a_single_service(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+        $service = Service::factory()->create(['name' => 'Nettoyage costume']);
+
+        $response = $this->actingAs($admin)->getJson("/api/services/{$service->id}");
+
+        $response->assertOk();
+        $response->assertJsonPath('id', $service->id);
+        $response->assertJsonPath('name', 'Nettoyage costume');
+    }
+
+    public function test_fetching_a_single_service_with_an_agency_id_embeds_the_agency_pivot(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+        $agency = Agency::factory()->create();
+        $service = Service::factory()->create();
+        $agency->services()->attach($service->id, ['is_active' => true, 'price_override' => 1800]);
+
+        $response = $this->actingAs($admin)->getJson("/api/services/{$service->id}?agency_id={$agency->id}");
+
+        $response->assertOk();
+        $response->assertJsonPath('agency_pivot.price_override', 1800);
+        $response->assertJsonPath('agency_pivot.is_active', true);
+    }
+
+    public function test_fetching_a_single_service_requires_the_services_manage_permission(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $technicien = $this->makeUser('technicien', $agency);
+        $service = Service::factory()->create();
+
+        $response = $this->actingAs($technicien)->getJson("/api/services/{$service->id}");
+
+        $response->assertStatus(403);
+    }
+
     public function test_creating_a_service_requires_the_services_manage_permission(): void
     {
         $this->seedRbac();

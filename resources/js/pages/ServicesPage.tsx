@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useFormat } from '../lib/format';
-import { api, ApiError } from '../lib/api';
+import { api } from '../lib/api';
 import PageHeader from '../components/ui/PageHeader';
-import { Alert, EmptyState, LoadingState, Spinner } from '../components/ui/Feedback';
+import { EmptyState, LoadingState, Spinner } from '../components/ui/Feedback';
 import Pagination from '../components/ui/Pagination';
 import { Pill, TONES } from '../components/ui/StatusBadge';
-import { button, card, cardPadded, cx, input, inputLg, inputSm, label, select, sectionTitle } from '../components/ui/styles';
-import { Pencil, Plus, Search, Shirt, Sparkles, X } from 'lucide-react';
+import { button, card, cx, inputLg, inputSm } from '../components/ui/styles';
+import { Pencil, Plus, Search, Shirt } from 'lucide-react';
 import { categoryMeta } from '../lib/serviceCategory';
 import type { Paginated, Service, ServiceCategory } from '../types';
 
@@ -29,7 +30,6 @@ export default function ServicesPage() {
     const [category, setCategory] = useState<ServiceCategory | ''>('');
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
-    const [editing, setEditing] = useState<Service | null>(null);
 
     function reload() {
         setLoading(true);
@@ -57,91 +57,89 @@ export default function ServicesPage() {
 
     return (
         <div className="space-y-6">
-            <PageHeader title={t('service.title')} subtitle={t('service.subtitle')} icon={Shirt} />
-
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-                <div className="space-y-4">
-                    <div className="relative">
-                        <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-500 dark:text-ink-350" />
-                        <input
-                            type="search"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder={t('service.search')}
-                            className={cx(inputLg, 'pl-12')}
-                        />
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setCategory('');
-                                setPage(1);
-                            }}
-                            className={cx(
-                                'inline-flex h-9 items-center rounded-full px-3.5 text-sm font-semibold transition duration-150',
-                                category === ''
-                                    ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-950'
-                                    : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-50 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
-                            )}
-                        >
-                            {t('service.allCategories')}
-                        </button>
-                        {CATEGORIES.map((c) => (
-                            <button
-                                key={c}
-                                type="button"
-                                onClick={() => {
-                                    setCategory(c);
-                                    setPage(1);
-                                }}
-                                className={cx(
-                                    'inline-flex h-9 items-center rounded-full px-3.5 text-sm font-semibold transition duration-150',
-                                    category === c
-                                        ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-950'
-                                        : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-50 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
-                                )}
-                            >
-                                {t(`service.category.${c}`)}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className={cx(card, 'overflow-hidden')}>
-                        {loading ? (
-                            <LoadingState />
-                        ) : services.length === 0 ? (
-                            <EmptyState icon={Shirt} title={t('service.none')} />
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <div
-                                    role="row"
-                                    className="hidden min-w-[760px] items-center gap-4 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
-                                >
-                                    <span className="w-9 shrink-0" aria-hidden="true" />
-                                    <span className="min-w-0 flex-1">{t('service.table.article')}</span>
-                                    <span className="w-28 shrink-0">{t('service.categoryLabel')}</span>
-                                    <span className="w-28 shrink-0 text-right">{t('service.table.price')}</span>
-                                    <span className="w-24 shrink-0">{t('service.table.status')}</span>
-                                    <span className="w-44 shrink-0">{t('service.table.actions')}</span>
-                                </div>
-
-                                <ul className="divide-y divide-ink-100 sm:min-w-[760px] dark:divide-ink-800">
-                                    {services.map((service) => (
-                                        <ServiceRow key={service.id} service={service} agencyId={agencyId} onChanged={reload} onEdit={() => setEditing(service)} />
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-                        <Pagination meta={meta} onPageChange={setPage} />
-                    </div>
-                </div>
-
-                <CreateServiceForm onCreated={reload} />
+            <div className="flex flex-wrap items-start justify-between gap-3">
+                <PageHeader title={t('service.title')} subtitle={t('service.subtitle')} icon={Shirt} />
+                <Link to="/services/new" className={button('primary', 'md')}>
+                    <Plus aria-hidden="true" className="h-4 w-4" />
+                    {t('service.new')}
+                </Link>
             </div>
 
-            {editing && <EditServiceModal service={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
+            <div className="relative">
+                <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-500 dark:text-ink-350" />
+                <input
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={t('service.search')}
+                    className={cx(inputLg, 'pl-12')}
+                />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+                <button
+                    type="button"
+                    onClick={() => {
+                        setCategory('');
+                        setPage(1);
+                    }}
+                    className={cx(
+                        'inline-flex h-9 items-center rounded-full px-3.5 text-sm font-semibold transition duration-150',
+                        category === ''
+                            ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-950'
+                            : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-50 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
+                    )}
+                >
+                    {t('service.allCategories')}
+                </button>
+                {CATEGORIES.map((c) => (
+                    <button
+                        key={c}
+                        type="button"
+                        onClick={() => {
+                            setCategory(c);
+                            setPage(1);
+                        }}
+                        className={cx(
+                            'inline-flex h-9 items-center rounded-full px-3.5 text-sm font-semibold transition duration-150',
+                            category === c
+                                ? 'bg-ink-900 text-white dark:bg-white dark:text-ink-950'
+                                : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-50 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
+                        )}
+                    >
+                        {t(`service.category.${c}`)}
+                    </button>
+                ))}
+            </div>
+
+            <div className={cx(card, 'overflow-hidden')}>
+                {loading ? (
+                    <LoadingState />
+                ) : services.length === 0 ? (
+                    <EmptyState icon={Shirt} title={t('service.none')} />
+                ) : (
+                    <div className="overflow-x-auto">
+                        <div
+                            role="row"
+                            className="hidden min-w-[760px] items-center gap-4 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
+                        >
+                            <span className="w-9 shrink-0" aria-hidden="true" />
+                            <span className="min-w-0 flex-1">{t('service.table.article')}</span>
+                            <span className="w-28 shrink-0">{t('service.categoryLabel')}</span>
+                            <span className="w-28 shrink-0 text-right">{t('service.table.price')}</span>
+                            <span className="w-24 shrink-0">{t('service.table.status')}</span>
+                            <span className="w-44 shrink-0">{t('service.table.actions')}</span>
+                        </div>
+
+                        <ul className="divide-y divide-ink-100 sm:min-w-[760px] dark:divide-ink-800">
+                            {services.map((service) => (
+                                <ServiceRow key={service.id} service={service} agencyId={agencyId} onChanged={reload} />
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                <Pagination meta={meta} onPageChange={setPage} />
+            </div>
         </div>
     );
 }
@@ -150,12 +148,10 @@ function ServiceRow({
     service,
     agencyId,
     onChanged,
-    onEdit,
 }: {
     service: Service;
     agencyId: number | null;
     onChanged: () => void;
-    onEdit: () => void;
 }) {
     const { t } = useI18n();
     const { money } = useFormat();
@@ -233,10 +229,10 @@ function ServiceRow({
             </div>
 
             <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-44">
-                <button type="button" onClick={onEdit} className={button('secondary', 'sm')}>
+                <Link to={`/services/${service.id}/edit`} className={button('secondary', 'sm')}>
                     <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
                     {t('common.edit')}
-                </button>
+                </Link>
                 <button type="button" onClick={() => void toggleActive()} className={button('ghost', 'sm')}>
                     {service.is_active ? t('service.deactivate') : t('service.activate')}
                 </button>
@@ -250,177 +246,3 @@ function ServiceRow({
     );
 }
 
-function CreateServiceForm({ onCreated }: { onCreated: () => void }) {
-    const { t } = useI18n();
-    const [code, setCode] = useState('');
-    const [name, setName] = useState('');
-    const [category, setCategory] = useState<ServiceCategory>('autre');
-    const [description, setDescription] = useState('');
-    const [basePrice, setBasePrice] = useState('');
-    const [durationHours, setDurationHours] = useState('24');
-    const [error, setError] = useState<string | null>(null);
-    const [busy, setBusy] = useState(false);
-
-    async function submit() {
-        setBusy(true);
-        setError(null);
-        try {
-            await api.post('/services', {
-                code,
-                name,
-                category,
-                description: description || null,
-                base_price: Number(basePrice),
-                estimated_duration_hours: Number(durationHours),
-            });
-            setCode('');
-            setName('');
-            setCategory('autre');
-            setDescription('');
-            setBasePrice('');
-            setDurationHours('24');
-            onCreated();
-        } catch (err) {
-            setError(err instanceof ApiError ? err.message : t('common.error'));
-        } finally {
-            setBusy(false);
-        }
-    }
-
-    const canSubmit = code.trim() !== '' && name.trim() !== '' && basePrice !== '';
-
-    return (
-        <section aria-labelledby="service-create-heading" className={cx(cardPadded, 'space-y-4')}>
-            <h2 id="service-create-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
-                <Sparkles aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                {t('service.new')}
-            </h2>
-
-            {error && <Alert tone="error">{error}</Alert>}
-
-            <div className="space-y-3">
-                <label className="block">
-                    <span className={label}>{t('service.code')}</span>
-                    <input value={code} onChange={(e) => setCode(e.target.value)} className={cx(input, 'w-full')} />
-                </label>
-                <label className="block">
-                    <span className={label}>{t('service.name')}</span>
-                    <input value={name} onChange={(e) => setName(e.target.value)} className={cx(input, 'w-full')} />
-                </label>
-                <label className="block">
-                    <span className={label}>{t('service.categoryLabel')}</span>
-                    <select value={category} onChange={(e) => setCategory(e.target.value as ServiceCategory)} className={cx(select, 'w-full')}>
-                        {CATEGORIES.map((c) => (
-                            <option key={c} value={c}>
-                                {t(`service.category.${c}`)}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label className="block">
-                    <span className={label}>{t('common.notes')}</span>
-                    <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={cx(input, 'w-full')} />
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                    <label className="block">
-                        <span className={label}>{t('service.basePrice')}</span>
-                        <input type="number" min={0} value={basePrice} onChange={(e) => setBasePrice(e.target.value)} className={input} />
-                    </label>
-                    <label className="block">
-                        <span className={label}>{t('service.duration')}</span>
-                        <input type="number" min={1} value={durationHours} onChange={(e) => setDurationHours(e.target.value)} className={input} />
-                    </label>
-                </div>
-                <button type="button" onClick={() => void submit()} disabled={!canSubmit || busy} className={button('primary', 'md', 'w-full')}>
-                    {busy ? <Spinner className="h-4 w-4" /> : <Plus aria-hidden="true" className="h-4 w-4" />}
-                    {t('common.create')}
-                </button>
-            </div>
-        </section>
-    );
-}
-
-function EditServiceModal({ service, onClose, onSaved }: { service: Service; onClose: () => void; onSaved: () => void }) {
-    const { t } = useI18n();
-    const [name, setName] = useState(service.name);
-    const [category, setCategory] = useState<ServiceCategory>(service.category);
-    const [description, setDescription] = useState(service.description ?? '');
-    const [basePrice, setBasePrice] = useState(String(service.base_price));
-    const [durationHours, setDurationHours] = useState(String(service.estimated_duration_hours));
-    const [error, setError] = useState<string | null>(null);
-    const [busy, setBusy] = useState(false);
-
-    async function submit() {
-        setBusy(true);
-        setError(null);
-        try {
-            await api.patch(`/services/${service.id}`, {
-                name,
-                category,
-                description: description || null,
-                base_price: Number(basePrice),
-                estimated_duration_hours: Number(durationHours),
-            });
-            onSaved();
-        } catch (err) {
-            setError(err instanceof ApiError ? err.message : t('common.error'));
-        } finally {
-            setBusy(false);
-        }
-    }
-
-    const canSubmit = name.trim() !== '' && basePrice !== '';
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
-            <section className={cx(cardPadded, 'w-full max-w-lg space-y-4')}>
-                <div className="flex items-center justify-between">
-                    <h2 className={sectionTitle}>{t('service.edit')}</h2>
-                    <button type="button" onClick={onClose} aria-label={t('common.close')} className={button('ghost', 'sm')}>
-                        <X aria-hidden="true" className="h-4 w-4" />
-                    </button>
-                </div>
-                {error && <Alert tone="error">{error}</Alert>}
-
-                <label className="block">
-                    <span className={label}>{t('service.name')}</span>
-                    <input value={name} onChange={(e) => setName(e.target.value)} className={cx(input, 'w-full')} />
-                </label>
-                <label className="block">
-                    <span className={label}>{t('service.categoryLabel')}</span>
-                    <select value={category} onChange={(e) => setCategory(e.target.value as ServiceCategory)} className={cx(select, 'w-full')}>
-                        {CATEGORIES.map((c) => (
-                            <option key={c} value={c}>
-                                {t(`service.category.${c}`)}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-                <label className="block">
-                    <span className={label}>{t('common.notes')}</span>
-                    <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={cx(input, 'w-full')} />
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                    <label className="block">
-                        <span className={label}>{t('service.basePrice')}</span>
-                        <input type="number" min={0} value={basePrice} onChange={(e) => setBasePrice(e.target.value)} className={input} />
-                    </label>
-                    <label className="block">
-                        <span className={label}>{t('service.duration')}</span>
-                        <input type="number" min={1} value={durationHours} onChange={(e) => setDurationHours(e.target.value)} className={input} />
-                    </label>
-                </div>
-
-                <div className="flex justify-end gap-2">
-                    <button type="button" onClick={onClose} className={button('secondary', 'md')}>
-                        {t('common.cancel')}
-                    </button>
-                    <button type="button" onClick={() => void submit()} disabled={!canSubmit || busy} className={button('primary', 'md')}>
-                        {busy ? <Spinner className="h-4 w-4" /> : null}
-                        {t('common.save')}
-                    </button>
-                </div>
-            </section>
-        </div>
-    );
-}

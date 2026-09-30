@@ -549,5 +549,13 @@
     "service.table.price": "Price",
     "service.table.status": "Status",
     "service.table.actions": "Actions",
+    "service.backToCatalog": "Back to catalog",
+    "service.newSubtitle": "Add an item to the service catalog.",
+    "service.editSubtitle": "Edit this item's information and pricing.",
+    "service.notFound": "This service could not be found.",
+    "service.section.general": "General information",
+    "service.section.pricing": "Pricing",
+    "service.section.availability": "Agency availability",
+    "service.availabilityHint": "Adjust this service's pricing or activation for the current agency only.",
     "rbac.group.catalog": "Catalog"
 }

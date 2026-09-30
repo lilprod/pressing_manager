@@ -549,5 +549,13 @@
     "service.table.price": "Tarif",
     "service.table.status": "Statut",
     "service.table.actions": "Actions",
+    "service.backToCatalog": "Retour au catalogue",
+    "service.newSubtitle": "Ajouter un article au catalogue de services.",
+    "service.editSubtitle": "Modifier les informations et le tarif de cet article.",
+    "service.notFound": "Ce service est introuvable.",
+    "service.section.general": "Informations générales",
+    "service.section.pricing": "Tarification",
+    "service.section.availability": "Disponibilité en agence",
+    "service.availabilityHint": "Ajustez le tarif ou l'activation de ce service pour l'agence courante uniquement.",
     "rbac.group.catalog": "Catalogue"
 }

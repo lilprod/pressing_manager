@@ -82,6 +82,27 @@ class ServiceController extends ApiController
         return response()->json($paginated);
     }
 
+    /**
+     * Détail d'un service pour l'écran de création/édition. Si un agency_id est
+     * fourni, embarque la surcharge (price_override/is_active) de cette agence
+     * sous "agency_pivot", comme le fait catalog().
+     */
+    public function show(Request $request, Service $service): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'services.manage');
+
+        $agencyId = $request->integer('agency_id') ?: null;
+
+        if ($agencyId) {
+            $this->authorizeAgency($request->user(), $agencyId);
+
+            $pivot = Agency::findOrFail($agencyId)->services()->find($service->id)?->pivot;
+            $service->agency_pivot = $pivot ? ['price_override' => $pivot->price_override, 'is_active' => $pivot->is_active] : null;
+        }
+
+        return response()->json($service);
+    }
+
     public function store(StoreServiceRequest $request): JsonResponse
     {
         return response()->json(Service::create($request->validated()), 201);

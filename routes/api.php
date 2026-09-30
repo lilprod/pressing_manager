@@ -71,6 +71,7 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
 
     Route::get('/services', [ServiceController::class, 'index']);
     Route::get('/services/catalog', [ServiceController::class, 'catalog']);
+    Route::get('/services/{service}', [ServiceController::class, 'show']);
     Route::post('/services', [ServiceController::class, 'store']);
     Route::patch('/services/{service}', [ServiceController::class, 'update']);
     Route::patch('/agencies/{agency}/services/{service}', [ServiceController::class, 'updatePricing']);

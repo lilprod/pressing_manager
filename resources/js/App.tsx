@@ -17,6 +17,7 @@ import LicensePage from './pages/LicensePage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
 import LoyaltyPage from './pages/LoyaltyPage';
 import ServicesPage from './pages/ServicesPage';
+import ServiceFormPage from './pages/services/ServiceFormPage';
 import InvoicesOutstandingPage from './pages/InvoicesOutstandingPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
@@ -72,6 +73,8 @@ export default function App() {
                     <Route path="/subscriptions" element={<SubscriptionsPage />} />
                     <Route path="/loyalty" element={<LoyaltyPage />} />
                     <Route path="/services" element={<ServicesPage />} />
+                    <Route path="/services/new" element={<ServiceFormPage />} />
+                    <Route path="/services/:id/edit" element={<ServiceFormPage />} />
                     <Route path="/invoices/outstanding" element={<InvoicesOutstandingPage />} />
                     <Route path="/stock" element={<StockPage />} />
                     <Route path="/deliveries" element={<DeliveriesPage />} />

@@ -78,9 +78,9 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`) |
 | 03 Clients & fidélité | Nouveau/Modifier client | `pages/clients/ClientFormPage.tsx` (routes `/clients/new`, `/clients/:id/edit`) | **fait** (commit `11de473`, écrans séparés depuis commit `eaf68bf`) — a aussi exposé le champ `notes` (backend déjà prêt, jamais affiché côté front) |
 | 03 Clients & fidélité | Fiche client (consultation) | panneau détail dans `ClientsList.tsx` | **fait** — reste un panneau latéral sur la liste (pas de retour utilisateur demandant un écran séparé pour la consultation, contrairement à la création/édition) |
-| 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait** — construit sans accès Figma direct (rate-limit MCP atteint), à partir de la description du gap dans ce fichier + conventions POS standards (mouvements manuels entrée/sortie, clôture = comptage vs théorique avec écart) ; à comparer visuellement à la maquette si l'accès Figma est rétabli |
-| 07 Articles & tarifs | Catalogue (liste) | `pages/ServicesPage.tsx` | **fait** (commit `fc75065`, écrans séparés depuis commit `d52b79b`) |
-| 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait** (commit `d52b79b`) — retour utilisateur du 2026-09-30 : le design a des écrans dédiés séparés de la liste, pas un panneau/modale inline ; voir convention ci-dessous |
+| 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait, mais écart de fidélité important confirmé** (captures Figma fournies le 2026-09-30, voir §2) — construit sans accès Figma direct, version MVP fonctionnelle (mouvements simples, clôture = comptant vs théorique) mais la maquette réelle est beaucoup plus riche : rapprochement par moyen de paiement, checklist de clôture, double contrôle/validation sur mouvement sensible, pièces justificatives, rapport PDF. Détail complet en §2 — chantier de renforcement à prioriser avec l'utilisateur, pas juste un ajustement visuel |
+| 07 Articles & tarifs | Catalogue (liste) | `pages/ServicesPage.tsx` | **fait, mais écart de fidélité important confirmé** (captures Figma fournies le 2026-09-30, voir §2) — liste fonctionnelle simple ; la maquette montre un vrai hub (stats, tarifs au kilo, import Excel, historique, filtres avancés) |
+| 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait, mais écart de fidélité important confirmé** (voir §2) — formulaire simple (prix fixe unique) ; la maquette montre un système de facturation Pièce/Kilo/Mixte avec grilles de prix dégressives, règles de validation, disponibilité par agence détaillée. Convention liste/création/édition elle-même correcte, voir ci-dessous |
 | 08 Rapports & bilans | Rapports et bilans | `pages/KpiPage.tsx` (route `/kpi`, libellé nav « Rapports & bilans ») | **fait** (2026-09-30) — filtres période + raccourcis, 4 KPI avec variation vs période précédente, tableau « Performance des agences », indicateurs opérationnels existants conservés (hors maquette mais déjà exposés par l'API), raccourcis vers les écrans détaillés. Histogramme CA / répartition paiements / synthèse fidélité / planification omis (§2) |
 | 08 Rapports & bilans | Bilan journalier et performance caissiers | — | **non construit** : quasi intégralement dépendant d'agrégats absents (recettes par mode de paiement et par heure, performance par caissier, remises du jour). Les données existantes (clôture de caisse théorique/compté/écart) sont déjà sur `/cash/closures/:id` ; lien depuis « Rapports détaillés ». Voir §2 |
 | 09 Paramètres | Paramètres (hub) | `pages/SettingsPage.tsx` (route `/settings`) | **fait** (2026-09-30) — l'ancien formulaire unique devient un hub : recherche + filtres par groupe, « État de configuration » (checklist d'identité réelle, `lib/brandingChecklist.ts`), cartes vers les écrans existants uniquement (gating par permission, y compris « Agences » vers le CRUD livré en parallèle), « Mis à jour le » via `updated_at` (colonne existante, désormais exposée par `GET /settings`) |
@@ -168,9 +168,12 @@ proposer de migration vers la stack du CDC.
 5. **QR par lot** (CDC §11.6) : le QR existant est généré par article (`order_items.qr_code`,
    toujours actif) mais pas regroupable en "lot" pour plusieurs vêtements d'un même
    dépôt, et pas configurable en option par agence comme le prévoit le CDC.
-6. **Blocage du retrait si impayé, configurable par agence** (EF-RET-05) — à vérifier
-   dans `OrderController`/`RetrieveController` si c'est aujourd'hui figé ou déjà
-   paramétrable ; non confirmé lors de l'analyse.
+6. **Blocage du retrait si impayé, configurable par agence** (EF-RET-05) — **confirmé
+   non implémenté** (captures Figma « Paramètres opérationnels » fournies par
+   l'utilisateur le 2026-09-30, cf. node `25:12525` ci-dessous : bascule explicite
+   « Bloquer le retrait en cas d'impayé »). Aucun champ en base pour ce jour ; fait
+   partie du même chantier « réglages par agence » que les codes dépôt et les modes
+   de tarification.
 
 Points notables où l'existant est **en avance** sur le phasage du CDC (construit avant
 que ce document n'existe, sur demande utilisateur directe) : file hors ligne au
@@ -374,6 +377,93 @@ une table de réglages par agence (`agency_settings`) + endpoints `GET/PATCH
   `DELETE /profile/sessions/{id}` / `DELETE /profile/sessions` (sauf le courant).
   Pour afficher appareil/IP, stocker IP + user-agent à la création du jeton.
 - **Appareils autorisés** : notion absente.
+
+**06 Caisse — Clôture et rapprochement journalier, Nouveau mouvement** (captures
+Figma fournies par l'utilisateur le 2026-09-30, pas de node Figma exact) — la
+maquette réelle est nettement plus riche que `CashService`/`CashClosure` actuels :
+- **Rapprochement par moyen de paiement** (Espèces / Mobile Money / Carte-Virement,
+  théorique vs réel/relevé, statut Conforme par ligne) : `CashClosure` ne stocke
+  qu'un solde espèces global (`counted_balance`), aucune ventilation par méthode de
+  paiement. Il faudrait décomposer `cash_payments_total` par `payments.method` et
+  saisir un compté par méthode à la clôture (`closure_counts` : méthode, théorique,
+  compté).
+- **Distinction recettes de nouveaux dépôts vs paiements de solde** (612 500 FCFA/31
+  dépôts vs 248 000 FCFA/18 retraits) : notre `Payment` ne distingue pas
+  acompte-à-la-création vs règlement de solde ultérieur ; même agrégat aujourd'hui.
+- **Checklist de clôture obligatoire** (6 étapes : journal vérifié, espèces
+  recomptées, relevés Mobile Money, paiements carte vérifiés, anomalies traitées,
+  double contrôle) : aucune notion de checklist, la clôture actuelle est un simple
+  formulaire à un seul champ (`counted_balance`).
+- **Justification obligatoire si écart non nul** (motif + preuve, validation manager
+  tracée) : `CashClosure.notes` existe mais n'est jamais rendu obligatoire même à
+  écart ≠ 0 ; pas de workflow d'approbation manager séparé.
+- **Rapport PDF de clôture** (« Clôture_BG_2026-09-28.pdf ») : aucune génération PDF
+  pour les clôtures (contrairement aux tickets/factures qui existent déjà via
+  DomPDF — même moteur réutilisable).
+- **Opérateurs de la journée** (qui a fait quoi : ouverture, comptage, validations,
+  statut « Vérifié ») : pas de vue agrégée par utilisateur sur la période, seul
+  `CashMovement.created_by`/`CashClosure.closed_by` existent en base brute.
+- **Mouvement de caisse structuré** : la maquette a une **Catégorie*** (dropdown,
+  obligatoire), un **Mode de paiement**, un **Bénéficiaire/fournisseur***, une
+  **Référence interne**, un **Commentaire**, et une **pièce justificative**
+  (upload, chiffré, lié au journal d'audit). `CashMovement` actuel n'a que
+  `type`/`amount`/`reason` (texte libre)/`note` — pas de catégorie structurée, pas
+  de bénéficiaire, pas de pièce jointe.
+- **Double contrôle / validation manager sur mouvement sensible** (seuil 250 000
+  FCFA → état « Brouillon » puis « En attente » jusqu'à seconde validation, avec
+  notification au contrôleur) : `CashMovement` est créé instantanément, sans état de
+  brouillon ni workflow d'approbation. Implique un champ `status`
+  (brouillon/en_attente/validé), un seuil configurable, et une notification.
+- **Traçabilité horodatée du mouvement** (brouillon créé → règle appliquée →
+  seconde validation, avec acteur et heure à chaque étape) : `AuditLog` générique
+  existe mais n'est pas présenté sous cette forme dédiée au mouvement.
+- Conclusion : le module livré est un MVP fonctionnel correct (calcul du solde
+  théorique, clôture simple) mais qui ne couvre qu'une fraction de ce que montre la
+  maquette. À traiter comme un **chantier de renforcement à part entière** si la
+  fidélité complète est souhaitée, pas comme un ajustement cosmétique.
+
+**07 Articles & tarifs — Catalogue et fiche article** (captures Figma fournies par
+l'utilisateur le 2026-09-30, pas de node Figma exact) :
+- **Mode de facturation par article** (Pièce / Kilo / Mixte, sélecteur sur la fiche
+  article) : `Service.base_price` est un prix fixe unique, aucune notion de mode de
+  facturation. Recoupe et précise le gap « séparation Article × Service » déjà noté
+  plus haut (§ CDC v3.0) — ici clairement une propriété de l'article lui-même, pas
+  seulement une règle de ratio entre services.
+- **Grilles de prix dégressives au kilo** (tranches de poids progressives, ex.
+  0–3 kg / 3,01–8 kg / 8,01 kg et + avec prix par kg et par service) : aucune table
+  de paliers de prix n'existe. Il faudrait un modèle `ServicePriceTier` (service_id,
+  poids_min, poids_max, prix_classique, prix_express…).
+- **Options de tarification par article** (autoriser une remise, arrondi à 100 FCFA,
+  prix modifiable en caisse) : aucun de ces booléens n'existe sur `Service`.
+- **États acceptés / rendus compatibles / services associés** (cases à cocher
+  paramétrables par article, ex. taches importantes, sur cintre, collecte) : notre
+  `IntakeCondition` existe mais n'est pas rattaché à une liste configurable par
+  article ; « rendus compatibles » et « services associés » (croisement avec
+  collecte/livraison/traitement anti-odeur) n'existent pas du tout.
+- **Disponibilité par agence détaillée** (statut disponible/indisponible par agence,
+  avec « prix local +5 % ») : `agency_services` (price_override, is_active) couvre
+  la donnée brute mais aucune UI ne l'affiche sous cette forme récapitulative
+  agence-par-agence sur la fiche article.
+- **Contrôle avant publication** (checklist : informations obligatoires, tarifs
+  cohérents, délais renseignés, une agence active) et **recommandations
+  automatiques** (« le tarif Express ne doit pas dépasser de 40 % ») : aucune
+  validation métier de ce type, juste les règles de validation HTTP basiques.
+- **Historique des modifications par article** (« Dernière modification », « Voir
+  l'historique ») : pas d'historisation des changements de prix (même gap que la
+  tarification par agence, §2 CDC v3.0 — non négociable pour la conformité
+  fiscale : un prix modifié ne doit jamais changer une facture déjà émise).
+- **Tableau de bord du catalogue** (Articles actifs, Catégories, Tarif moyen, « À
+  réviser » = tarifs non mis à jour depuis 12 mois) : aucun agrégat de ce type
+  (`GET /services/stats`).
+- **Import Excel** du catalogue : déjà noté comme gap CDC (EF-ART-03), confirmé ici
+  visuellement (bouton « Importer Excel » à côté d'« Exporter »).
+- **Onglets Catégories / Tarifs au kilo / Indisponibles / Historique** sur la liste :
+  structure de navigation différente de la liste plate actuelle.
+- Conclusion : même constat que pour la Caisse — le CRUD actuel (prix fixe, une
+  seule liste) est correct pour un MVP mais très en retrait par rapport à la
+  maquette, qui décrit un vrai système de tarification (modes de facturation,
+  grilles dégressives, règles de validation, historique). Chantier de renforcement
+  à part entière.
 
 Le catalogue articles/tarifs (CRUD) et la sidebar de navigation groupée, qui étaient
 dans une version précédente de cette liste, sont **déjà faits** (commits `7dd2fae`,

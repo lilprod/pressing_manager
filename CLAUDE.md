@@ -88,7 +88,9 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 09 Paramètres | Sécurité (politique de mots de passe) | `pages/settings/SecuritySettingsPage.tsx` (route `/settings/security`) | **fait** (2026-09-30) — pas d'écran dédié dans la maquette : mise en page calquée sur « Paramètres opérationnels » (node `25:12525`, champs suffixés + bascules). Les réglages opérationnels eux-mêmes (codes agence, délais, workflow, tarification) n'existent pas (§2) |
 | 09 Paramètres | Promotions et fidélité | `pages/LoyaltyPage.tsx` (route `/loyalty`) | **fait** (2026-09-30) — volet fidélité seulement : KPI dérivés de la config (paliers actifs, remise max, règle d'acquisition réelle via `loyalty_amount_per_point` exposé par `GET /settings`), paliers éditables en ligne (le `PATCH /loyalty-tiers/{id}` existait sans UI d'édition). Volet promotions entièrement absent du backend (§2) |
 | 09 Paramètres | Notifications | `pages/NotificationsPage.tsx` (route `/notifications`) | **fait** (2026-09-30) — cartes d'état des canaux (comptes réels d'évènements activés, passerelle SMS « non connectée » = état réel), matrice évènement × SMS/e-mail avec interrupteurs, journal filtrable |
-| 11 Équipe | Utilisateurs, Rôles & permissions, Profil | `pages/UsersPage.tsx`, `pages/RolesPermissionsPage.tsx`, `pages/ProfilePage.tsx` | à faire |
+| 11 Équipe | Utilisateurs et équipe | `pages/UsersPage.tsx` (route `/users`) | **fait** (2026-09-30) — annuaire en tableau (`table-fixed`, `overflow-x-auto`) + panneau latéral création/édition (la maquette montre un panneau à côté de la liste, **pas** un écran dédié : la convention `/<ressource>/new` ne s'applique donc pas ; l'ancienne modale d'édition est remplacée par ce panneau), filtre par rôle (serveur), colonne « Dernière activité » = `last_active_at` (max de `personal_access_tokens.last_used_at`, déjà tenu par Sanctum, exposé par `GET /users?full=1`, testé) |
+| 11 Équipe | Rôles et permissions | `pages/RolesPermissionsPage.tsx` (route `/roles-permissions`) | **fait** (2026-09-30) — cartes de rôles (`users_count` via `withCount('users')`, testé), configuration du rôle sélectionné en ligne (remplace la modale), duplication (création pré-remplie via `POST /roles`), matrice domaines × rôles (complet / partiel k/n / aucun), utilisateurs concernés (`/users?role=`) |
+| 11 Équipe | Profil et sécurité | `pages/ProfilePage.tsx` (route `/profile`) | **fait** (2026-09-30) — résumé (photo avec bouton caméra, rôle, affectation, expiration réelle du mot de passe), coordonnées, rôle en lecture seule, préférences langue/thème (déjà gérées côté client), changement de mot de passe avec robustesse calculée sur la politique réelle |
 
 ### 2. Écarts fonctionnels identifiés vs la maquette (backend + frontend à construire)
 
@@ -329,6 +331,49 @@ une table de réglages par agence (`agency_settings`) + endpoints `GET/PATCH
 - Mesures par canal (envoyés / échecs / taux sur la période) : il faudrait un agrégat
   `GET /notification-logs/stats?from&to` groupé par canal et statut.
 - « Exporter » le journal : pas d'export.
+
+**11 Utilisateurs et équipe** (node `43:1497`)
+- Bouton « Importer » (upload) : pas d'import CSV de comptes.
+- 4 cartes d'indicateurs (membres, rôle/icône user-star, invitations en attente,
+  connexions) avec variation : il faudrait `GET /users/stats` (total, actifs,
+  `must_change_password`, connexions sur la période — cette dernière demande un
+  journal de connexions, voir ci-dessous).
+- Onglets par statut (tous / actifs / invitations / désactivés), recherche texte et
+  filtre de statut : `GET /users?full=1` ne filtre que par `role` et `agency_id`.
+  Ajouter `search`, `status=active|inactive|pending` à `indexForAdmin`.
+- Tri « Jour / Semaine / Mois » des résultats : sémantique non définie sans journal
+  de connexions.
+- Panneau de création : cases « agences autorisées » multiples → le modèle n'a qu'un
+  `users.agency_id` ; il faudrait un pivot `agency_user`. Envoi d'une **invitation par
+  e-mail** : aujourd'hui un mot de passe temporaire est affiché à l'admin.
+- « Activité récente » (connexion, changement d'agence, nouvel appareil, session
+  expirée) : aucun journal d'authentification. Il faudrait une table `auth_events`
+  (type, user, IP, user-agent, date) alimentée au login/logout/expiration.
+
+**11 Rôles et permissions** (node `43:1850`)
+- Onglets et 3 sélecteurs de portée dans « Configuration » (portée fine par agence /
+  périmètre de données) : une permission est globale au rôle ; la portée se limite à
+  `roles.scope` (global/agency/flexible).
+- Pastille de statut par rôle (actif/brouillon ?) et alerte contextuelle détaillée :
+  pas de statut de rôle en base.
+- Journal des modifications de droits : pas d'audit (même besoin que `settings_audits`).
+
+**11 Profil et sécurité** (node `65:22067`)
+- Prénom / nom en deux champs : un seul `users.name`.
+- « Dernière connexion » + origine (appareil/IP) : pas de journal d'authentification
+  (`auth_events`, voir ci-dessus) ; seul `last_used_at` du jeton existe.
+- Sélecteurs de rôle/agences éditables et « agences autorisées » : lecture seule ici
+  (modification par un admin via `/users`) ; multi-agences absent (pivot à créer).
+- 3 préférences à bascule (notifications personnelles, etc.) : pas de préférences
+  utilisateur côté serveur (langue/thème sont stockés en local sur l'appareil).
+- **Authentification renforcée (MFA)** : rien (il faudrait TOTP : secret chiffré,
+  codes de secours, étape de vérification au login).
+- **Sessions actives** (liste + « Déconnecter les autres sessions ») : les jetons
+  Sanctum existent en base mais aucun endpoint ; il faudrait `GET /profile/sessions`
+  (`personal_access_tokens` de l'utilisateur : nom, `last_used_at`, création) et
+  `DELETE /profile/sessions/{id}` / `DELETE /profile/sessions` (sauf le courant).
+  Pour afficher appareil/IP, stocker IP + user-agent à la création du jeton.
+- **Appareils autorisés** : notion absente.
 
 Le catalogue articles/tarifs (CRUD) et la sidebar de navigation groupée, qui étaient
 dans une version précédente de cette liste, sont **déjà faits** (commits `7dd2fae`,

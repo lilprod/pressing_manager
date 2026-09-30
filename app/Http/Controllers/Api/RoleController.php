@@ -17,7 +17,8 @@ class RoleController extends ApiController
     {
         $this->authorizePermission($request->user(), 'users.manage');
 
-        return response()->json(Role::with('permissions')->orderBy('name')->get());
+        // users_count : nombre de comptes portant le rôle (cartes de rôles et « Utilisateurs concernés »).
+        return response()->json(Role::with('permissions')->withCount('users')->orderBy('name')->get());
     }
 
     public function store(StoreRoleRequest $request): JsonResponse

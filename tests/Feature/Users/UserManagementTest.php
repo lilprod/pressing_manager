@@ -33,6 +33,25 @@ class UserManagementTest extends TestCase
         $this->assertSame($agency->name, $entry['agency']['name']);
     }
 
+    public function test_the_full_directory_exposes_each_users_last_activity(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+        $agency = Agency::factory()->create();
+        $active = $this->makeUser('accueil', $agency);
+        $never = $this->makeUser('technicien', $agency);
+
+        $token = $active->createToken('web');
+        $token->accessToken->forceFill(['last_used_at' => now()->subHours(2)])->save();
+
+        $response = $this->actingAs($admin)->getJson('/api/users?full=1');
+
+        $response->assertOk();
+        $rows = collect($response->json('data'))->keyBy('id');
+        $this->assertNotNull($rows[$active->id]['last_active_at']);
+        $this->assertNull($rows[$never->id]['last_active_at']);
+    }
+
     public function test_a_non_admin_ignores_the_full_flag_and_still_gets_the_lightweight_picker(): void
     {
         $this->seedRbac();

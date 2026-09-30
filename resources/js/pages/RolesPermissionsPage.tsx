@@ -1,41 +1,130 @@
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import {
+    Bell,
+    Boxes,
+    ChartNoAxesCombined,
+    Check,
+    Copy,
+    Minus,
+    PackagePlus,
+    Plus,
+    Receipt,
+    Save,
+    Settings,
+    ShieldAlert,
+    ShieldCheck,
+    Shirt,
+    Trash2,
+    Truck,
+    Users,
+    UsersRound,
+    X,
+    type LucideIcon,
+} from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
 import { api, ApiError } from '../lib/api';
-import PageHeader from '../components/ui/PageHeader';
-import { Alert, LoadingState, Spinner } from '../components/ui/Feedback';
-import { Pill } from '../components/ui/StatusBadge';
-import { button, card, cardPadded, cx, input, label, select, sectionTitle } from '../components/ui/styles';
-import { Check, Minus, Pencil, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
-import type { Permission, Role, RoleScope } from '../types';
+import PageHeader, { Avatar } from '../components/ui/PageHeader';
+import { Alert, EmptyState, LoadingState, Spinner } from '../components/ui/Feedback';
+import { SectionCard } from '../components/ui/Metrics';
+import { Pill, TONES } from '../components/ui/StatusBadge';
+import { button, card, cx, input, label, select } from '../components/ui/styles';
+import type { Paginated, Permission, Role, RoleScope, User } from '../types';
 import { SYSTEM_ROLE_SLUGS } from '../types';
 
-type Tab = 'roles' | 'permissions' | 'matrix';
+/* Écran « Rôles et permissions » (Figma SPARK PRESSING, section 11, node 43:1850) :
+ * cartes de rôles, configuration du rôle sélectionné en ligne (remplace l'ancienne
+ * modale), matrice domaines × rôles, utilisateurs concernés et duplication (création
+ * pré-remplie via POST /roles existant). Omis faute de backend (voir CLAUDE.md §2) :
+ * permissions par agence / portée fine, journal des changements de droits. */
+
+const GROUP_ICONS: Record<string, LucideIcon> = {
+    clients: Users,
+    orders: PackagePlus,
+    billing: Receipt,
+    admin: Settings,
+    reports: ChartNoAxesCombined,
+    stocks: Boxes,
+    deliveries: Truck,
+    hr: UsersRound,
+    notifications: Bell,
+    catalog: Shirt,
+};
+
+type Draft = { mode: 'create' | 'edit'; roleId: number | null; name: string; scope: RoleScope; permissionIds: Set<number> };
+
+function groupLabel(t: (key: string) => string, group: string): string {
+    const key = `rbac.group.${group}`;
+    const translated = t(key);
+    return translated === key ? group : translated;
+}
+
+function isSystem(role: Role): boolean {
+    return (SYSTEM_ROLE_SLUGS as string[]).includes(role.slug);
+}
 
 export default function RolesPermissionsPage() {
     const { t } = useI18n();
     const [roles, setRoles] = useState<Role[]>([]);
     const [permissions, setPermissions] = useState<Permission[]>([]);
     const [loading, setLoading] = useState(true);
-    const [tab, setTab] = useState<Tab>('roles');
-    const [creating, setCreating] = useState(false);
-    const [editingRole, setEditingRole] = useState<Role | null>(null);
+    const [selectedId, setSelectedId] = useState<number | null>(null);
+    const [draft, setDraft] = useState<Draft | null>(null);
+    const [feedback, setFeedback] = useState<string | null>(null);
+    const editorRef = useRef<HTMLDivElement>(null);
 
-    function reload() {
-        Promise.all([api.get<Role[]>('/roles'), api.get<Permission[]>('/permissions')])
+    function reload(keepSelection?: number | null) {
+        return Promise.all([api.get<Role[]>('/roles'), api.get<Permission[]>('/permissions')])
             .then(([rolesRes, permissionsRes]) => {
-                setRoles(rolesRes);
+                const visible = rolesRes;
+                setRoles(visible);
                 setPermissions(permissionsRes);
+                const next = keepSelection !== undefined ? keepSelection : selectedId;
+                const role = visible.find((r) => r.id === next) ?? visible[0] ?? null;
+                setSelectedId(role?.id ?? null);
+                setDraft(role ? draftFrom(role) : null);
             })
             .finally(() => setLoading(false));
     }
 
-    useEffect(reload, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => void reload(), []);
 
-    const tabs: { key: Tab; label: string }[] = [
-        { key: 'roles', label: t('rbac.roles') },
-        { key: 'permissions', label: t('rbac.permissions') },
-        { key: 'matrix', label: t('rbac.matrix') },
-    ];
+    function draftFrom(role: Role): Draft {
+        return { mode: 'edit', roleId: role.id, name: role.name, scope: role.scope, permissionIds: new Set(role.permissions?.map((p) => p.id) ?? []) };
+    }
+
+    function reveal() {
+        requestAnimationFrame(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+
+    function select(role: Role) {
+        setSelectedId(role.id);
+        setDraft(draftFrom(role));
+        setFeedback(null);
+    }
+
+    function startCreate() {
+        setDraft({ mode: 'create', roleId: null, name: '', scope: 'agency', permissionIds: new Set() });
+        setFeedback(null);
+        reveal();
+    }
+
+    function startDuplicate() {
+        const source = roles.find((r) => r.id === selectedId);
+        if (!source) return;
+        setDraft({
+            mode: 'create',
+            roleId: null,
+            name: t('rbac.copyOf', { name: source.name }),
+            scope: source.scope,
+            permissionIds: new Set(source.permissions?.map((p) => p.id) ?? []),
+        });
+        setFeedback(null);
+        reveal();
+    }
+
+    const selected = roles.find((r) => r.id === selectedId) ?? null;
+    const groups = Array.from(new Set(permissions.map((p) => p.group)));
 
     return (
         <div className="space-y-6">
@@ -44,234 +133,123 @@ export default function RolesPermissionsPage() {
                 subtitle={t('rbac.subtitle')}
                 icon={ShieldCheck}
                 actions={
-                    tab === 'roles' && (
-                        <button type="button" onClick={() => setCreating(true)} className={button('primary')}>
+                    <>
+                        <button type="button" onClick={startDuplicate} disabled={!selected} className={button('secondary', 'md', 'h-10')}>
+                            <Copy aria-hidden="true" className="h-4 w-4" />
+                            {t('rbac.duplicate')}
+                        </button>
+                        <button type="button" onClick={startCreate} className={button('primary', 'md', 'h-10')}>
                             <Plus aria-hidden="true" className="h-4 w-4" />
                             {t('rbac.newRole')}
                         </button>
-                    )
+                    </>
                 }
             />
 
-            <div role="tablist" aria-label={t('rbac.title')} className="flex gap-2">
-                {tabs.map((tb) => (
-                    <button
-                        key={tb.key}
-                        type="button"
-                        role="tab"
-                        aria-selected={tab === tb.key}
-                        onClick={() => setTab(tb.key)}
-                        className={cx(
-                            'inline-flex h-10 items-center rounded-full px-4 text-sm font-semibold transition duration-150',
-                            tab === tb.key
-                                ? 'bg-ink-900 text-white shadow-sm dark:bg-white dark:text-ink-950'
-                                : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-50 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
-                        )}
-                    >
-                        {tb.label}
-                    </button>
-                ))}
-            </div>
+            {feedback && <Alert tone="success">{feedback}</Alert>}
 
             {loading ? (
                 <LoadingState />
             ) : (
                 <>
-                    {tab === 'roles' && <RolesTab roles={roles} onEdit={setEditingRole} onChanged={reload} />}
-                    {tab === 'permissions' && <PermissionsTab permissions={permissions} />}
-                    {tab === 'matrix' && <MatrixTab roles={roles} permissions={permissions} />}
+                    <ul aria-label={t('rbac.roles')} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                        {roles.map((role) => {
+                            const active = draft?.mode === 'edit' && role.id === selectedId;
+                            return (
+                                <li key={role.id} className="min-w-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => select(role)}
+                                        aria-pressed={active}
+                                        className={cx(
+                                            card,
+                                            'flex h-full w-full flex-col items-start gap-2 p-4 text-left transition duration-150 hover:border-ink-300 dark:hover:border-ink-700',
+                                            active && 'border-brand-600 ring-2 ring-brand-600/20 dark:border-brand-400',
+                                        )}
+                                    >
+                                        <div className="flex flex-wrap gap-1.5">
+                                            <Pill tone={role.scope === 'global' ? 'brand' : 'neutral'}>{t(`rbac.scope.${role.scope}`)}</Pill>
+                                            {isSystem(role) && <Pill tone="accent">{t('rbac.system')}</Pill>}
+                                        </div>
+                                        <p className="font-display font-bold text-ink-900 dark:text-white">{role.name}</p>
+                                        <p className="text-xs text-ink-600 dark:text-ink-350">
+                                            {t('rbac.usersCount', { count: role.users_count ?? 0 })} · {t('rbac.permissionCount', { count: role.permissions?.length ?? 0 })}
+                                        </p>
+                                    </button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+
+                    <div ref={editorRef} className="scroll-mt-24">
+                        {draft && (
+                            <RoleEditor
+                                key={`${draft.mode}-${draft.roleId ?? 'new'}-${draft.name}`}
+                                draft={draft}
+                                role={draft.mode === 'edit' ? selected : null}
+                                permissions={permissions}
+                                groups={groups}
+                                onCancel={() => (selected ? setDraft(draftFrom(selected)) : setDraft(null))}
+                                onSaved={async (savedId, message) => {
+                                    await reload(savedId);
+                                    setFeedback(message);
+                                }}
+                            />
+                        )}
+                    </div>
+
+                    <Matrix roles={roles} permissions={permissions} groups={groups} highlightId={draft?.mode === 'edit' ? selectedId : null} />
+
+                    {selected && draft?.mode === 'edit' && <RoleUsers role={selected} />}
                 </>
             )}
-
-            {creating && (
-                <RoleFormModal
-                    role={null}
-                    permissions={permissions}
-                    onClose={() => setCreating(false)}
-                    onSaved={() => {
-                        setCreating(false);
-                        reload();
-                    }}
-                />
-            )}
-
-            {editingRole && (
-                <RoleFormModal
-                    role={editingRole}
-                    permissions={permissions}
-                    onClose={() => setEditingRole(null)}
-                    onSaved={() => {
-                        setEditingRole(null);
-                        reload();
-                    }}
-                />
-            )}
         </div>
     );
 }
 
-function groupLabel(t: (key: string) => string, group: string): string {
-    const key = `rbac.group.${group}`;
-    const translated = t(key);
-    return translated === key ? group : translated;
-}
-
-function RolesTab({ roles, onEdit, onChanged }: { roles: Role[]; onEdit: (role: Role) => void; onChanged: () => void }) {
-    const { t } = useI18n();
-    const [error, setError] = useState<string | null>(null);
-
-    async function deleteRole(role: Role) {
-        setError(null);
-        try {
-            await api.delete(`/roles/${role.id}`);
-            onChanged();
-        } catch (err) {
-            setError(err instanceof ApiError ? err.message : t('common.error'));
-        }
-    }
-
-    return (
-        <div className="space-y-4">
-            {error && <Alert tone="error">{error}</Alert>}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {roles.map((role) => {
-                    const isSystem = (SYSTEM_ROLE_SLUGS as string[]).includes(role.slug);
-                    return (
-                        <div key={role.id} className={cx(card, 'space-y-2 p-4')}>
-                            <div className="flex items-center justify-between gap-2">
-                                <p className="font-display font-bold text-ink-900 dark:text-white">{role.name}</p>
-                                <Pill tone="neutral">{t(`rbac.scope.${role.scope}`)}</Pill>
-                            </div>
-                            <p className="font-mono text-xs text-ink-500 dark:text-ink-400">{role.slug}</p>
-                            <p className="text-sm text-ink-600 dark:text-ink-350">
-                                {t('rbac.permissionCount', { count: role.permissions?.length ?? 0 })}
-                            </p>
-                            <div className="flex items-center gap-2 pt-1">
-                                <button type="button" onClick={() => onEdit(role)} className={button('secondary', 'sm')}>
-                                    <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
-                                    {t('common.edit')}
-                                </button>
-                                {!isSystem && (
-                                    <button type="button" onClick={() => void deleteRole(role)} className={button('dangerGhost', 'sm')}>
-                                        <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
-                                        {t('common.delete')}
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-function PermissionsTab({ permissions }: { permissions: Permission[] }) {
-    const { t } = useI18n();
-    const groups = Array.from(new Set(permissions.map((p) => p.group)));
-
-    return (
-        <div className="space-y-5">
-            {groups.map((group) => (
-                <section key={group} className={cx(card, 'overflow-hidden')}>
-                    <h2 className="border-b border-ink-200/80 px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-ink-600 dark:border-ink-800 dark:text-ink-350">
-                        {groupLabel(t, group)}
-                    </h2>
-                    <ul className="divide-y divide-ink-100 dark:divide-ink-800">
-                        {permissions
-                            .filter((p) => p.group === group)
-                            .map((p) => (
-                                <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
-                                    <span className="text-ink-900 dark:text-ink-50">{p.name}</span>
-                                    <span className="font-mono text-xs text-ink-500 dark:text-ink-400">{p.slug}</span>
-                                </li>
-                            ))}
-                    </ul>
-                </section>
-            ))}
-        </div>
-    );
-}
-
-function MatrixTab({ roles, permissions }: { roles: Role[]; permissions: Permission[] }) {
-    const { t } = useI18n();
-    const groups = Array.from(new Set(permissions.map((p) => p.group)));
-
-    return (
-        <div className={cx(card, 'overflow-x-auto')}>
-            <table className="w-full text-left text-sm">
-                <thead className="bg-ink-50 text-xs uppercase tracking-wider text-ink-600 dark:bg-ink-950/50 dark:text-ink-350">
-                    <tr>
-                        <th scope="col" className="sticky left-0 bg-ink-50 px-4 py-2.5 font-semibold dark:bg-ink-950/50">
-                            {t('rbac.permissions')}
-                        </th>
-                        {roles.map((role) => (
-                            <th key={role.id} scope="col" className="whitespace-nowrap px-3 py-2.5 text-center font-semibold">
-                                {role.name}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {groups.map((group) => (
-                        <Fragment key={group}>
-                            <tr className="bg-ink-50/60 dark:bg-ink-950/30">
-                                <td colSpan={roles.length + 1} className="px-4 py-1.5 text-xs font-bold uppercase tracking-wider text-ink-600 dark:text-ink-350">
-                                    {groupLabel(t, group)}
-                                </td>
-                            </tr>
-                            {permissions
-                                .filter((p) => p.group === group)
-                                .map((permission) => (
-                                    <tr key={permission.id} className="border-t border-ink-100 dark:border-ink-800">
-                                        <td className="sticky left-0 bg-white px-4 py-2 dark:bg-ink-900">{permission.name}</td>
-                                        {roles.map((role) => {
-                                            const has = role.permissions?.some((p) => p.id === permission.id);
-                                            return (
-                                                <td key={role.id} className="px-3 py-2 text-center">
-                                                    {has ? (
-                                                        <Check aria-label={t('rbac.granted')} className="mx-auto h-4 w-4 text-emerald-700 dark:text-emerald-300" />
-                                                    ) : (
-                                                        <Minus aria-hidden="true" className="mx-auto h-4 w-4 text-ink-300 dark:text-ink-700" />
-                                                    )}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                ))}
-                        </Fragment>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
-}
-
-function RoleFormModal({
+function RoleEditor({
+    draft,
     role,
     permissions,
-    onClose,
+    groups,
+    onCancel,
     onSaved,
 }: {
+    draft: Draft;
     role: Role | null;
     permissions: Permission[];
-    onClose: () => void;
-    onSaved: () => void;
+    groups: string[];
+    onCancel: () => void;
+    onSaved: (savedId: number | null, message: string) => void | Promise<void>;
 }) {
     const { t } = useI18n();
-    const [name, setName] = useState(role?.name ?? '');
-    const [scope, setScope] = useState<RoleScope>(role?.scope ?? 'agency');
-    const [permissionIds, setPermissionIds] = useState<Set<number>>(new Set(role?.permissions?.map((p) => p.id) ?? []));
+    const [name, setName] = useState(draft.name);
+    const [scope, setScope] = useState<RoleScope>(draft.scope);
+    const [permissionIds, setPermissionIds] = useState<Set<number>>(new Set(draft.permissionIds));
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
-    const groups = Array.from(new Set(permissions.map((p) => p.group)));
+    const original = role ? new Set(role.permissions?.map((p) => p.id) ?? []) : new Set<number>();
+    const dirty =
+        draft.mode === 'create' ||
+        name !== role?.name ||
+        scope !== role?.scope ||
+        permissionIds.size !== original.size ||
+        [...permissionIds].some((id) => !original.has(id));
 
-    function togglePermission(id: number) {
+    function toggle(id: number) {
         setPermissionIds((prev) => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
             else next.add(id);
+            return next;
+        });
+    }
+
+    function toggleGroup(group: string, on: boolean) {
+        setPermissionIds((prev) => {
+            const next = new Set(prev);
+            permissions.filter((p) => p.group === group).forEach((p) => (on ? next.add(p.id) : next.delete(p.id)));
             return next;
         });
     }
@@ -281,12 +259,13 @@ function RoleFormModal({
         setError(null);
         try {
             const payload = { name, scope, permission_ids: Array.from(permissionIds) };
-            if (role) {
+            if (draft.mode === 'edit' && role) {
                 await api.patch(`/roles/${role.id}`, payload);
+                await onSaved(role.id, t('rbac.saved'));
             } else {
-                await api.post('/roles', payload);
+                const created = await api.post<Role>('/roles', payload);
+                await onSaved(created.id, t('rbac.created'));
             }
-            onSaved();
         } catch (err) {
             setError(err instanceof ApiError ? err.message : t('common.error'));
         } finally {
@@ -294,66 +273,238 @@ function RoleFormModal({
         }
     }
 
-    const canSubmit = name.trim() !== '';
+    async function remove() {
+        if (!role) return;
+        setBusy(true);
+        setError(null);
+        try {
+            await api.delete(`/roles/${role.id}`);
+            await onSaved(null, t('rbac.deleted'));
+        } catch (err) {
+            setError(err instanceof ApiError ? err.message : t('common.error'));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    const title = draft.mode === 'create' ? t('rbac.newRole') : t('rbac.configure', { name: role?.name ?? '' });
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
-            <section className={cx(cardPadded, 'max-h-[85vh] w-full max-w-lg space-y-4 overflow-y-auto')}>
-                <div className="flex items-center justify-between">
-                    <h2 className={sectionTitle}>{role ? t('rbac.editRole') : t('rbac.newRole')}</h2>
-                    <button type="button" onClick={onClose} aria-label={t('common.close')} className={button('ghost', 'sm')}>
-                        <X aria-hidden="true" className="h-4 w-4" />
+        <SectionCard
+            id="role-editor-heading"
+            title={title}
+            subtitle={t('rbac.configureHint')}
+            headerExtra={
+                <div className="flex flex-wrap gap-2">
+                    {draft.mode === 'edit' && role && !isSystem(role) && (
+                        <button type="button" onClick={() => void remove()} disabled={busy} className={button('dangerGhost', 'sm')}>
+                            <Trash2 aria-hidden="true" className="h-4 w-4" />
+                            {t('common.delete')}
+                        </button>
+                    )}
+                    {dirty && (
+                        <button type="button" onClick={onCancel} className={button('ghost', 'sm')}>
+                            <X aria-hidden="true" className="h-4 w-4" />
+                            {t('common.cancel')}
+                        </button>
+                    )}
+                    <button type="button" onClick={() => void submit()} disabled={busy || !dirty || name.trim() === ''} className={button('primary', 'sm')}>
+                        {busy ? <Spinner className="h-4 w-4" /> : <Save aria-hidden="true" className="h-4 w-4" />}
+                        {draft.mode === 'create' ? t('common.create') : t('common.save')}
                     </button>
                 </div>
-                {error && <Alert tone="error">{error}</Alert>}
+            }
+        >
+            {error && <Alert tone="error">{error}</Alert>}
 
+            <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
                     <span className={label}>{t('rbac.roleName')}</span>
-                    <input value={name} onChange={(e) => setName(e.target.value)} className={cx(input, 'w-full')} />
+                    <input value={name} onChange={(e) => setName(e.target.value)} className={input} />
                 </label>
                 <label className="block">
                     <span className={label}>{t('rbac.scope')}</span>
-                    <select value={scope} onChange={(e) => setScope(e.target.value as RoleScope)} className={cx(select, 'w-full')}>
+                    <select value={scope} onChange={(e) => setScope(e.target.value as RoleScope)} className={select}>
                         <option value="agency">{t('rbac.scope.agency')}</option>
                         <option value="global">{t('rbac.scope.global')}</option>
                         <option value="flexible">{t('rbac.scope.flexible')}</option>
                     </select>
                 </label>
+            </div>
 
-                <fieldset className="space-y-3">
-                    <legend className={label}>{t('rbac.permissions')}</legend>
-                    {groups.map((group) => (
-                        <div key={group}>
-                            <p className="mb-1.5 text-xs font-bold uppercase tracking-wider text-ink-600 dark:text-ink-350">{groupLabel(t, group)}</p>
+            {draft.mode === 'edit' && role && (role.users_count ?? 0) > 0 && (
+                <Alert tone="warning" icon={ShieldAlert}>
+                    {t('rbac.impact', { count: role.users_count ?? 0 })}
+                </Alert>
+            )}
+
+            <fieldset className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <legend className="sr-only">{t('rbac.permissions')}</legend>
+                {groups.map((group) => {
+                    const items = permissions.filter((p) => p.group === group);
+                    const granted = items.filter((p) => permissionIds.has(p.id)).length;
+                    const Icon = GROUP_ICONS[group] ?? ShieldCheck;
+                    return (
+                        <div key={group} className="rounded-xl border border-ink-200/80 p-3.5 dark:border-ink-800">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                                <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-ink-900 dark:text-ink-50">
+                                    <Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-ink-500 dark:text-ink-350" />
+                                    <span className="truncate">{groupLabel(t, group)}</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => toggleGroup(group, granted < items.length)}
+                                    className="shrink-0 text-xs font-semibold text-brand-700 underline-offset-4 hover:underline dark:text-brand-300"
+                                >
+                                    {granted < items.length ? t('rbac.selectAll') : t('rbac.selectNone')}
+                                </button>
+                            </div>
                             <div className="space-y-1.5">
-                                {permissions
-                                    .filter((p) => p.group === group)
-                                    .map((p) => (
-                                        <label key={p.id} className="flex items-center gap-2 text-sm text-ink-800 dark:text-ink-100">
-                                            <input
-                                                type="checkbox"
-                                                checked={permissionIds.has(p.id)}
-                                                onChange={() => togglePermission(p.id)}
-                                                className="h-4 w-4 rounded border-ink-400 text-brand-600 focus:ring-brand-500"
-                                            />
-                                            {p.name}
-                                        </label>
-                                    ))}
+                                {items.map((p) => (
+                                    <label key={p.id} className="flex items-start gap-2 text-sm text-ink-800 dark:text-ink-100" title={p.slug}>
+                                        <input
+                                            type="checkbox"
+                                            checked={permissionIds.has(p.id)}
+                                            onChange={() => toggle(p.id)}
+                                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-ink-400 text-brand-600 focus:ring-brand-500"
+                                        />
+                                        {p.name}
+                                    </label>
+                                ))}
                             </div>
                         </div>
-                    ))}
-                </fieldset>
+                    );
+                })}
+            </fieldset>
+        </SectionCard>
+    );
+}
 
-                <div className="flex justify-end gap-2 pt-2">
-                    <button type="button" onClick={onClose} className={button('secondary', 'md')}>
-                        {t('common.cancel')}
-                    </button>
-                    <button type="button" onClick={() => void submit()} disabled={!canSubmit || busy} className={button('primary', 'md')}>
-                        {busy ? <Spinner className="h-4 w-4" /> : null}
-                        {t('common.save')}
-                    </button>
-                </div>
-            </section>
-        </div>
+function Matrix({ roles, permissions, groups, highlightId }: { roles: Role[]; permissions: Permission[]; groups: string[]; highlightId: number | null }) {
+    const { t } = useI18n();
+
+    return (
+        <SectionCard id="rbac-matrix-heading" flush title={t('rbac.matrix')} subtitle={t('rbac.matrixHint')}>
+            <div className="relative overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                    <thead className="border-y border-ink-200/80 bg-ink-50 text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400">
+                        <tr>
+                            <th scope="col" className="px-5 py-2.5 sm:px-6">{t('rbac.domain')}</th>
+                            {roles.map((role) => (
+                                <th
+                                    key={role.id}
+                                    scope="col"
+                                    className={cx('w-24 px-2 py-2.5 text-center', role.id === highlightId && 'bg-brand-50 text-brand-800 dark:bg-brand-400/10 dark:text-brand-300')}
+                                >
+                                    {role.name}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
+                        {groups.map((group) => {
+                            const items = permissions.filter((p) => p.group === group);
+                            const Icon = GROUP_ICONS[group] ?? ShieldCheck;
+                            return (
+                                <tr key={group}>
+                                    <td className="px-5 py-3 sm:px-6">
+                                        <div className="flex items-start gap-2.5">
+                                            <Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-ink-500 dark:text-ink-350" />
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-ink-900 dark:text-ink-50">{groupLabel(t, group)}</p>
+                                                <p className="text-xs text-ink-600 dark:text-ink-350">{items.map((p) => p.name).join(' · ')}</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    {roles.map((role) => {
+                                        const granted = items.filter((p) => role.permissions?.some((rp) => rp.id === p.id)).length;
+                                        return (
+                                            <td key={role.id} className={cx('px-2 py-3 text-center', role.id === highlightId && 'bg-brand-50/60 dark:bg-brand-400/5')}>
+                                                <MatrixCell granted={granted} total={items.length} />
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </SectionCard>
+    );
+}
+
+function MatrixCell({ granted, total }: { granted: number; total: number }) {
+    const { t } = useI18n();
+    if (granted === total && total > 0) {
+        return (
+            <span className={cx('mx-auto flex h-6 w-6 items-center justify-center rounded-full ring-1 ring-inset', TONES.emerald)}>
+                <Check aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.5} />
+                <span className="sr-only">{t('rbac.granted')}</span>
+            </span>
+        );
+    }
+    if (granted > 0) {
+        return (
+            <span className={cx('mx-auto inline-flex h-6 items-center rounded-full px-2 text-[11px] font-bold tabular-nums ring-1 ring-inset', TONES.amber)} title={t('rbac.partial')}>
+                {granted}/{total}
+            </span>
+        );
+    }
+    return (
+        <span className="mx-auto flex h-6 w-6 items-center justify-center rounded-full bg-ink-100 text-ink-400 dark:bg-ink-800 dark:text-ink-500">
+            <Minus aria-hidden="true" className="h-3.5 w-3.5" />
+            <span className="sr-only">{t('rbac.notGranted')}</span>
+        </span>
+    );
+}
+
+function RoleUsers({ role }: { role: Role }) {
+    const { t } = useI18n();
+    const [users, setUsers] = useState<User[]>([]);
+    const [total, setTotal] = useState(0);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        setLoading(true);
+        api.get<Paginated<User>>(`/users?full=1&per_page=8&role=${encodeURIComponent(role.slug)}`)
+            .then((res) => {
+                setUsers(res.data);
+                setTotal(res.total);
+            })
+            .catch(() => setUsers([]))
+            .finally(() => setLoading(false));
+    }, [role.slug]);
+
+    return (
+        <SectionCard
+            id="role-users-heading"
+            title={t('rbac.concernedUsers')}
+            subtitle={t('rbac.concernedUsersHint', { role: role.name, count: total })}
+            action={{ to: '/users', label: t('users.title') }}
+        >
+            {loading ? (
+                <LoadingState className="py-6" />
+            ) : users.length === 0 ? (
+                <EmptyState compact icon={UsersRound} title={t('rbac.noUsers')} />
+            ) : (
+                <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                    {users.map((u) => {
+                        const [first, ...rest] = u.name.split(' ');
+                        return (
+                            <li key={u.id} className="flex min-w-0 items-center gap-2.5 rounded-xl border border-ink-200/80 px-3 py-2 dark:border-ink-800">
+                                <Avatar firstName={first} lastName={rest.join(' ')} photoUrl={u.photo_url} size="sm" />
+                                <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-ink-900 dark:text-ink-50">{u.name}</p>
+                                    <p className="truncate text-xs text-ink-600 dark:text-ink-350">{u.agency?.name ?? t('users.allAgencies')}</p>
+                                </div>
+                                {!u.is_active && <Pill tone="rose" className="ml-auto">{t('users.inactive')}</Pill>}
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+            {total > users.length && <p className="text-xs text-ink-600 dark:text-ink-350">{t('rbac.moreUsers', { count: total - users.length })}</p>}
+        </SectionCard>
     );
 }

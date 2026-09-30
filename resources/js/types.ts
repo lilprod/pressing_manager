@@ -37,6 +37,7 @@ export interface Role {
     name: string;
     scope: RoleScope;
     permissions?: Permission[];
+    users_count?: number;
 }
 
 export interface Agency {

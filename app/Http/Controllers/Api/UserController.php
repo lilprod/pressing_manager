@@ -50,6 +50,10 @@ class UserController extends ApiController
 
         $users = User::query()
             ->with('role', 'agency')
+            // Dernière activité = dernier usage d'un jeton Sanctum (colonne last_used_at déjà
+            // tenue à jour par Sanctum à chaque requête authentifiée) : colonne « Dernière activité »
+            // de l'annuaire. Exposé sous le nom last_active_at.
+            ->withMax('tokens as last_active_at', 'last_used_at')
             ->when($request->filled('role'), function ($query) use ($request) {
                 $roleId = Role::where('slug', $request->string('role')->value())->value('id');
                 $query->where('role_id', $roleId);

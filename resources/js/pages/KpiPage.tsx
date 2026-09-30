@@ -203,7 +203,7 @@ export default function KpiPage() {
 
                     {data.by_agency && data.by_agency.length > 0 && (
                         <SectionCard id="reports-agencies" flush title={t('reports.agencies.title')} subtitle={t('reports.agencies.subtitle')}>
-                            <div className="overflow-x-auto">
+                            <div className="relative overflow-x-auto">
                                 <table className="w-full min-w-[640px] text-left text-sm">
                                     <thead className="border-y border-ink-200/80 bg-ink-50 text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400">
                                         <tr>

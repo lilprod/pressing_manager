@@ -14,6 +14,8 @@ export interface AppSettings {
     password_require_number: boolean;
     password_require_symbol: boolean;
     tax_rate: number;
+    updated_at: string | null;
+    loyalty_amount_per_point: number;
 }
 
 export type RoleSlug = 'admin' | 'manager' | 'accueil' | 'technicien' | 'livreur' | 'client';

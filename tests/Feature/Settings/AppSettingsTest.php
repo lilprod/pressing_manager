@@ -175,4 +175,43 @@ class AppSettingsTest extends TestCase
 
         $response->assertStatus(422);
     }
+
+    public function test_settings_expose_their_last_update_date(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+
+        $this->getJson('/api/settings')->assertJsonStructure(['updated_at']);
+
+        config(['loyalty.amount_per_point' => 250]);
+        $this->getJson('/api/settings')->assertJsonPath('loyalty_amount_per_point', 250);
+
+        $response = $this->actingAs($admin)->post('/api/settings', ['pressing_name' => 'Pressing Horizon']);
+
+        $response->assertOk();
+        $this->assertNotNull($response->json('updated_at'));
+    }
+
+    public function test_a_partial_update_leaves_the_other_sections_untouched(): void
+    {
+        // Les écrans « Branding » et « Sécurité » enregistrent chacun leur sous-ensemble de champs.
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+
+        $this->actingAs($admin)->post('/api/settings', [
+            'pressing_name' => 'Pressing Horizon',
+            'address' => 'Rue 12, Lomé',
+        ])->assertOk();
+
+        $response = $this->actingAs($admin)->post('/api/settings', [
+            'session_timeout_minutes' => 45,
+            'password_require_symbol' => '1',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('pressing_name', 'Pressing Horizon');
+        $response->assertJsonPath('address', 'Rue 12, Lomé');
+        $response->assertJsonPath('session_timeout_minutes', 45);
+        $response->assertJsonPath('password_require_symbol', true);
+    }
 }

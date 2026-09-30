@@ -74,7 +74,11 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait** (commit `d52b79b`) — retour utilisateur du 2026-09-30 : le design a des écrans dédiés séparés de la liste, pas un panneau/modale inline ; voir convention ci-dessous |
 | 08 Rapports & bilans | Rapports et bilans | `pages/KpiPage.tsx` (route `/kpi`, libellé nav « Rapports & bilans ») | **fait** (2026-09-30) — filtres période + raccourcis, 4 KPI avec variation vs période précédente, tableau « Performance des agences », indicateurs opérationnels existants conservés (hors maquette mais déjà exposés par l'API), raccourcis vers les écrans détaillés. Histogramme CA / répartition paiements / synthèse fidélité / planification omis (§2) |
 | 08 Rapports & bilans | Bilan journalier et performance caissiers | — | **non construit** : quasi intégralement dépendant d'agrégats absents (recettes par mode de paiement et par heure, performance par caissier, remises du jour). Les données existantes (clôture de caisse théorique/compté/écart) sont déjà sur `/cash/closures/:id` ; lien depuis « Rapports détaillés ». Voir §2 |
-| 09 Paramètres | Paramètres, Promotions/fidélité, Branding, Notifications | `pages/SettingsPage.tsx`, `pages/LoyaltyPage.tsx`, `pages/NotificationsPage.tsx` | à faire |
+| 09 Paramètres | Paramètres (hub) | `pages/SettingsPage.tsx` (route `/settings`) | **fait** (2026-09-30) — l'ancien formulaire unique devient un hub : recherche + filtres par groupe, « État de configuration » (checklist d'identité réelle, `lib/brandingChecklist.ts`), cartes vers les écrans existants uniquement (gating par permission), « Mis à jour le » via `updated_at` (colonne existante, désormais exposée par `GET /settings`) |
+| 09 Paramètres | Branding du pressing | `pages/settings/BrandingSettingsPage.tsx` (route `/settings/branding`) | **fait** (2026-09-30) — nom, logo, favicon, coordonnées + NIF, aperçu en direct (en-tête app + documents), checklist, barre « non enregistré » ; enregistrement partiel de `/settings` (testé) |
+| 09 Paramètres | Sécurité (politique de mots de passe) | `pages/settings/SecuritySettingsPage.tsx` (route `/settings/security`) | **fait** (2026-09-30) — pas d'écran dédié dans la maquette : mise en page calquée sur « Paramètres opérationnels » (node `25:12525`, champs suffixés + bascules). Les réglages opérationnels eux-mêmes (codes agence, délais, workflow, tarification) n'existent pas (§2) |
+| 09 Paramètres | Promotions et fidélité | `pages/LoyaltyPage.tsx` (route `/loyalty`) | **fait** (2026-09-30) — volet fidélité seulement : KPI dérivés de la config (paliers actifs, remise max, règle d'acquisition réelle via `loyalty_amount_per_point` exposé par `GET /settings`), paliers éditables en ligne (le `PATCH /loyalty-tiers/{id}` existait sans UI d'édition). Volet promotions entièrement absent du backend (§2) |
+| 09 Paramètres | Notifications | `pages/NotificationsPage.tsx` (route `/notifications`) | **fait** (2026-09-30) — cartes d'état des canaux (comptes réels d'évènements activés, passerelle SMS « non connectée » = état réel), matrice évènement × SMS/e-mail avec interrupteurs, journal filtrable |
 | 11 Équipe | Utilisateurs, Rôles & permissions, Profil | `pages/UsersPage.tsx`, `pages/RolesPermissionsPage.tsx`, `pages/ProfilePage.tsx` | à faire |
 
 ### 2. Écarts fonctionnels identifiés vs la maquette (backend + frontend à construire)
@@ -182,6 +186,80 @@ côté front : chaque élément a été **omis** et attend le backend décrit ic
   progression vs objectif, statut de session) : la colonne `payments.received_by`
   existe, il faudrait l'agréger par utilisateur dans un endpoint ; la notion de
   session de caisse par caissier et les objectifs n'existent pas du tout.
+
+**09 Paramètres — hub** (node `25:12184`)
+- Bouton « Historique » et journal « Dernières modifications » (date, détail, auteur,
+  badge) : aucun audit des paramètres. Il faudrait une table `settings_audits`
+  (clé, ancienne/nouvelle valeur, `user_id`, date) alimentée par
+  `SettingsController::update` (et les autres écrans de réglage) + `GET /settings/audit`.
+- Cartes de catégories sans écran/backend, omises : **Agences** (building-2 — CRUD
+  agences, chantier parallèle §10), **Numérotation** (hash — préfixes/format des
+  n° de commande et facture ; `OrderNumberGenerator` est codé en dur), **Horaires et
+  délais** (clock-3 — horaires d'ouverture, délais standard/express par défaut),
+  **Promotions** (ticket-percent — voir ci-dessous), **Workflow atelier** (workflow —
+  étapes activables), **Tarifs et devise** (badge-cent — devise/TVA : `tax_rate` vient
+  de `config/invoicing.php`, non éditable), **Paiements** (credit-card — moyens de
+  paiement activés, clés opérateurs Flooz/T-Money : aujourd'hui en `.env`),
+  **Mode hors ligne** (cloud-off — politique de rétention/synchro).
+- Badges d'état et date de mise à jour par catégorie : n'existent que pour les
+  réglages portés par `app_settings` (branding, sécurité). Les autres modules n'ont
+  pas de notion « configuré / à compléter ».
+
+**09 Paramètres opérationnels** (node `25:12525`) — écran non construit, aucun champ
+en base : codes agence (préfixe + séquence + aperçu, par agence), délais (standard,
+express, retrait max en jours) + bascules, options atelier et aperçu du workflow à
+6 étapes, mode de tarification (3 options) + prix/frais (frais express, livraison,
+minimum de commande), rétention hors ligne, journal des modifications. Il faudrait
+une table de réglages par agence (`agency_settings`) + endpoints `GET/PATCH
+/agencies/{id}/settings`.
+
+**09 Branding du pressing** (node `72:21182`)
+- Palette personnalisable (couleur principale / secondaire + contrôle
+  d'accessibilité) : pas de colonnes `primary_color`/`accent_color` ; les couleurs
+  sont des tokens Tailwind compilés. Exigerait des variables CSS runtime + validation
+  de contraste côté API.
+- Champ « Site web » (globe) et zone de texte (mentions / pied de page des documents) :
+  colonnes `website` et `document_footer` absentes d'`app_settings`.
+- « Modèles de documents » (ticket, facture : statut + 2 options) : pas de
+  paramétrage des gabarits (format papier, mentions, afficher/masquer le QR…).
+- Aperçu « mobile client » : l'app mobile client (section 14) n'existe pas.
+
+**09 Promotions et fidélité** (node `72:20021`)
+- Tout le volet **promotions** : formulaire de création (code, type/valeur de remise,
+  période début/fin, quota global/par client, agences, cumulable), tableau des
+  promotions (code, remise, période, quota, utilisation avec progression, agences,
+  statut) et filtres. Il faudrait un modèle `Promotion` (+ pivot agences, table
+  d'utilisations) et son application dans `OrderController::store`.
+- Indicateurs membres / points émis / points utilisés / taux de remise / campagnes :
+  il faudrait `GET /loyalty/stats` (nb clients par palier, somme des points, points
+  crédités/consommés sur la période — la consommation de points n'existe pas : la
+  remise de palier est appliquée sans débit de points).
+- Carte « Règles » éditable (montant par point, seuils, bascule) : la règle est
+  `config('loyalty.amount_per_point')` (env), affichée en lecture seule.
+- « Activité fidélité » (mouvements de points par client, motif, date) : aucun
+  historique, seul `clients.loyalty_points` (cumul) est stocké. Il faudrait une table
+  `loyalty_point_movements` écrite par `LoyaltyService`.
+- « Répartition des membres par palier » : agrégat clients par palier à ajouter à
+  `/loyalty/stats`.
+- Bouton « Exporter » : pas d'export fidélité.
+
+**09 Notifications** (node `72:21413`)
+- 4 évènements supplémentaires sur 7 dans la maquette : seuls `order_ready`,
+  `delivery_completed`, `delivery_failed` existent (`NotificationSetting::EVENTS`).
+  Candidats : dépôt reçu, rappel de retrait, facture impayée, promotion — chacun
+  demande un déclencheur côté backend.
+- Colonne « Portée » par évènement : les réglages sont par agence uniquement (portée
+  affichée une fois, pour l'agence courante).
+- « Envoyer un test » : pas d'endpoint `POST /notifications/test`.
+- Éditeur de modèle (objet, corps, variables `{client}`, `{commande}`…, aperçu SMS) :
+  les messages sont codés dans les classes `Notification` ; il faudrait une table
+  `notification_templates` (agence × évènement × canal).
+- Heures calmes (plage horaire + exception), options d'envoi (3 bascules),
+  configuration du fournisseur SMS (expéditeur, clé, test de connexion) : rien en base,
+  et aucune passerelle SMS réelle (envois simulés).
+- Mesures par canal (envoyés / échecs / taux sur la période) : il faudrait un agrégat
+  `GET /notification-logs/stats?from&to` groupé par canal et statut.
+- « Exporter » le journal : pas d'export.
 
 Le catalogue articles/tarifs (CRUD) et la sidebar de navigation groupée, qui étaient
 dans une version précédente de cette liste, sont **déjà faits** (commits `7dd2fae`,

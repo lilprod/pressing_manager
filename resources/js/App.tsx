@@ -25,6 +25,8 @@ import CashClosureFormPage from './pages/cash/CashClosureFormPage';
 import CashClosureDetail from './pages/cash/CashClosureDetail';
 import InvoicesOutstandingPage from './pages/InvoicesOutstandingPage';
 import SettingsPage from './pages/SettingsPage';
+import BrandingSettingsPage from './pages/settings/BrandingSettingsPage';
+import SecuritySettingsPage from './pages/settings/SecuritySettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import UsersPage from './pages/UsersPage';
 import RolesPermissionsPage from './pages/RolesPermissionsPage';
@@ -96,6 +98,8 @@ export default function App() {
                     <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/license" element={<LicensePage />} />
                     <Route path="/settings" element={<SettingsPage />} />
+                    <Route path="/settings/branding" element={<BrandingSettingsPage />} />
+                    <Route path="/settings/security" element={<SecuritySettingsPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/users" element={<UsersPage />} />
                     <Route path="/roles-permissions" element={<RolesPermissionsPage />} />

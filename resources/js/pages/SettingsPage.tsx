@@ -1,271 +1,277 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import {
+    ArrowRight,
+    Bell,
+    Crown,
+    Gift,
+    KeyRound,
+    LockKeyhole,
+    Palette,
+    Search,
+    Settings as SettingsIcon,
+    ShieldCheck,
+    Shirt,
+    Truck,
+    Users,
+    type LucideIcon,
+} from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { api, ApiError } from '../lib/api';
+import { brandingChecklist } from '../lib/brandingChecklist';
+import { useFormat } from '../lib/format';
+import { hasPermission } from '../lib/permissions';
 import PageHeader from '../components/ui/PageHeader';
-import { Alert, Spinner } from '../components/ui/Feedback';
-import { button, cardPadded, cx, input, inputSm, label, sectionTitle } from '../components/ui/styles';
-import { ImageUp, ShieldCheck, Settings as SettingsIcon } from 'lucide-react';
-import type { AppSettings } from '../types';
+import { EmptyState } from '../components/ui/Feedback';
+import { ChipToggle, ProgressBar } from '../components/ui/Metrics';
+import { Pill, TONES, type Tone } from '../components/ui/StatusBadge';
+import { card, cardInteractive, cardPadded, cx, input, sectionTitle } from '../components/ui/styles';
+
+/* Hub « Paramètres » (Figma SPARK PRESSING, section 09, node 25:12184) : recherche,
+ * état de configuration et cartes de catégories menant aux écrans de réglage.
+ * Seules les catégories qui ont un écran réel sont listées ; celles de la maquette sans
+ * backend (agences, numérotation, horaires, promotions, workflow atelier, devise,
+ * paiements, mode hors ligne) et le journal « Dernières modifications » sont omis —
+ * voir CLAUDE.md §2. */
+
+type GroupKey = 'organisation' | 'customers' | 'brand';
+
+interface Category {
+    key: string;
+    group: GroupKey;
+    to: string;
+    icon: LucideIcon;
+    title: string;
+    detail: string;
+    status?: { tone: Tone; label: string };
+    updatedAt?: string | null;
+    allowed: boolean;
+}
 
 export default function SettingsPage() {
     const { t } = useI18n();
-    const { settings, refresh } = useSettings();
+    const { user } = useAuth();
+    const { settings } = useSettings();
+    const { date } = useFormat();
+    const [query, setQuery] = useState('');
+    const [group, setGroup] = useState<GroupKey | 'all'>('all');
 
-    const [pressingName, setPressingName] = useState('');
-    const [address, setAddress] = useState('');
-    const [phone, setPhone] = useState('');
-    const [email, setEmail] = useState('');
-    const [taxId, setTaxId] = useState('');
-    const [logoFile, setLogoFile] = useState<File | null>(null);
-    const [faviconFile, setFaviconFile] = useState<File | null>(null);
+    const checklist = brandingChecklist(settings);
+    const done = checklist.filter((item) => item.done).length;
+    const brandingComplete = done === checklist.length;
+    const expiry = settings?.password_expiry_days;
 
-    const [expiryEnabled, setExpiryEnabled] = useState(false);
-    const [passwordExpiryDays, setPasswordExpiryDays] = useState(90);
-    const [passwordExpiryWarningDays, setPasswordExpiryWarningDays] = useState(14);
-    const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState(30);
-    const [passwordMinLength, setPasswordMinLength] = useState(8);
-    const [requireUppercase, setRequireUppercase] = useState(true);
-    const [requireNumber, setRequireNumber] = useState(true);
-    const [requireSymbol, setRequireSymbol] = useState(false);
+    const categories: Category[] = [
+        {
+            key: 'users',
+            group: 'organisation',
+            to: '/users',
+            icon: Users,
+            title: t('users.title'),
+            detail: t('settingsHub.card.users'),
+            allowed: hasPermission(user, 'users.manage'),
+        },
+        {
+            key: 'roles',
+            group: 'organisation',
+            to: '/roles-permissions',
+            icon: ShieldCheck,
+            title: t('rbac.title'),
+            detail: t('settingsHub.card.roles'),
+            allowed: hasPermission(user, 'users.manage'),
+        },
+        {
+            key: 'services',
+            group: 'organisation',
+            to: '/services',
+            icon: Shirt,
+            title: t('nav.services'),
+            detail: t('settingsHub.card.services'),
+            allowed: hasPermission(user, 'services.manage'),
+        },
+        {
+            key: 'deliveries',
+            group: 'organisation',
+            to: '/deliveries',
+            icon: Truck,
+            title: t('nav.deliveries'),
+            detail: t('settingsHub.card.deliveries'),
+            allowed: hasPermission(user, 'deliveries.manage'),
+        },
+        {
+            key: 'loyalty',
+            group: 'customers',
+            to: '/loyalty',
+            icon: Gift,
+            title: t('loyalty.title'),
+            detail: t('settingsHub.card.loyalty'),
+            allowed: hasPermission(user, 'clients.manage'),
+        },
+        {
+            key: 'subscriptions',
+            group: 'customers',
+            to: '/subscriptions',
+            icon: Crown,
+            title: t('subscription.title'),
+            detail: t('settingsHub.card.subscriptions'),
+            allowed: hasPermission(user, 'subscriptions.manage'),
+        },
+        {
+            key: 'notifications',
+            group: 'customers',
+            to: '/notifications',
+            icon: Bell,
+            title: t('nav.notifications'),
+            detail: t('settingsHub.card.notifications'),
+            allowed: hasPermission(user, 'notifications.manage'),
+        },
+        {
+            key: 'branding',
+            group: 'brand',
+            to: '/settings/branding',
+            icon: Palette,
+            title: t('branding.title'),
+            detail: t('settingsHub.card.branding'),
+            status: brandingComplete ? { tone: 'emerald', label: t('settingsHub.status.configured') } : { tone: 'amber', label: t('settingsHub.status.toComplete') },
+            updatedAt: settings?.updated_at,
+            allowed: hasPermission(user, 'agencies.manage'),
+        },
+        {
+            key: 'security',
+            group: 'brand',
+            to: '/settings/security',
+            icon: LockKeyhole,
+            title: t('settings.security'),
+            detail: t('settingsHub.card.security'),
+            status: expiry
+                ? { tone: 'emerald', label: t('settingsHub.status.expiry', { days: expiry }) }
+                : { tone: 'neutral', label: t('settingsHub.status.noExpiry') },
+            updatedAt: settings?.updated_at,
+            allowed: hasPermission(user, 'agencies.manage'),
+        },
+        {
+            key: 'license',
+            group: 'brand',
+            to: '/license',
+            icon: KeyRound,
+            title: t('nav.license'),
+            detail: t('settingsHub.card.license'),
+            allowed: hasPermission(user, 'licenses.manage'),
+        },
+    ];
 
-    const [error, setError] = useState<string | null>(null);
-    const [feedback, setFeedback] = useState<string | null>(null);
-    const [busy, setBusy] = useState(false);
+    const groups: GroupKey[] = ['organisation', 'customers', 'brand'];
 
-    useEffect(() => {
-        if (!settings) return;
-        setPressingName(settings.pressing_name ?? '');
-        setAddress(settings.address ?? '');
-        setPhone(settings.phone ?? '');
-        setEmail(settings.email ?? '');
-        setTaxId(settings.tax_id ?? '');
-        setExpiryEnabled(!!settings.password_expiry_days);
-        setPasswordExpiryDays(settings.password_expiry_days || 90);
-        setPasswordExpiryWarningDays(settings.password_expiry_warning_days ?? 14);
-        setSessionTimeoutMinutes(settings.session_timeout_minutes ?? 30);
-        setPasswordMinLength(settings.password_min_length);
-        setRequireUppercase(settings.password_require_uppercase);
-        setRequireNumber(settings.password_require_number);
-        setRequireSymbol(settings.password_require_symbol);
-    }, [settings]);
-
-    const logoPreview = logoFile ? URL.createObjectURL(logoFile) : settings?.logo_url;
-    const faviconPreview = faviconFile ? URL.createObjectURL(faviconFile) : settings?.favicon_url;
-
-    async function submit() {
-        setBusy(true);
-        setError(null);
-        setFeedback(null);
-        try {
-            const formData = new FormData();
-            formData.append('pressing_name', pressingName);
-            formData.append('address', address);
-            formData.append('phone', phone);
-            formData.append('email', email);
-            formData.append('tax_id', taxId);
-            if (logoFile) formData.append('logo', logoFile);
-            if (faviconFile) formData.append('favicon', faviconFile);
-
-            formData.append('password_expiry_days', String(expiryEnabled ? passwordExpiryDays : 0));
-            formData.append('password_expiry_warning_days', String(passwordExpiryWarningDays));
-            formData.append('session_timeout_minutes', String(sessionTimeoutMinutes));
-            formData.append('password_min_length', String(passwordMinLength));
-            formData.append('password_require_uppercase', requireUppercase ? '1' : '0');
-            formData.append('password_require_number', requireNumber ? '1' : '0');
-            formData.append('password_require_symbol', requireSymbol ? '1' : '0');
-
-            await api.postForm<AppSettings>('/settings', formData);
-            setLogoFile(null);
-            setFaviconFile(null);
-            await refresh();
-            setFeedback(t('settings.saved'));
-        } catch (err) {
-            setError(err instanceof ApiError ? err.message : t('common.error'));
-        } finally {
-            setBusy(false);
-        }
-    }
+    const visible = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        return categories.filter(
+            (c) => c.allowed && (group === 'all' || c.group === group) && (!q || `${c.title} ${c.detail}`.toLowerCase().includes(q)),
+        );
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [query, group, settings, user]);
 
     return (
         <div className="space-y-6">
-            <PageHeader title={t('settings.title')} subtitle={t('settings.subtitle')} icon={SettingsIcon} />
+            <PageHeader title={t('settings.title')} subtitle={t('settingsHub.subtitle')} icon={SettingsIcon} />
 
-            <div className={cx(cardPadded, 'max-w-2xl space-y-5')}>
-                {error && <Alert tone="error">{error}</Alert>}
-                {feedback && <Alert tone="success">{feedback}</Alert>}
-
-                <div>
-                    <h2 className={sectionTitle}>{t('settings.identity')}</h2>
-                    <div className="mt-3 space-y-4">
-                        <label className="block">
-                            <span className={label}>{t('settings.pressingName')}</span>
-                            <input value={pressingName} onChange={(e) => setPressingName(e.target.value)} className={cx(input, 'w-full')} />
-                        </label>
-                        <label className="block">
-                            <span className={label}>{t('settings.address')}</span>
-                            <input value={address} onChange={(e) => setAddress(e.target.value)} className={cx(input, 'w-full')} />
-                        </label>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="block">
-                                <span className={label}>{t('settings.phone')}</span>
-                                <input value={phone} onChange={(e) => setPhone(e.target.value)} className={cx(input, 'w-full')} />
-                            </label>
-                            <label className="block">
-                                <span className={label}>{t('settings.email')}</span>
-                                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={cx(input, 'w-full')} />
-                            </label>
-                        </div>
-                        <label className="block">
-                            <span className={label}>{t('settings.taxId')}</span>
-                            <input value={taxId} onChange={(e) => setTaxId(e.target.value)} className={cx(input, 'w-full')} />
-                        </label>
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,2.6fr)_minmax(0,1fr)]">
+                <div className={cx(cardPadded, 'space-y-4')}>
+                    <label className="relative block">
+                        <span className="sr-only">{t('settingsHub.search')}</span>
+                        <Search aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500 dark:text-ink-350" />
+                        <input
+                            type="search"
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                            placeholder={t('settingsHub.searchPlaceholder')}
+                            className={cx(input, 'pl-10')}
+                        />
+                    </label>
+                    <div role="group" aria-label={t('settingsHub.filter')} className="flex flex-wrap gap-2">
+                        <ChipToggle active={group === 'all'} onClick={() => setGroup('all')}>
+                            {t('order.all')}
+                        </ChipToggle>
+                        {groups.map((g) => (
+                            <ChipToggle key={g} active={group === g} onClick={() => setGroup(g)}>
+                                {t(`settingsHub.group.${g}`)}
+                            </ChipToggle>
+                        ))}
                     </div>
                 </div>
 
-                <div className="grid gap-5 border-t border-ink-200/80 pt-5 sm:grid-cols-2 dark:border-ink-800">
-                    <ImagePicker
-                        label={t('settings.logo')}
-                        hint={t('settings.logoHint')}
-                        preview={logoPreview}
-                        onChange={setLogoFile}
-                    />
-                    <ImagePicker
-                        label={t('settings.favicon')}
-                        hint={t('settings.faviconHint')}
-                        preview={faviconPreview}
-                        onChange={setFaviconFile}
-                    />
-                </div>
-
-                <div className="border-t border-ink-200/80 pt-5 dark:border-ink-800">
-                    <h2 className={cx(sectionTitle, 'flex items-center gap-2')}>
-                        <ShieldCheck aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                        {t('settings.security')}
-                    </h2>
-                    <div className="mt-3 space-y-4">
-                        <label className="block">
-                            <span className={label}>{t('settings.sessionTimeout')}</span>
-                            <p className="mb-1.5 text-xs text-ink-600 dark:text-ink-350">{t('settings.sessionTimeoutHint')}</p>
-                            <input
-                                type="number"
-                                min={5}
-                                max={1440}
-                                value={sessionTimeoutMinutes}
-                                onChange={(e) => setSessionTimeoutMinutes(Number(e.target.value))}
-                                className={cx(inputSm, 'w-32')}
-                            />
-                        </label>
-
-                        <div className="rounded-xl bg-ink-50 p-3.5 dark:bg-ink-950/50">
-                            <Toggle checked={expiryEnabled} onChange={setExpiryEnabled} label={t('settings.passwordExpiryEnabled')} />
-                            {expiryEnabled && (
-                                <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                                    <label className="block">
-                                        <span className={label}>{t('settings.passwordExpiryDays')}</span>
-                                        <input
-                                            type="number"
-                                            min={1}
-                                            max={3650}
-                                            value={passwordExpiryDays}
-                                            onChange={(e) => setPasswordExpiryDays(Number(e.target.value))}
-                                            className={cx(inputSm, 'w-32')}
-                                        />
-                                    </label>
-                                    <label className="block">
-                                        <span className={label}>{t('settings.passwordExpiryWarningDays')}</span>
-                                        <p className="mb-1.5 text-xs text-ink-600 dark:text-ink-350">{t('settings.passwordExpiryWarningDaysHint')}</p>
-                                        <input
-                                            type="number"
-                                            min={1}
-                                            max={90}
-                                            value={passwordExpiryWarningDays}
-                                            onChange={(e) => setPasswordExpiryWarningDays(Number(e.target.value))}
-                                            className={cx(inputSm, 'w-32')}
-                                        />
-                                    </label>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="space-y-3 rounded-xl bg-ink-50 p-3.5 dark:bg-ink-950/50">
-                            <label className="block">
-                                <span className={label}>{t('settings.passwordMinLength')}</span>
-                                <input
-                                    type="number"
-                                    min={6}
-                                    max={64}
-                                    value={passwordMinLength}
-                                    onChange={(e) => setPasswordMinLength(Number(e.target.value))}
-                                    className={cx(inputSm, 'w-32')}
-                                />
-                            </label>
-                            <Toggle checked={requireUppercase} onChange={setRequireUppercase} label={t('settings.passwordRequireUppercase')} />
-                            <Toggle checked={requireNumber} onChange={setRequireNumber} label={t('settings.passwordRequireNumber')} />
-                            <Toggle checked={requireSymbol} onChange={setRequireSymbol} label={t('settings.passwordRequireSymbol')} />
-                        </div>
+                <section aria-labelledby="settings-config-state" className={cx(cardPadded, 'flex flex-col justify-between gap-3')}>
+                    <div>
+                        <h2 id="settings-config-state" className={sectionTitle}>
+                            {t('settingsHub.configState')}
+                        </h2>
+                        <p className="text-sm text-ink-600 dark:text-ink-350">{t('settingsHub.configStateHint')}</p>
                     </div>
-                </div>
-
-                <div className="flex justify-end border-t border-ink-200/80 pt-5 dark:border-ink-800">
-                    <button type="button" onClick={() => void submit()} disabled={busy} className={button('primary', 'md')}>
-                        {busy ? <Spinner className="h-4 w-4" /> : null}
-                        {t('common.save')}
-                    </button>
-                </div>
+                    <ProgressBar value={done} max={checklist.length} className="h-2" />
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                        <span className="font-semibold text-ink-900 dark:text-ink-50">{t('settingsHub.configCount', { done, total: checklist.length })}</span>
+                        {!brandingComplete && hasPermission(user, 'agencies.manage') && (
+                            <Link to="/settings/branding" className="font-semibold text-brand-700 underline-offset-4 hover:underline dark:text-brand-300">
+                                {t('settingsHub.complete')}
+                            </Link>
+                        )}
+                    </div>
+                </section>
             </div>
+
+            {visible.length === 0 ? (
+                <div className={card}>
+                    <EmptyState icon={Search} title={t('settingsHub.noResult')} />
+                </div>
+            ) : (
+                groups.map((g) => {
+                    const items = visible.filter((c) => c.group === g);
+                    if (items.length === 0) return null;
+                    return (
+                        <section key={g} aria-labelledby={`settings-group-${g}`} className="space-y-3">
+                            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                <h2 id={`settings-group-${g}`} className="text-xs font-bold uppercase tracking-wider text-ink-600 dark:text-ink-350">
+                                    {t(`settingsHub.group.${g}`)}
+                                </h2>
+                                <p className="text-xs text-ink-500 dark:text-ink-400">{t(`settingsHub.groupHint.${g}`)}</p>
+                            </div>
+                            <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                                {items.map((c) => (
+                                    <li key={c.key} className="min-w-0">
+                                        <CategoryCard category={c} updatedLabel={c.updatedAt ? t('settingsHub.updatedAt', { date: date(c.updatedAt) }) : null} />
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+                    );
+                })
+            )}
         </div>
     );
 }
 
-function Toggle({ checked, onChange, label: toggleLabel }: { checked: boolean; onChange: (value: boolean) => void; label: string }) {
+function CategoryCard({ category, updatedLabel }: { category: Category; updatedLabel: string | null }) {
+    const { t } = useI18n();
+    const Icon = category.icon;
     return (
-        <label className="flex cursor-pointer items-center justify-between gap-3">
-            <span className="text-sm font-medium text-ink-800 dark:text-ink-100">{toggleLabel}</span>
-            <span className="relative inline-flex items-center">
-                <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="peer sr-only" />
-                <span
-                    aria-hidden="true"
-                    className={cx('relative h-6 w-11 shrink-0 rounded-full transition-colors', checked ? 'bg-brand-600 dark:bg-brand-400' : 'bg-ink-400 dark:bg-ink-500')}
-                >
-                    <span className={cx('absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform', checked && 'translate-x-5')} />
+        <Link to={category.to} className={cx(cardInteractive, 'group flex h-full flex-col gap-4 p-5')}>
+            <div className="flex items-start justify-between gap-2">
+                <span className={cx('flex h-10 w-10 items-center justify-center rounded-xl ring-1 ring-inset', TONES.brand)}>
+                    <Icon aria-hidden="true" className="h-[18px] w-[18px]" />
                 </span>
-            </span>
-        </label>
-    );
-}
-
-function ImagePicker({
-    label: fieldLabel,
-    hint,
-    preview,
-    onChange,
-}: {
-    label: string;
-    hint: string;
-    preview?: string | null;
-    onChange: (file: File | null) => void;
-}) {
-    return (
-        <label className="block">
-            <span className={label}>{fieldLabel}</span>
-            <p className="mb-2 text-xs text-ink-600 dark:text-ink-350">{hint}</p>
-            <div className="flex items-center gap-3">
-                <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-ink-300 bg-ink-50 dark:border-ink-700 dark:bg-ink-950/50">
-                    {preview ? (
-                        <img src={preview} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                        <ImageUp aria-hidden="true" className="h-6 w-6 text-ink-400" />
-                    )}
-                </span>
-                <input
-                    type="file"
-                    accept="image/*"
-                    aria-label={fieldLabel}
-                    onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-                    className="block w-full text-sm text-ink-700 file:mr-3 file:rounded-lg file:border-0 file:bg-ink-100 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-ink-800 hover:file:bg-ink-200 dark:text-ink-200 dark:file:bg-ink-800 dark:file:text-ink-100 dark:hover:file:bg-ink-700"
-                />
+                {category.status && <Pill tone={category.status.tone}>{category.status.label}</Pill>}
             </div>
-        </label>
+            <div className="flex-1">
+                <p className="font-semibold text-ink-900 dark:text-ink-50">{category.title}</p>
+                <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-350">{category.detail}</p>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-ink-100 pt-3 text-xs dark:border-ink-800">
+                <span className="text-ink-500 dark:text-ink-400">{updatedLabel ?? ''}</span>
+                <span className="inline-flex items-center gap-1 font-semibold text-brand-700 dark:text-brand-300">
+                    {t('settingsHub.open')}
+                    <ArrowRight aria-hidden="true" className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                </span>
+            </div>
+        </Link>
     );
 }

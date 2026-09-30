@@ -89,6 +89,11 @@ class SettingsController extends ApiController
             'password_require_number' => $settings->password_require_number,
             'password_require_symbol' => $settings->password_require_symbol,
             'tax_rate' => (float) config('invoicing.tax_rate'),
+            // Règle d'acquisition des points (config/loyalty.php) : affichée sur l'écran Fidélité
+            // au lieu d'une valeur codée en dur côté front.
+            'loyalty_amount_per_point' => max(1, (int) config('loyalty.amount_per_point')),
+            // Horodatage de la ligne (colonne timestamps déjà en base) : affiché sur le hub des paramètres.
+            'updated_at' => $settings->updated_at?->toIso8601String(),
         ];
     }
 }

@@ -69,7 +69,7 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`) |
 | 03 Clients & fidélité | Nouveau/Modifier client | `pages/clients/ClientFormPage.tsx` (routes `/clients/new`, `/clients/:id/edit`) | **fait** (commit `11de473`, écrans séparés depuis commit `eaf68bf`) — a aussi exposé le champ `notes` (backend déjà prêt, jamais affiché côté front) |
 | 03 Clients & fidélité | Fiche client (consultation) | panneau détail dans `ClientsList.tsx` | **fait** — reste un panneau latéral sur la liste (pas de retour utilisateur demandant un écran séparé pour la consultation, contrairement à la création/édition) |
-| 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | **absent, voir §2** | bloqué (module à construire) |
+| 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait** — construit sans accès Figma direct (rate-limit MCP atteint), à partir de la description du gap dans ce fichier + conventions POS standards (mouvements manuels entrée/sortie, clôture = comptage vs théorique avec écart) ; à comparer visuellement à la maquette si l'accès Figma est rétabli |
 | 07 Articles & tarifs | Catalogue (liste) | `pages/ServicesPage.tsx` | **fait** (commit `fc75065`, écrans séparés depuis commit `d52b79b`) |
 | 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait** (commit `d52b79b`) — retour utilisateur du 2026-09-30 : le design a des écrans dédiés séparés de la liste, pas un panneau/modale inline ; voir convention ci-dessous |
 | 08 Rapports & bilans | Rapports, Bilan journalier | `pages/KpiPage.tsx` | à faire |
@@ -80,9 +80,12 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 
 Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
 
-- **Module Caisse** (section 06) : aucune UI de mouvements de caisse manuels ni de
-  clôture/rapprochement journalier. Seul `POST /payments/cash` (encaissement lié à
-  une facture) existe. À construire de zéro (backend + frontend).
+- ~~**Module Caisse** (section 06)~~ **fait** (voir tableau ci-dessus) : modèles
+  `CashMovement`/`CashClosure`, service `CashService` (calcule le solde théorique
+  depuis la dernière clôture), endpoints `/cash/*`. Le solde théorique d'une
+  agence peut légitimement inclure des paiements espèces historiques antérieurs
+  à toute clôture (première clôture d'une agence avec déjà de l'activité) —
+  normal, pas un bug.
 - **Retraits en agence** (section 05) : pas de flux dédié comptoir (file "prêt à
   retirer", remise d'articles, encaissement du solde). Seule la livraison à domicile
   (`DeliveriesPage.tsx`) existe — flux différent.
@@ -124,3 +127,19 @@ dans une version précédente de cette liste, sont **déjà faits** (commits `7d
   repo en parallèle (constaté le 2026-09-30, deux commits poussés pendant une
   session). Toujours `git fetch` + merger (jamais rebase/force-push sur `master`)
   avant de pousser, et relancer la suite de validation complète après fusion.
+- **Piège Eloquent : ne jamais nommer une relation comme une colonne FK existante**
+  (ex. une relation `createdBy()` sur un modèle qui a une colonne `created_by`).
+  `Model::toArray()` fait `array_merge(attributesToArray(), relationsToArray())` —
+  la relation chargée (snake_case du nom de méthode) écrase silencieusement la
+  valeur brute de la colonne dans le JSON, et peut même faire fuiter les
+  `$appends` du modèle lié (ex. `User::$appends`) même avec un `select()` limité
+  dans le `with()`. Nommer la relation différemment (`creator()`, `closer()`…).
+  Bug détecté et corrigé avant publication sur `CashMovement`/`CashClosure`
+  (commit du module Caisse) — vérifier ce pattern sur toute nouvelle relation
+  `xxx_by`.
+- **Bug corrigé en marge du chantier clients (commit `eaf68bf`)** : `Client::create()`
+  ne reflète pas en mémoire le défaut DB de `loyalty_points` (0), donc l'accesseur
+  `loyaltyDiscountRate()` plantait la sérialisation JSON à chaque création de
+  client sans `loyalty_points` explicite. Toujours `->refresh()` après un
+  `Model::create()` dont la réponse JSON dépend d'un accesseur qui lit une colonne
+  à défaut DB (pas fournie explicitement à `create()`).

@@ -1,18 +1,19 @@
 import defaultTheme from 'tailwindcss/defaultTheme';
 
 /**
- * Système de design « Pressing Manager ».
+ * Système de design « Pressing Manager » — aligné sur la maquette Figma SPARK PRESSING.
  *
- * - brand  : bleu lagon (eau claire, linge propre, confiance). brand-600 est la
- *            teinte des actions principales en mode clair (blanc dessus : 4,98:1),
- *            brand-400/300 la teinte des actions en mode sombre (encre dessus : ≥ 7,5:1).
- * - accent : safran chaleureux, réservé aux accents (express, mises en avant).
- * - ink    : neutres gris-bleu légèrement teintés, utilisés à la place de slate.
- *            ink-400 est calibré pour atteindre 3:1 (bordures de champs) sur blanc
- *            et ink-350 (texte secondaire en mode sombre) reste ≥ 5,2:1 même sur ink-800.
+ * - brand  : vert forêt (Dark Forest #24483F), calé sur brand-600 — navigation et
+ *            bouton primaire. Blanc dessus : 10,1:1 (clair) ; encre dessus sur
+ *            brand-400 : 4,8:1 (sombre).
+ * - accent : or premium (Luxury Gold #C8A54B), calé sur accent-500 — CTA sélectifs
+ *            et mise en avant (équivalent du safran précédent).
+ * - ink    : reprend l'échelle neutre "slate" de la maquette (Neutral 50…900),
+ *            complétée par les paliers manquants avec les valeurs slate standard.
+ *            ink-350 = ink-400, conservé pour ne pas casser les classes existantes.
  *
- * Tous les couples texte/fond ont été vérifiés (WCAG 2.1 AA) : voir le rapport de
- * refonte pour la liste des ratios calculés.
+ * Toutes les paires texte/fond utilisées dans les boutons/liens ont été vérifiées
+ * (WCAG 2.1 AA, ≥ 4,5:1 texte courant / ≥ 3:1 composants).
  */
 
 /** @type {import('tailwindcss').Config} */
@@ -26,49 +27,49 @@ export default {
         extend: {
             colors: {
                 brand: {
-                    50: '#eefbfc',
-                    100: '#d4f3f6',
-                    200: '#aee6ed',
-                    300: '#74d1de',
-                    400: '#36b4c7',
-                    500: '#1497ad',
-                    600: '#0f7a91',
-                    700: '#106276',
-                    800: '#144f60',
-                    900: '#154251',
-                    950: '#082a36',
+                    50: '#f8f9f9',
+                    100: '#dbe2e1',
+                    200: '#afc5bf',
+                    300: '#82aca2',
+                    400: '#558f81',
+                    500: '#3a6b5f',
+                    600: '#24483f',
+                    700: '#1d3b34',
+                    800: '#17302a',
+                    900: '#132722',
+                    950: '#0f1f1b',
                 },
                 accent: {
-                    50: '#fff8ed',
-                    100: '#ffeed4',
-                    200: '#fed9a8',
-                    300: '#fdbc71',
-                    400: '#fb9538',
-                    500: '#f97612',
-                    600: '#ea5b08',
-                    700: '#c24309',
-                    800: '#9a3510',
-                    900: '#7c2e10',
-                    950: '#431407',
+                    50: '#faf9f8',
+                    100: '#edeae2',
+                    200: '#ddd5c0',
+                    300: '#d3c39c',
+                    400: '#cbb272',
+                    500: '#c8a54b',
+                    600: '#aa8833',
+                    700: '#806726',
+                    800: '#5b491a',
+                    900: '#3d3112',
+                    950: '#241d0a',
                 },
                 ink: {
-                    50: '#f5f8fa',
-                    100: '#ebf0f3',
-                    200: '#d8e1e7',
-                    300: '#b9c7d0',
-                    350: '#98a9b4',
-                    400: '#7b8e9a',
-                    500: '#62788a',
-                    600: '#4a5e6d',
-                    700: '#3a4b58',
-                    800: '#253441',
-                    900: '#17222c',
-                    950: '#0c141b',
+                    50: '#f8fafc',
+                    100: '#f1f5f9',
+                    200: '#e2e8f0',
+                    300: '#cbd5e1',
+                    350: '#94a3b8',
+                    400: '#94a3b8',
+                    500: '#64748b',
+                    600: '#475569',
+                    700: '#334155',
+                    800: '#1e293b',
+                    900: '#0f172a',
+                    950: '#020617',
                 },
             },
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
-                display: ['"Plus Jakarta Sans"', 'Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Inter', ...defaultTheme.fontFamily.sans],
+                display: ['Inter', ...defaultTheme.fontFamily.sans],
             },
             borderRadius: {
                 '4xl': '2rem',
@@ -77,7 +78,7 @@ export default {
                 card: '0 1px 2px 0 rgb(12 20 27 / 0.04), 0 1px 3px 0 rgb(12 20 27 / 0.06)',
                 'card-hover': '0 4px 12px -2px rgb(12 20 27 / 0.08), 0 2px 4px -2px rgb(12 20 27 / 0.06)',
                 pop: '0 12px 32px -8px rgb(12 20 27 / 0.18), 0 4px 8px -4px rgb(12 20 27 / 0.08)',
-                brand: '0 8px 20px -6px rgb(15 122 145 / 0.45)',
+                brand: '0 8px 20px -6px rgb(36 72 63 / 0.45)',
                 'inner-top': 'inset 0 1px 0 0 rgb(255 255 255 / 0.04)',
             },
             keyframes: {

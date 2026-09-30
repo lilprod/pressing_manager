@@ -41,7 +41,7 @@ export default function LicensePage() {
 
     const tone = statusTone('license', license.status);
     const ringColor =
-        tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'amber' ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400';
+        tone === 'emerald' ? 'text-emerald-600 dark:text-emerald-400' : tone === 'amber' ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
     // Jauge : jours restants rapportés à une année (plafonnée), pour une lecture visuelle rapide.
     const ratio = Math.max(0, Math.min(1, license.days_remaining / 365));
     const circumference = 2 * Math.PI * 42;

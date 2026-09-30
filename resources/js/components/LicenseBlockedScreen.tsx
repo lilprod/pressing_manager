@@ -16,7 +16,7 @@ export default function LicenseBlockedScreen() {
         <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-ink-50 px-4 py-10 dark:bg-ink-950">
             <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-rose-100/70 to-transparent dark:from-rose-500/10"
+                className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-red-100/70 to-transparent dark:from-red-500/10"
             />
 
             <div className="relative w-full max-w-md space-y-6">
@@ -25,11 +25,11 @@ export default function LicenseBlockedScreen() {
                 </div>
 
                 <div className={`${card} overflow-hidden`}>
-                    <div className="flex flex-col items-center gap-3 border-b border-ink-200/80 bg-rose-50/60 px-6 pb-6 pt-8 text-center dark:border-ink-800 dark:bg-rose-400/5">
-                        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-700 text-white shadow-lg shadow-rose-700/25 dark:bg-rose-400 dark:text-ink-950 dark:shadow-none">
+                    <div className="flex flex-col items-center gap-3 border-b border-ink-200/80 bg-red-50/60 px-6 pb-6 pt-8 text-center dark:border-ink-800 dark:bg-red-400/5">
+                        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-700 text-white shadow-lg shadow-red-700/25 dark:bg-red-400 dark:text-ink-950 dark:shadow-none">
                             <Lock aria-hidden="true" className="h-7 w-7" />
                         </span>
-                        <h1 className="font-display text-xl font-bold text-rose-800 dark:text-rose-300">{t('license.blockedTitle')}</h1>
+                        <h1 className="font-display text-xl font-bold text-red-800 dark:text-red-300">{t('license.blockedTitle')}</h1>
                         <p role="alert" className="text-sm text-ink-700 dark:text-ink-300">
                             {t('license.blockedMessage')}
                         </p>

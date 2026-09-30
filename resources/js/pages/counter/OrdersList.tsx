@@ -100,7 +100,7 @@ export default function OrdersList() {
                                     <p className="text-ink-700 dark:text-ink-300">
                                         {p.preview.items_count} {t('order.items').toLowerCase()} · {money(p.preview.total_amount)}
                                     </p>
-                                    {p.status === 'error' && <p className="mt-1 font-medium text-rose-700 dark:text-rose-300">{p.error}</p>}
+                                    {p.status === 'error' && <p className="mt-1 font-medium text-red-700 dark:text-red-300">{p.error}</p>}
                                 </div>
                                 <Pill tone="amber">{t('order.pending')}</Pill>
                             </li>

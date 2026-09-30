@@ -14,7 +14,7 @@ export default function LicenseBanner() {
     }
 
     return (
-        <div role="alert" className="bg-rose-700 text-white">
+        <div role="alert" className="bg-red-700 text-white">
             <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-3 gap-y-1.5 px-4 py-2.5 text-center text-sm font-medium sm:px-6">
                 <ShieldAlert aria-hidden="true" className="h-4 w-4 shrink-0" />
                 <span>{t('license.graceBanner', { date: date(license.grace_ends_at) })}</span>

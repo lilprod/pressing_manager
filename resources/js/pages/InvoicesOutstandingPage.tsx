@@ -52,7 +52,7 @@ export default function InvoicesOutstandingPage() {
                         <span className="text-sm font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">
                             {t('invoice.totalOutstanding')}
                         </span>
-                        <span className="font-display text-2xl font-extrabold tabular-nums text-rose-700 dark:text-rose-300">{money(totalDue)}</span>
+                        <span className="font-display text-2xl font-extrabold tabular-nums text-red-700 dark:text-red-300">{money(totalDue)}</span>
                     </div>
 
                     <div className={cx(card, 'overflow-hidden')}>
@@ -84,7 +84,7 @@ export default function InvoicesOutstandingPage() {
                                                 <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">
                                                     {t('invoice.balanceDue')}
                                                 </p>
-                                                <p className="font-display font-bold tabular-nums text-rose-700 dark:text-rose-300">
+                                                <p className="font-display font-bold tabular-nums text-red-700 dark:text-red-300">
                                                     {money(invoice.balance_due ?? 0)}
                                                 </p>
                                             </div>

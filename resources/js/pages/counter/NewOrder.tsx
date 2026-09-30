@@ -471,7 +471,7 @@ export default function NewOrder() {
                                                     onClick={() => removeLine(line.service_id)}
                                                     aria-label={t('order.removeItem')}
                                                     title={t('order.removeItem')}
-                                                    className="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-rose-700 transition hover:bg-rose-50 active:scale-95 lg:ml-0 dark:text-rose-300 dark:hover:bg-rose-400/10"
+                                                    className="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-red-700 transition hover:bg-red-50 active:scale-95 lg:ml-0 dark:text-red-300 dark:hover:bg-red-400/10"
                                                 >
                                                     <Trash2 aria-hidden="true" className="h-[18px] w-[18px]" />
                                                 </button>

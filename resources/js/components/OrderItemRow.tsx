@@ -162,10 +162,10 @@ export default function OrderItemRow({ item, onUpdated, onPrintLabel }: Props) {
                 <div
                     role="alertdialog"
                     aria-label={t('status.perdu')}
-                    className="flex animate-fade-in flex-wrap items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm dark:border-rose-400/20 dark:bg-rose-400/10"
+                    className="flex animate-fade-in flex-wrap items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm dark:border-red-400/20 dark:bg-red-400/10"
                 >
-                    <TriangleAlert aria-hidden="true" className="h-5 w-5 shrink-0 text-rose-700 dark:text-rose-300" />
-                    <span className="flex-1 font-semibold text-rose-800 dark:text-rose-300">{t('order.confirmLost')}</span>
+                    <TriangleAlert aria-hidden="true" className="h-5 w-5 shrink-0 text-red-700 dark:text-red-300" />
+                    <span className="flex-1 font-semibold text-red-800 dark:text-red-300">{t('order.confirmLost')}</span>
                     <button type="button" onClick={() => void applyTransition('perdu')} className={button('danger', 'sm')}>
                         {t('common.confirm')}
                     </button>

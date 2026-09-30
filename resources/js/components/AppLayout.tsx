@@ -112,7 +112,7 @@ export default function AppLayout() {
                             onClick={() => void logout()}
                             aria-label={t('nav.logout')}
                             title={t('nav.logout')}
-                            className={cx(iconButton, 'text-rose-700 hover:bg-rose-50 hover:text-rose-800 dark:text-rose-300 dark:hover:bg-rose-400/10 dark:hover:text-rose-200')}
+                            className={cx(iconButton, 'text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-400/10 dark:hover:text-red-200')}
                         >
                             <LogOut aria-hidden="true" className="h-[18px] w-[18px]" />
                         </button>

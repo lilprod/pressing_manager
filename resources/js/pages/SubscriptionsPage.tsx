@@ -165,7 +165,7 @@ export default function SubscriptionsPage() {
                                                 </div>
                                                 <div aria-hidden="true" className="h-2 overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
                                                     <div
-                                                        className={cx('h-full rounded-full transition-all', usage >= 0.9 ? 'bg-rose-500' : usage >= 0.7 ? 'bg-amber-500' : 'bg-brand-500 dark:bg-brand-400')}
+                                                        className={cx('h-full rounded-full transition-all', usage >= 0.9 ? 'bg-red-500' : usage >= 0.7 ? 'bg-amber-500' : 'bg-brand-500 dark:bg-brand-400')}
                                                         style={{ width: `${usage * 100}%` }}
                                                     />
                                                 </div>

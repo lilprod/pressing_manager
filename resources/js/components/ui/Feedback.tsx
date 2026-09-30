@@ -60,7 +60,7 @@ const ALERT_STYLES: Record<AlertTone, { box: string; icon: LucideIcon }> = {
         icon: CircleCheck,
     },
     error: {
-        box: 'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300',
+        box: 'border-red-200 bg-red-50 text-red-800 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-300',
         icon: CircleAlert,
     },
     warning: {

@@ -101,7 +101,58 @@ Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
   explicitement mono-tenant** (voir `docs/ARCHITECTURE.md`). Ne pas coder cette
   section sans clarifier au préalable si c'est une réinterprétation (l'admin global
   actuel = ce superadmin) ou un vrai chantier multi-tenant — décision produit à
-  prendre avec l'utilisateur avant tout code.
+  prendre avec l'utilisateur avant tout code. **Confirmé par le CDC v3.0** (EF-SUP-01
+  à 04) : Spark (l'éditeur) y est bien un superadmin plateforme avec CRUD `pressings`
+  — le même arbitrage reste à trancher, voir ci-dessous.
+
+### Écarts identifiés par le Cahier des charges v3.0 (analyse du 2026-09-30)
+
+Le CDC (`Spark_Pressing_CDC_v3.0.pdf`, fourni par l'utilisateur) décrit une cible
+plus large que la maquette Figma seule. Analyse complète et argumentée :
+[Spark Pressing — CDC v3.0 vs existant](https://claude.ai/artifact/1KQnYZsD1joHDmYcZUDiCF).
+Point d'architecture à trancher **avant** tout le reste : le CDC §7 vise Next.js +
+MySQL/MariaDB + Spatie Permission (front/back découplés) ; l'existant est React/Vite
+(même origine que l'API Laravel) + PostgreSQL + RBAC maison. Ce n'est pas un détail
+technique mais le choix fondateur du document — à faire trancher par le Product
+Owner avant de prioriser le reste (réécriture complète vs écart assumé).
+
+Écarts fonctionnels (hors question d'architecture), par ordre de priorité suggéré :
+
+1. **Multi-devise et tarification historisée par agence** (CDC §8, EF-DEV-01 à 05) —
+   le plus structurant. Manque : `currency_code` (ISO 4217) sur `agencies` ; une vraie
+   `price_list` (agence × article × service × prix × devise × **date d'effet**), alors
+   qu'aujourd'hui `agency_services.price_override` est un prix courant unique sans
+   historique — changer un tarif ne doit jamais modifier le montant d'une facture déjà
+   émise (non négociable, §8.2). Condition préalable au reporting consolidé
+   multi-agences.
+2. **Séparation Article × Service avec règles de ratio de prix automatiques** (CDC
+   §11.1-11.3) — le CDC distingue le catalogue d'Articles (vêtements, global) du
+   Service (type de prestation : classique/express/repassage…, avec des règles du
+   type express = classique × 1,5). L'existant conflate les deux dans un seul modèle
+   `Service` (nom, code, catégorie, prix) ; pas de règle de calcul automatique, pas
+   d'import Excel du catalogue/prix (EF-ART-03, §11.5).
+3. **Tournées de livraison et encaissement mobile** (CDC §10.15, EF-LIV-01 et 03) —
+   `Delivery` existe (photo, signature, statuts, `livreur_id`) mais sans regroupement
+   en tournée (`delivery_round`) et sans collecte du solde restant à la livraison
+   (`DeliveryController::complete()` ne gère aucun paiement, vérifié en code).
+4. **Moteur de règles marketing génériques** (CDC §11.4, EF-CFG-10, EF-CLI-06) —
+   remplacerait à terme les paliers de fidélité actuels (`LoyaltyTier`, simple
+   seuil de points → taux de remise) par un moteur paramétrable (type : bienvenue,
+   palier, saisonnière, volume, code promo, parrainage ; condition JSON ; cumulable ;
+   portée pressing ou agence). Aucun système de codes promo n'existe aujourd'hui.
+5. **QR par lot** (CDC §11.6) : le QR existant est généré par article (`order_items.qr_code`,
+   toujours actif) mais pas regroupable en "lot" pour plusieurs vêtements d'un même
+   dépôt, et pas configurable en option par agence comme le prévoit le CDC.
+6. **Blocage du retrait si impayé, configurable par agence** (EF-RET-05) — à vérifier
+   dans `OrderController`/`RetrieveController` si c'est aujourd'hui figé ou déjà
+   paramétrable ; non confirmé lors de l'analyse.
+
+Points notables où l'existant est **en avance** sur le phasage du CDC (construit avant
+que ce document n'existe, sur demande utilisateur directe) : file hors ligne au
+comptoir (le CDC la met hors périmètre v1, §4.2), rôle Livreur (le CDC l'envisage en
+MVP ou Phase 2, à trancher), notifications SMS/e-mail (le CDC les met en Phase 3).
+Ne pas les retirer sans raison — documenter plutôt l'écart de phasage auprès du
+Product Owner.
 
 #### Éléments de maquette omis faute de données (refonte écran par écran, 2026-09-30)
 

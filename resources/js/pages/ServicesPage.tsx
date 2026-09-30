@@ -6,9 +6,10 @@ import { api, ApiError } from '../lib/api';
 import PageHeader from '../components/ui/PageHeader';
 import { Alert, EmptyState, LoadingState, Spinner } from '../components/ui/Feedback';
 import Pagination from '../components/ui/Pagination';
-import { Pill } from '../components/ui/StatusBadge';
+import { Pill, TONES } from '../components/ui/StatusBadge';
 import { button, card, cardPadded, cx, input, inputLg, inputSm, label, select, sectionTitle } from '../components/ui/styles';
 import { Pencil, Plus, Search, Shirt, Sparkles, X } from 'lucide-react';
+import { categoryMeta } from '../lib/serviceCategory';
 import type { Paginated, Service, ServiceCategory } from '../types';
 
 const CATEGORIES: ServiceCategory[] = ['nettoyage', 'lavage', 'repassage', 'retouche', 'teinture', 'autre'];
@@ -113,11 +114,25 @@ export default function ServicesPage() {
                         ) : services.length === 0 ? (
                             <EmptyState icon={Shirt} title={t('service.none')} />
                         ) : (
-                            <ul className="divide-y divide-ink-100 dark:divide-ink-800">
-                                {services.map((service) => (
-                                    <ServiceRow key={service.id} service={service} agencyId={agencyId} onChanged={reload} onEdit={() => setEditing(service)} />
-                                ))}
-                            </ul>
+                            <div className="overflow-x-auto">
+                                <div
+                                    role="row"
+                                    className="hidden min-w-[760px] items-center gap-4 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
+                                >
+                                    <span className="w-9 shrink-0" aria-hidden="true" />
+                                    <span className="min-w-0 flex-1">{t('service.table.article')}</span>
+                                    <span className="w-28 shrink-0">{t('service.categoryLabel')}</span>
+                                    <span className="w-28 shrink-0 text-right">{t('service.table.price')}</span>
+                                    <span className="w-24 shrink-0">{t('service.table.status')}</span>
+                                    <span className="w-44 shrink-0">{t('service.table.actions')}</span>
+                                </div>
+
+                                <ul className="divide-y divide-ink-100 sm:min-w-[760px] dark:divide-ink-800">
+                                    {services.map((service) => (
+                                        <ServiceRow key={service.id} service={service} agencyId={agencyId} onChanged={reload} onEdit={() => setEditing(service)} />
+                                    ))}
+                                </ul>
+                            </div>
                         )}
                         <Pagination meta={meta} onPageChange={setPage} />
                     </div>
@@ -172,42 +187,52 @@ function ServiceRow({
     }
 
     const agencyActive = service.agency_pivot?.is_active ?? true;
+    const meta = categoryMeta(service.category);
+    const Icon = meta.icon;
 
     return (
-        <li className="space-y-2.5 px-4 py-3.5 sm:px-5">
-            <div>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <p className="font-semibold text-ink-900 dark:text-ink-50">{service.name}</p>
-                    <Pill tone="neutral">{t(`service.category.${service.category}`)}</Pill>
-                    {!service.is_active && <Pill tone="rose">{t('service.inactive')}</Pill>}
-                    {agencyId && !agencyActive && <Pill tone="amber">{t('service.inactiveForAgency')}</Pill>}
-                </div>
+        <li className="flex flex-wrap items-start gap-3 px-4 py-3.5 sm:flex-nowrap sm:items-center sm:gap-4 sm:px-5">
+            <span className={cx('hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset sm:flex', TONES[meta.tone])}>
+                <Icon aria-hidden="true" className="h-4 w-4" />
+            </span>
+
+            <div className="min-w-0 basis-full sm:flex-1 sm:basis-auto">
+                <p className="truncate font-semibold text-ink-900 dark:text-ink-50">{service.name}</p>
                 <p className="text-sm text-ink-600 dark:text-ink-350">
-                    {service.code} · {money(service.base_price)} · {t('service.durationHours', { count: service.estimated_duration_hours })}
+                    {service.code} · {t('service.durationHours', { count: service.estimated_duration_hours })}
                 </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-                {agencyId && (
-                    <>
+            <div className="w-auto shrink-0 sm:w-28">
+                <Pill tone="neutral">{t(`service.category.${service.category}`)}</Pill>
+            </div>
+
+            <div className="w-auto shrink-0 text-left sm:w-28 sm:text-right">
+                {agencyId ? (
+                    <label className="inline-flex items-center gap-1.5">
+                        <span className="sr-only">{t('service.priceOverride')}</span>
                         <input
                             type="number"
                             min={0}
                             value={override}
+                            onBlur={() => void saveOverride()}
                             onChange={(e) => setOverride(e.target.value)}
                             placeholder={String(service.base_price)}
-                            aria-label={t('service.priceOverride')}
-                            className={cx(inputSm, 'w-24')}
+                            className={cx(inputSm, 'h-8 w-24 text-right tabular-nums')}
                         />
-                        <button type="button" onClick={() => void saveOverride()} disabled={busy} className={button('secondary', 'sm')}>
-                            {busy ? <Spinner className="h-3.5 w-3.5" /> : t('common.save')}
-                        </button>
-                        <button type="button" onClick={() => void toggleAgencyActive()} className={button('ghost', 'sm')}>
-                            {agencyActive ? t('service.deactivateForAgency') : t('service.activateForAgency')}
-                        </button>
-                        <span aria-hidden="true" className="mx-1 h-5 w-px bg-ink-200 dark:bg-ink-700" />
-                    </>
+                        {busy && <Spinner className="h-3.5 w-3.5 shrink-0" />}
+                    </label>
+                ) : (
+                    <span className="font-display font-bold tabular-nums text-ink-900 dark:text-white">{money(service.base_price)}</span>
                 )}
+            </div>
+
+            <div className="flex w-auto shrink-0 flex-col items-start gap-1 sm:w-24">
+                {service.is_active ? <Pill tone="emerald">{t('service.active')}</Pill> : <Pill tone="rose">{t('service.inactive')}</Pill>}
+                {agencyId && !agencyActive && <Pill tone="amber">{t('service.inactiveForAgency')}</Pill>}
+            </div>
+
+            <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-44">
                 <button type="button" onClick={onEdit} className={button('secondary', 'sm')}>
                     <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
                     {t('common.edit')}
@@ -215,6 +240,11 @@ function ServiceRow({
                 <button type="button" onClick={() => void toggleActive()} className={button('ghost', 'sm')}>
                     {service.is_active ? t('service.deactivate') : t('service.activate')}
                 </button>
+                {agencyId && (
+                    <button type="button" onClick={() => void toggleAgencyActive()} className={button('ghost', 'sm')}>
+                        {agencyActive ? t('service.deactivateForAgency') : t('service.activateForAgency')}
+                    </button>
+                )}
             </div>
         </li>
     );

@@ -541,5 +541,9 @@
     "service.activateForAgency": "Activate here",
     "service.deactivateForAgency": "Deactivate here",
     "service.priceOverride": "Agency-specific price",
+    "service.table.article": "Item",
+    "service.table.price": "Price",
+    "service.table.status": "Status",
+    "service.table.actions": "Actions",
     "rbac.group.catalog": "Catalog"
 }

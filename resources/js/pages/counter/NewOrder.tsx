@@ -9,6 +9,7 @@ import { readCachedServices, writeCachedServices } from '../../lib/servicesCache
 import { readCachedIntakeConditions, writeCachedIntakeConditions } from '../../lib/intakeConditionsCache';
 import { readRecentClients, rememberClients } from '../../lib/recentClientsCache';
 import { syncEvents } from '../../lib/sync';
+import { categoryMeta } from '../../lib/serviceCategory';
 import type { Client, IntakeCondition, Order, Service, ServiceCategory } from '../../types';
 import {
     Award,
@@ -17,31 +18,25 @@ import {
     ChevronDown,
     ChevronRight,
     ClipboardList,
-    Droplets,
     Minus,
-    Palette,
     Phone,
     Plus,
     Receipt,
-    Scissors,
     Search,
     SearchX,
-    Shirt,
     ShoppingBag,
     ShoppingBasket,
     Star,
     StickyNote,
     Tag,
     Trash2,
-    WashingMachine,
     X,
     Zap,
-    type LucideIcon,
 } from 'lucide-react';
 import { useFormat } from '../../lib/format';
 import PageHeader, { Avatar } from '../../components/ui/PageHeader';
 import { Alert, EmptyState, Spinner } from '../../components/ui/Feedback';
-import { Pill, TONES, type Tone } from '../../components/ui/StatusBadge';
+import { Pill, TONES } from '../../components/ui/StatusBadge';
 import { button, card, cardPadded, cx, inputLg, inputSm, label, sectionTitle } from '../../components/ui/styles';
 
 const SERVICE_CATEGORY_ORDER: ServiceCategory[] = ['nettoyage', 'lavage', 'repassage', 'retouche', 'teinture', 'autre'];
@@ -762,21 +757,4 @@ function StepHeading({ id, step, title, hint }: { id: string; step: number; titl
             </div>
         </div>
     );
-}
-
-function categoryMeta(category: string): { icon: LucideIcon; tone: Tone } {
-    switch (category) {
-        case 'nettoyage':
-            return { icon: WashingMachine, tone: 'brand' };
-        case 'lavage':
-            return { icon: Droplets, tone: 'sky' };
-        case 'repassage':
-            return { icon: Shirt, tone: 'accent' };
-        case 'retouche':
-            return { icon: Scissors, tone: 'violet' };
-        case 'teinture':
-            return { icon: Palette, tone: 'rose' };
-        default:
-            return { icon: Tag, tone: 'neutral' };
-    }
 }

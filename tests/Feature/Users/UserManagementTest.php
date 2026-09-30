@@ -26,9 +26,9 @@ class UserManagementTest extends TestCase
         $response = $this->actingAs($admin)->getJson('/api/users?full=1');
 
         $response->assertOk();
-        $emails = collect($response->json())->pluck('email');
+        $emails = collect($response->json('data'))->pluck('email');
         $this->assertTrue($emails->contains($accueil->email));
-        $entry = collect($response->json())->firstWhere('id', $accueil->id);
+        $entry = collect($response->json('data'))->firstWhere('id', $accueil->id);
         $this->assertSame(true, $entry['must_change_password']);
         $this->assertSame($agency->name, $entry['agency']['name']);
     }

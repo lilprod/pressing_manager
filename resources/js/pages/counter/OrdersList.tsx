@@ -9,6 +9,7 @@ import { useSyncQueue } from '../../lib/useSyncQueue';
 import PageHeader, { Avatar } from '../../components/ui/PageHeader';
 import StatusBadge, { Pill } from '../../components/ui/StatusBadge';
 import { EmptyState, LoadingState } from '../../components/ui/Feedback';
+import Pagination from '../../components/ui/Pagination';
 import { button, card, cx } from '../../components/ui/styles';
 import type { Order, OrderStatus, Paginated } from '../../types';
 
@@ -20,6 +21,12 @@ export default function OrdersList() {
     const { activeAgencyId } = useAuth();
     const pending = useSyncQueue();
     const [orders, setOrders] = useState<Order[]>([]);
+    const [meta, setMeta] = useState<Pick<Paginated<Order>, 'current_page' | 'last_page' | 'total'>>({
+        current_page: 1,
+        last_page: 1,
+        total: 0,
+    });
+    const [page, setPage] = useState(1);
     const [status, setStatus] = useState<OrderStatus | ''>('');
     const [readyToday, setReadyToday] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -27,17 +34,31 @@ export default function OrdersList() {
     useEffect(() => {
         setLoading(true);
         // Pour un rôle global, l'agence choisie dans l'en-tête filtre la liste (vide = toutes les agences).
-        const params = new URLSearchParams();
+        const params = new URLSearchParams({ page: String(page) });
         if (status) params.set('status', status);
         if (readyToday) params.set('ready_today', '1');
         if (activeAgencyId) params.set('agency_id', String(activeAgencyId));
-        const query = params.toString() ? `?${params}` : '';
         api
-            .get<Paginated<Order>>(`/orders${query}`)
-            .then((res) => setOrders(res.data))
+            .get<Paginated<Order>>(`/orders?${params}`)
+            .then((res) => {
+                setOrders(res.data);
+                setMeta({ current_page: res.current_page, last_page: res.last_page, total: res.total });
+            })
             .catch(() => setOrders([]))
             .finally(() => setLoading(false));
-    }, [status, readyToday, activeAgencyId]);
+    }, [status, readyToday, activeAgencyId, page]);
+
+    function changeStatus(next: OrderStatus | '') {
+        setStatus(next);
+        setPage(1);
+    }
+
+    function toggleReadyToday() {
+        setReadyToday((current) => !current);
+        setPage(1);
+    }
+
+    useEffect(() => setPage(1), [activeAgencyId]);
 
     const filterClass = (active: boolean) =>
         cx(
@@ -61,18 +82,18 @@ export default function OrdersList() {
             />
 
             <div role="group" aria-label={t('order.filterByStatus')} className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-                <button type="button" aria-pressed={status === ''} onClick={() => setStatus('')} className={filterClass(status === '')}>
+                <button type="button" aria-pressed={status === ''} onClick={() => changeStatus('')} className={filterClass(status === '')}>
                     {t('order.all')}
                 </button>
                 {STATUSES.map((s) => (
-                    <button key={s} type="button" aria-pressed={status === s} onClick={() => setStatus(s)} className={filterClass(status === s)}>
+                    <button key={s} type="button" aria-pressed={status === s} onClick={() => changeStatus(s)} className={filterClass(status === s)}>
                         {t(`status.${s}`)}
                     </button>
                 ))}
                 <button
                     type="button"
                     aria-pressed={readyToday}
-                    onClick={() => setReadyToday((current) => !current)}
+                    onClick={toggleReadyToday}
                     className={cx(filterClass(readyToday), 'inline-flex items-center gap-1.5')}
                 >
                     <Clock aria-hidden="true" className="h-4 w-4" />
@@ -168,6 +189,7 @@ export default function OrdersList() {
                         ))}
                     </ul>
                 )}
+                <Pagination meta={meta} onPageChange={setPage} />
             </div>
         </div>
     );

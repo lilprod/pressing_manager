@@ -31,7 +31,7 @@ class DeliveryController extends ApiController
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
             ->when($request->boolean('mine'), fn ($query) => $query->where('livreur_id', $request->user()->id))
             ->latest()
-            ->get();
+            ->paginate($request->integer('per_page', 20));
 
         return response()->json($deliveries);
     }

@@ -3,15 +3,15 @@ import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useLicense } from '../contexts/LicenseContext';
 import { hasPermission } from '../lib/permissions';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 import LicenseRenewalForm from '../components/LicenseRenewalForm';
-import type { LicensePayment } from '../types';
-import { CalendarDays, CircleAlert, History, KeyRound, Layers, RefreshCw } from 'lucide-react';
+import type { LicensePayment, LicensePlan } from '../types';
+import { CalendarDays, CircleAlert, History, KeyRound, Layers, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { useFormat } from '../lib/format';
 import PageHeader from '../components/ui/PageHeader';
-import StatusBadge, { statusTone } from '../components/ui/StatusBadge';
-import { EmptyState, LoadingState } from '../components/ui/Feedback';
-import { card, cardPadded, cx, sectionTitle } from '../components/ui/styles';
+import StatusBadge, { Pill, statusTone } from '../components/ui/StatusBadge';
+import { Alert, EmptyState, LoadingState, Spinner } from '../components/ui/Feedback';
+import { button, card, cardPadded, cx, input, label, sectionTitle } from '../components/ui/styles';
 
 export default function LicensePage() {
     const { user } = useAuth();
@@ -155,6 +155,8 @@ export default function LicensePage() {
                     </section>
                 )}
             </div>
+
+            {canManage && <LicensePlansPanel />}
         </div>
     );
 }
@@ -165,3 +167,226 @@ const PAYMENT_METHOD_KEYS: Record<LicensePayment['method'], string> = {
     flooz: 'payment.flooz',
     tmoney: 'payment.tmoney',
 };
+
+function LicensePlansPanel() {
+    const { t } = useI18n();
+    const { money } = useFormat();
+    const [plans, setPlans] = useState<LicensePlan[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [editing, setEditing] = useState<LicensePlan | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    function reload() {
+        setLoading(true);
+        api.get<LicensePlan[]>('/license-plans').then(setPlans).finally(() => setLoading(false));
+    }
+
+    useEffect(reload, []);
+
+    async function toggleActive(planItem: LicensePlan) {
+        setError(null);
+        try {
+            await api.patch(`/license-plans/${planItem.id}`, { is_active: !planItem.is_active });
+            reload();
+        } catch (err) {
+            setError(err instanceof ApiError ? err.message : t('common.error'));
+        }
+    }
+
+    async function remove(planItem: LicensePlan) {
+        setError(null);
+        try {
+            await api.delete(`/license-plans/${planItem.id}`);
+            reload();
+        } catch (err) {
+            setError(err instanceof ApiError ? err.message : t('common.error'));
+        }
+    }
+
+    return (
+        <section aria-labelledby="license-plans-heading" className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+            <div className={cx(card, 'overflow-hidden')}>
+                <h2 id="license-plans-heading" className={cx(sectionTitle, 'flex items-center gap-2 px-5 pb-3 pt-5')}>
+                    <Layers aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
+                    {t('license.plansManagement')}
+                </h2>
+
+                {error && (
+                    <div className="px-5 pb-3">
+                        <Alert tone="error">{error}</Alert>
+                    </div>
+                )}
+
+                {loading ? (
+                    <LoadingState />
+                ) : plans.length === 0 ? (
+                    <EmptyState compact icon={Layers} title={t('license.noPlans')} />
+                ) : (
+                    <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                        {plans.map((planItem) => (
+                            <li key={planItem.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+                                <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                        <p className="font-semibold text-ink-900 dark:text-ink-50">{planItem.name}</p>
+                                        {!planItem.is_active && <Pill tone="rose">{t('service.inactive')}</Pill>}
+                                    </div>
+                                    <p className="text-sm text-ink-600 dark:text-ink-350">
+                                        {money(planItem.price)} · {t('license.days', { days: planItem.days })}
+                                    </p>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                    <button type="button" onClick={() => setEditing(planItem)} className={button('secondary', 'sm')}>
+                                        <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
+                                        {t('common.edit')}
+                                    </button>
+                                    <button type="button" onClick={() => void toggleActive(planItem)} className={button('ghost', 'sm')}>
+                                        {planItem.is_active ? t('service.deactivate') : t('service.activate')}
+                                    </button>
+                                    <button type="button" onClick={() => void remove(planItem)} className={button('dangerGhost', 'sm')}>
+                                        <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+                                        {t('common.delete')}
+                                    </button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+
+            <CreateLicensePlanForm onCreated={reload} />
+
+            {editing && (
+                <EditLicensePlanModal
+                    plan={editing}
+                    onClose={() => setEditing(null)}
+                    onSaved={() => {
+                        setEditing(null);
+                        reload();
+                    }}
+                />
+            )}
+        </section>
+    );
+}
+
+function CreateLicensePlanForm({ onCreated }: { onCreated: () => void }) {
+    const { t } = useI18n();
+    const [name, setName] = useState('');
+    const [days, setDays] = useState('');
+    const [price, setPrice] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    async function submit() {
+        setBusy(true);
+        setError(null);
+        try {
+            await api.post('/license-plans', { name, days: Number(days), price: Number(price) });
+            setName('');
+            setDays('');
+            setPrice('');
+            onCreated();
+        } catch (err) {
+            setError(err instanceof ApiError ? err.message : t('common.error'));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    const canSubmit = name.trim() !== '' && days !== '' && price !== '';
+
+    return (
+        <section aria-labelledby="license-plan-create-heading" className={cx(cardPadded, 'space-y-4')}>
+            <h2 id="license-plan-create-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
+                <Plus aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
+                {t('license.newPlan')}
+            </h2>
+
+            {error && <Alert tone="error">{error}</Alert>}
+
+            <div className="space-y-3">
+                <label className="block">
+                    <span className={label}>{t('license.planName')}</span>
+                    <input value={name} onChange={(e) => setName(e.target.value)} className={cx(input, 'w-full')} />
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                        <span className={label}>{t('license.planDays')}</span>
+                        <input type="number" min={1} value={days} onChange={(e) => setDays(e.target.value)} className={input} />
+                    </label>
+                    <label className="block">
+                        <span className={label}>{t('license.planPrice')}</span>
+                        <input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} className={input} />
+                    </label>
+                </div>
+                <button type="button" onClick={() => void submit()} disabled={!canSubmit || busy} className={button('primary', 'md', 'w-full')}>
+                    {busy ? <Spinner className="h-4 w-4" /> : <Plus aria-hidden="true" className="h-4 w-4" />}
+                    {t('common.create')}
+                </button>
+            </div>
+        </section>
+    );
+}
+
+function EditLicensePlanModal({ plan, onClose, onSaved }: { plan: LicensePlan; onClose: () => void; onSaved: () => void }) {
+    const { t } = useI18n();
+    const [name, setName] = useState(plan.name);
+    const [days, setDays] = useState(String(plan.days));
+    const [price, setPrice] = useState(String(plan.price));
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    async function submit() {
+        setBusy(true);
+        setError(null);
+        try {
+            await api.patch(`/license-plans/${plan.id}`, { name, days: Number(days), price: Number(price) });
+            onSaved();
+        } catch (err) {
+            setError(err instanceof ApiError ? err.message : t('common.error'));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    const canSubmit = name.trim() !== '' && days !== '' && price !== '';
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+            <section className={cx(cardPadded, 'w-full max-w-md space-y-4')}>
+                <div className="flex items-center justify-between">
+                    <h2 className={sectionTitle}>{t('license.editPlan')}</h2>
+                    <button type="button" onClick={onClose} aria-label={t('common.close')} className={button('ghost', 'sm')}>
+                        <X aria-hidden="true" className="h-4 w-4" />
+                    </button>
+                </div>
+                {error && <Alert tone="error">{error}</Alert>}
+
+                <label className="block">
+                    <span className={label}>{t('license.planName')}</span>
+                    <input value={name} onChange={(e) => setName(e.target.value)} className={cx(input, 'w-full')} />
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                        <span className={label}>{t('license.planDays')}</span>
+                        <input type="number" min={1} value={days} onChange={(e) => setDays(e.target.value)} className={input} />
+                    </label>
+                    <label className="block">
+                        <span className={label}>{t('license.planPrice')}</span>
+                        <input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} className={input} />
+                    </label>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                    <button type="button" onClick={onClose} className={button('secondary', 'md')}>
+                        {t('common.cancel')}
+                    </button>
+                    <button type="button" onClick={() => void submit()} disabled={!canSubmit || busy} className={button('primary', 'md')}>
+                        {busy ? <Spinner className="h-4 w-4" /> : null}
+                        {t('common.save')}
+                    </button>
+                </div>
+            </section>
+        </div>
+    );
+}

@@ -15,7 +15,7 @@ class RenewLicenseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'plan' => ['required', Rule::in(array_keys(config('licensing.plans')))],
+            'plan' => ['required', Rule::exists('license_plans', 'slug')->where('is_active', true)],
             'method' => ['required', Rule::in(['espece', 'carte', 'flooz', 'tmoney'])],
             'external_reference' => ['nullable', 'string', 'max:255'],
         ];

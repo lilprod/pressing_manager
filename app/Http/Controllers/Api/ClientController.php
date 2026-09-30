@@ -8,6 +8,7 @@ use App\Models\Client;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ClientController extends ApiController
 {
@@ -73,10 +74,24 @@ class ClientController extends ApiController
         return response()->json($client);
     }
 
+    #[OA\Delete(
+        path: '/clients/{client}',
+        summary: 'Supprime un client (refusé s\'il a des commandes : désactivez-le plutôt)',
+        tags: ['Clients'],
+        security: [['sanctum' => []]],
+        responses: [
+            new OA\Response(response: 204, description: 'Client supprimé'),
+            new OA\Response(response: 409, description: 'Le client a des commandes : suppression refusée'),
+        ]
+    )]
     public function destroy(Request $request, Client $client): JsonResponse
     {
         $this->authorizeAgency($request->user(), $client->agency_id);
         $this->authorizePermission($request->user(), 'clients.manage');
+
+        if ($client->orders()->exists()) {
+            throw new HttpException(409, "Ce client a des commandes : impossible de le supprimer. Désactivez-le plutôt.");
+        }
 
         $client->delete();
 

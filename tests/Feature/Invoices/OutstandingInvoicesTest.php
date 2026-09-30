@@ -112,6 +112,23 @@ class OutstandingInvoicesTest extends TestCase
         $this->assertCount(1, $response->json('data'));
     }
 
+    public function test_the_total_outstanding_covers_every_matching_invoice_not_just_the_current_page(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        for ($i = 1; $i <= 25; $i++) {
+            $this->makeInvoice($agency, $client, $i, 'emise', 1000);
+        }
+
+        $response = $this->actingAs($accueil)->getJson('/api/invoices?per_page=20');
+
+        $response->assertOk();
+        $this->assertCount(20, $response->json('data'));
+        $response->assertJsonPath('total_outstanding', 25000);
+    }
+
     public function test_listing_outstanding_invoices_requires_the_invoices_manage_permission(): void
     {
         $this->seedRbac();

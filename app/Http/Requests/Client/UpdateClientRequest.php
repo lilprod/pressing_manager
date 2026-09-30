@@ -26,6 +26,7 @@ class UpdateClientRequest extends FormRequest
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
+            'is_active' => ['boolean'],
         ];
     }
 }

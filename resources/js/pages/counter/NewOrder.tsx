@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { api, ApiError } from '../../lib/api';
 import { queuePendingOrder } from '../../lib/offlineDb';
 import { readCachedServices, writeCachedServices } from '../../lib/servicesCache';
 import { readCachedIntakeConditions, writeCachedIntakeConditions } from '../../lib/intakeConditionsCache';
 import { readRecentClients, rememberClients } from '../../lib/recentClientsCache';
 import { syncEvents } from '../../lib/sync';
-import type { Client, IntakeCondition, Order, Service } from '../../types';
+import type { Client, IntakeCondition, Order, Service, ServiceCategory } from '../../types';
 import {
     Award,
     Building2,
@@ -16,6 +17,7 @@ import {
     ChevronDown,
     ChevronRight,
     ClipboardList,
+    Droplets,
     Minus,
     Palette,
     Phone,
@@ -42,6 +44,8 @@ import { Alert, EmptyState, Spinner } from '../../components/ui/Feedback';
 import { Pill, TONES, type Tone } from '../../components/ui/StatusBadge';
 import { button, card, cardPadded, cx, inputLg, inputSm, label, sectionTitle } from '../../components/ui/styles';
 
+const SERVICE_CATEGORY_ORDER: ServiceCategory[] = ['nettoyage', 'lavage', 'repassage', 'retouche', 'teinture', 'autre'];
+
 interface CartLine {
     service_id: number;
     quantity: number;
@@ -54,13 +58,16 @@ export default function NewOrder() {
     const { user, activeAgencyId } = useAuth();
     const { t } = useI18n();
     const { money } = useFormat();
+    const { settings } = useSettings();
     const navigate = useNavigate();
+    const taxRate = settings?.tax_rate ?? 0;
 
     const agencyId = user?.agency_id ?? activeAgencyId;
 
     const [services, setServices] = useState<(Service & { effective_price: number })[]>([]);
     const [intakeConditions, setIntakeConditions] = useState<IntakeCondition[]>(readCachedIntakeConditions());
     const [expandedLine, setExpandedLine] = useState<number | null>(null);
+    const [serviceQuery, setServiceQuery] = useState('');
     const [clientQuery, setClientQuery] = useState('');
     const [clientResults, setClientResults] = useState<Client[]>(readRecentClients());
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -147,7 +154,11 @@ export default function NewOrder() {
         setDiscount(rate > 0 ? Math.round(total * rate) : 0);
     }, [selectedClient, total, discountEdited]);
 
-    const grandTotal = Math.max(0, total - discount);
+    // Même formule que InvoiceService::createFromOrder côté back, pour que le total annoncé
+    // au comptoir corresponde exactement à celui de la facture générée ensuite (TVA incluse).
+    const taxableBase = Math.max(0, total - discount);
+    const taxAmount = Math.round(taxableBase * taxRate);
+    const grandTotal = taxableBase + taxAmount;
 
     function addLine(serviceId: number) {
         setCart((current) => {
@@ -256,6 +267,31 @@ export default function NewOrder() {
     const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
     const submitHint = !selectedClient ? t('order.hintClient') : cart.length === 0 ? t('order.hintItems') : null;
 
+    // Le catalogue peut compter plusieurs centaines de services : regroupés par
+    // catégorie, et sans recherche limités par catégorie, pour garder l'écran
+    // de comptoir utilisable.
+    const SERVICE_PREVIEW_LIMIT_PER_CATEGORY = 9;
+    const trimmedServiceQuery = serviceQuery.trim().toLowerCase();
+    const filteredServices = useMemo(() => {
+        if (!trimmedServiceQuery) return services;
+        return services.filter(
+            (s) => s.name.toLowerCase().includes(trimmedServiceQuery) || s.code.toLowerCase().includes(trimmedServiceQuery),
+        );
+    }, [services, trimmedServiceQuery]);
+    const groupedServices = useMemo(() => {
+        const groups = new Map<string, typeof filteredServices>();
+        for (const service of filteredServices) {
+            const list = groups.get(service.category) ?? [];
+            list.push(service);
+            groups.set(service.category, list);
+        }
+        return SERVICE_CATEGORY_ORDER.filter((category) => groups.has(category)).map((category) => {
+            const items = groups.get(category)!;
+            const visible = trimmedServiceQuery ? items : items.slice(0, SERVICE_PREVIEW_LIMIT_PER_CATEGORY);
+            return { category, items: visible, hiddenCount: items.length - visible.length };
+        });
+    }, [filteredServices, trimmedServiceQuery]);
+
     return (
         <div className="space-y-6">
             <PageHeader title={t('order.new')} subtitle={t('order.newSubtitle')} icon={ShoppingBag} />
@@ -263,7 +299,7 @@ export default function NewOrder() {
             {feedback && <Alert tone="success">{feedback}</Alert>}
             {error && <Alert tone="error">{error}</Alert>}
 
-            <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_320px] lg:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_340px] lg:grid-cols-[minmax(0,1fr)_420px]">
                 <div className="min-w-0 space-y-6">
                     <section aria-labelledby="client-heading" className={cardPadded}>
                         <StepHeading id="client-heading" step={1} title={t('order.client')} />
@@ -350,49 +386,54 @@ export default function NewOrder() {
                         ) : services.length === 0 ? (
                             <EmptyState icon={Tag} title={t('order.noServices')} />
                         ) : (
-                            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-                                {services.map((service) => {
-                                    const inCart = cart.find((l) => l.service_id === service.id)?.quantity ?? 0;
-                                    const meta = categoryMeta(service.category);
-                                    const Icon = meta.icon;
-                                    const categoryKey = `service.category.${service.category}`;
-                                    const categoryLabel = t(categoryKey) === categoryKey ? service.category : t(categoryKey);
-                                    return (
-                                        <button
-                                            key={service.id}
-                                            type="button"
-                                            onClick={() => addLine(service.id)}
-                                            className={cx(
-                                                'group relative flex min-h-[8.5rem] flex-col items-start gap-3 rounded-2xl border-2 p-4 text-left transition duration-150 active:scale-[0.97]',
-                                                inCart > 0
-                                                    ? 'border-brand-600 bg-brand-50/70 shadow-card-hover dark:border-brand-300 dark:bg-brand-400/10'
-                                                    : 'border-ink-200/80 bg-white hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-card-hover dark:border-ink-800 dark:bg-ink-900 dark:hover:border-brand-400/50',
-                                            )}
-                                        >
-                                            <span className={cx('flex h-10 w-10 items-center justify-center rounded-xl ring-1 ring-inset', TONES[meta.tone])}>
-                                                <Icon aria-hidden="true" className="h-5 w-5" />
-                                            </span>
-                                            <span className="min-w-0 flex-1">
-                                                <span className="block text-[11px] font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{categoryLabel}</span>
-                                                <span className="mt-0.5 block font-semibold leading-snug text-ink-900 dark:text-ink-50">{service.name}</span>
-                                            </span>
-                                            <span className="font-display text-lg font-bold tabular-nums text-brand-700 dark:text-brand-300">{money(service.effective_price)}</span>
-                                            {inCart > 0 ? (
-                                                <span
-                                                    key={inCart}
-                                                    className="absolute right-3 top-3 flex h-7 min-w-7 animate-pop-in items-center justify-center rounded-full bg-brand-600 px-2 text-sm font-bold text-white shadow-brand dark:bg-brand-300 dark:text-ink-950 dark:shadow-none"
-                                                >
-                                                    {inCart}
-                                                    <span className="sr-only">{t('order.inCart', { count: inCart })}</span>
-                                                </span>
-                                            ) : (
-                                                <span className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-ink-100 text-ink-600 opacity-0 transition group-hover:opacity-100 dark:bg-ink-800 dark:text-ink-300">
-                                                    <Plus aria-hidden="true" className="h-4 w-4" />
-                                                </span>
-                                            )}
-                                        </button>
-                                    );
-                                })}
+                            <div className="space-y-3">
+                                <label htmlFor="service-search" className="sr-only">
+                                    {t('order.searchService')}
+                                </label>
+                                <div className="relative">
+                                    <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-500 dark:text-ink-350" />
+                                    <input
+                                        id="service-search"
+                                        type="search"
+                                        placeholder={t('order.searchService')}
+                                        value={serviceQuery}
+                                        onChange={(e) => setServiceQuery(e.target.value)}
+                                        className={cx(inputLg, 'pl-12')}
+                                    />
+                                </div>
+
+                                {filteredServices.length === 0 ? (
+                                    <EmptyState compact icon={SearchX} title={t('order.noServiceResults')} />
+                                ) : (
+                                    <div className="space-y-5">
+                                        {groupedServices.map(({ category, items, hiddenCount }) => {
+                                            const categoryKey = `service.category.${category}`;
+                                            const categoryLabel = t(categoryKey) === categoryKey ? category : t(categoryKey);
+                                            return (
+                                                <div key={category}>
+                                                    <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-600 dark:text-ink-350">
+                                                        {categoryLabel}
+                                                    </h3>
+                                                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                                                        {items.map((service) => (
+                                                            <ServiceCard
+                                                                key={service.id}
+                                                                service={service}
+                                                                inCart={cart.find((l) => l.service_id === service.id)?.quantity ?? 0}
+                                                                onAdd={() => addLine(service.id)}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    {hiddenCount > 0 && (
+                                                        <p className="mt-2 text-xs text-ink-600 dark:text-ink-350">
+                                                            {t('order.moreServicesHint', { shown: items.length, total: items.length + hiddenCount })}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </section>
@@ -400,7 +441,7 @@ export default function NewOrder() {
 
                 <aside
                     aria-labelledby="cart-heading"
-                    className={cx(card, 'flex flex-col overflow-hidden md:sticky md:top-32 md:max-h-[calc(100vh-13.5rem)] md:min-h-[26rem]')}
+                    className={cx(card, 'flex flex-col overflow-hidden md:sticky md:top-20 md:max-h-[calc(100vh-9rem)] md:min-h-[26rem]')}
                 >
                     <div className="flex items-center justify-between gap-2 border-b border-ink-200/80 px-5 py-3.5 dark:border-ink-800">
                         <h2 id="cart-heading" className="flex scroll-mt-40 items-center gap-2 font-display text-base font-bold text-ink-900 dark:text-ink-50">
@@ -583,6 +624,11 @@ export default function NewOrder() {
                             />
                         </label>
 
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                            <span className="text-ink-600 dark:text-ink-350">{t('order.subtotal')}</span>
+                            <span className="tabular-nums font-semibold text-ink-800 dark:text-ink-100">{money(total)}</span>
+                        </div>
+
                         <label className="flex items-center justify-between gap-3">
                             <span className="text-sm font-semibold text-ink-700 dark:text-ink-200">{t('order.discount')}</span>
                             <span className="relative">
@@ -600,8 +646,15 @@ export default function NewOrder() {
                             </span>
                         </label>
 
-                        <div className="flex items-end justify-between gap-3">
-                            <span className="text-sm font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('common.total')}</span>
+                        {taxRate > 0 && (
+                            <div className="flex items-center justify-between gap-3 text-sm">
+                                <span className="text-ink-600 dark:text-ink-350">{t('order.tax', { rate: Math.round(taxRate * 100) })}</span>
+                                <span className="tabular-nums font-semibold text-ink-800 dark:text-ink-100">{money(taxAmount)}</span>
+                            </div>
+                        )}
+
+                        <div className="flex items-end justify-between gap-3 border-t border-ink-200/80 pt-3 dark:border-ink-800">
+                            <span className="text-sm font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('order.totalTtc')}</span>
                             <span className="font-display text-3xl font-extrabold tabular-nums text-ink-900 dark:text-white" aria-live="polite">
                                 {money(grandTotal)}
                             </span>
@@ -629,7 +682,7 @@ export default function NewOrder() {
                         <div className="flex items-center gap-3">
                             <div className="min-w-0 flex-1">
                                 <p className="text-xs font-semibold text-ink-600 dark:text-ink-350">{t('order.itemsCount', { count: cartCount })}</p>
-                                <p className="font-display text-xl font-extrabold tabular-nums text-ink-900 dark:text-white">{money(total)}</p>
+                                <p className="font-display text-xl font-extrabold tabular-nums text-ink-900 dark:text-white">{money(grandTotal)}</p>
                             </div>
                             <a href="#cart-heading" className={button('primary', 'md')}>
                                 <Receipt aria-hidden="true" className="h-4 w-4" />
@@ -640,6 +693,55 @@ export default function NewOrder() {
                 </>
             )}
         </div>
+    );
+}
+
+function ServiceCard({
+    service,
+    inCart,
+    onAdd,
+}: {
+    service: Service & { effective_price: number };
+    inCart: number;
+    onAdd: () => void;
+}) {
+    const { t } = useI18n();
+    const { money } = useFormat();
+    const meta = categoryMeta(service.category);
+    const Icon = meta.icon;
+
+    return (
+        <button
+            type="button"
+            onClick={onAdd}
+            className={cx(
+                'group relative flex min-h-[7rem] flex-col items-start gap-3 rounded-2xl border-2 p-4 text-left transition duration-150 active:scale-[0.97]',
+                inCart > 0
+                    ? 'border-brand-600 bg-brand-50/70 shadow-card-hover dark:border-brand-300 dark:bg-brand-400/10'
+                    : 'border-ink-200/80 bg-white hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-card-hover dark:border-ink-800 dark:bg-ink-900 dark:hover:border-brand-400/50',
+            )}
+        >
+            <span className={cx('flex h-10 w-10 items-center justify-center rounded-xl ring-1 ring-inset', TONES[meta.tone])}>
+                <Icon aria-hidden="true" className="h-5 w-5" />
+            </span>
+            <span className="min-w-0 flex-1">
+                <span className="block font-semibold leading-snug text-ink-900 dark:text-ink-50">{service.name}</span>
+            </span>
+            <span className="font-display text-lg font-bold tabular-nums text-brand-700 dark:text-brand-300">{money(service.effective_price)}</span>
+            {inCart > 0 ? (
+                <span
+                    key={inCart}
+                    className="absolute right-3 top-3 flex h-7 min-w-7 animate-pop-in items-center justify-center rounded-full bg-brand-600 px-2 text-sm font-bold text-white shadow-brand dark:bg-brand-300 dark:text-ink-950 dark:shadow-none"
+                >
+                    {inCart}
+                    <span className="sr-only">{t('order.inCart', { count: inCart })}</span>
+                </span>
+            ) : (
+                <span className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-ink-100 text-ink-600 opacity-0 transition group-hover:opacity-100 dark:bg-ink-800 dark:text-ink-300">
+                    <Plus aria-hidden="true" className="h-4 w-4" />
+                </span>
+            )}
+        </button>
     );
 }
 
@@ -666,6 +768,8 @@ function categoryMeta(category: string): { icon: LucideIcon; tone: Tone } {
     switch (category) {
         case 'nettoyage':
             return { icon: WashingMachine, tone: 'brand' };
+        case 'lavage':
+            return { icon: Droplets, tone: 'sky' };
         case 'repassage':
             return { icon: Shirt, tone: 'accent' };
         case 'retouche':

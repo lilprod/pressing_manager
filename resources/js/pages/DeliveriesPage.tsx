@@ -6,6 +6,7 @@ import { api, ApiError } from '../lib/api';
 import { hasPermission } from '../lib/permissions';
 import PageHeader from '../components/ui/PageHeader';
 import { Alert, EmptyState, LoadingState } from '../components/ui/Feedback';
+import Pagination from '../components/ui/Pagination';
 import StatusBadge, { Pill } from '../components/ui/StatusBadge';
 import SignaturePad from '../components/SignaturePad';
 import { button, card, cardPadded, cx, input, inputSm, label, select, sectionTitle } from '../components/ui/styles';
@@ -35,6 +36,12 @@ export default function DeliveriesPage() {
     const requestAgencyId = user?.agency_id ? undefined : (agencyId ?? undefined);
 
     const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+    const [meta, setMeta] = useState<Pick<Paginated<Delivery>, 'current_page' | 'last_page' | 'total'>>({
+        current_page: 1,
+        last_page: 1,
+        total: 0,
+    });
+    const [page, setPage] = useState(1);
     const [zones, setZones] = useState<DeliveryZone[]>([]);
     const [readyOrders, setReadyOrders] = useState<Order[]>([]);
     const [livreurs, setLivreurs] = useState<User[]>([]);
@@ -48,12 +55,12 @@ export default function DeliveriesPage() {
             return;
         }
         setLoading(true);
-        const params = new URLSearchParams({ agency_id: String(agencyId) });
+        const params = new URLSearchParams({ agency_id: String(agencyId), page: String(page) });
         if (mineOnly) params.set('mine', '1');
         if (statusFilter) params.set('status', statusFilter);
 
         Promise.all([
-            api.get<Delivery[]>(`/deliveries?${params}`),
+            api.get<Paginated<Delivery>>(`/deliveries?${params}`),
             api.get<DeliveryZone[]>(`/delivery-zones?agency_id=${agencyId}`),
             canManage
                 ? api.get<Paginated<Order>>(`/orders?agency_id=${agencyId}&status=pret&per_page=50`)
@@ -61,7 +68,8 @@ export default function DeliveriesPage() {
             canManage ? api.get<User[]>(`/users?role=livreur&agency_id=${agencyId}`) : Promise.resolve<User[]>([]),
         ])
             .then(([deliveriesRes, zonesRes, ordersRes, livreursRes]) => {
-                setDeliveries(deliveriesRes);
+                setDeliveries(deliveriesRes.data);
+                setMeta({ current_page: deliveriesRes.current_page, last_page: deliveriesRes.last_page, total: deliveriesRes.total });
                 setZones(zonesRes);
                 setReadyOrders(ordersRes.data);
                 setLivreurs(livreursRes);
@@ -69,7 +77,8 @@ export default function DeliveriesPage() {
             .finally(() => setLoading(false));
     }
 
-    useEffect(reload, [agencyId, mineOnly, statusFilter]);
+    useEffect(reload, [agencyId, mineOnly, statusFilter, page]);
+    useEffect(() => setPage(1), [agencyId, mineOnly, statusFilter]);
 
     if (!agencyId) {
         return (
@@ -92,6 +101,8 @@ export default function DeliveriesPage() {
                 <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
                     <DeliveriesListPanel
                         deliveries={deliveries}
+                        meta={meta}
+                        onPageChange={setPage}
                         canManage={canManage}
                         canFulfill={canFulfill}
                         currentUserId={user?.id ?? null}
@@ -117,6 +128,8 @@ export default function DeliveriesPage() {
 
 function DeliveriesListPanel({
     deliveries,
+    meta,
+    onPageChange,
     canManage,
     canFulfill,
     currentUserId,
@@ -128,6 +141,8 @@ function DeliveriesListPanel({
     onChanged,
 }: {
     deliveries: Delivery[];
+    meta: Pick<Paginated<Delivery>, 'current_page' | 'last_page' | 'total'>;
+    onPageChange: (page: number) => void;
     canManage: boolean;
     canFulfill: boolean;
     currentUserId: number | null;
@@ -190,6 +205,7 @@ function DeliveriesListPanel({
                     ))}
                 </ul>
             )}
+            <Pagination meta={meta} onPageChange={onPageChange} />
         </section>
     );
 }

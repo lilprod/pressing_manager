@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Requests\License\RenewLicenseRequest;
 use App\Models\License;
+use App\Models\LicensePlan;
 use App\Services\LicenseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -61,8 +62,9 @@ class LicenseController extends ApiController
         ], 201);
     }
 
+    /** Plans actifs proposés au renouvellement (voir LicensePlanController::index pour la liste complète, admin). */
     public function plans(): JsonResponse
     {
-        return response()->json(config('licensing.plans'));
+        return response()->json(LicensePlan::where('is_active', true)->orderBy('days')->get());
     }
 }

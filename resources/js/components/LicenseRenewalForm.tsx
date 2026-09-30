@@ -4,7 +4,7 @@ import { useI18n } from '../contexts/I18nContext';
 import { useLicense } from '../contexts/LicenseContext';
 import { api, ApiError } from '../lib/api';
 import { useFormat } from '../lib/format';
-import type { LicensePlanConfig, PaymentMethod } from '../types';
+import type { LicensePlan, PaymentMethod } from '../types';
 import PaymentMethodPicker from './PaymentMethodPicker';
 import { Alert, Spinner } from './ui/Feedback';
 import { button, cx, input, label } from './ui/styles';
@@ -13,7 +13,7 @@ export default function LicenseRenewalForm() {
     const { t } = useI18n();
     const { money } = useFormat();
     const { refresh } = useLicense();
-    const [plans, setPlans] = useState<Record<string, LicensePlanConfig>>({});
+    const [plans, setPlans] = useState<LicensePlan[]>([]);
     const [plan, setPlan] = useState('');
     const [method, setMethod] = useState<PaymentMethod>('espece');
     const [externalReference, setExternalReference] = useState('');
@@ -22,10 +22,9 @@ export default function LicenseRenewalForm() {
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
-        api.get<Record<string, LicensePlanConfig>>('/license/plans').then((data) => {
+        api.get<LicensePlan[]>('/license/plans').then((data) => {
             setPlans(data);
-            const [first] = Object.keys(data);
-            if (first) setPlan(first);
+            if (data[0]) setPlan(data[0].slug);
         });
     }, []);
 
@@ -49,12 +48,6 @@ export default function LicenseRenewalForm() {
         }
     }
 
-    function planLabel(slug: string): string {
-        const key = `license.planName.${slug}`;
-        const translated = t(key);
-        return translated === key ? slug : translated;
-    }
-
     return (
         <form onSubmit={handleSubmit} className="space-y-5">
             {error && <Alert tone="error">{error}</Alert>}
@@ -63,11 +56,11 @@ export default function LicenseRenewalForm() {
             <fieldset>
                 <legend className={label}>{t('license.plan')}</legend>
                 <div className="grid gap-2.5 sm:grid-cols-3">
-                    {Object.entries(plans).map(([slug, config]) => {
-                        const checked = plan === slug;
+                    {plans.map((p) => {
+                        const checked = plan === p.slug;
                         return (
                             <label
-                                key={slug}
+                                key={p.slug}
                                 className={cx(
                                     'relative flex cursor-pointer flex-col gap-1 rounded-xl border-2 p-3.5 transition duration-150',
                                     'has-[:focus-visible]:ring-4 has-[:focus-visible]:ring-brand-500/25',
@@ -79,9 +72,9 @@ export default function LicenseRenewalForm() {
                                 <input
                                     type="radio"
                                     name="license-plan"
-                                    value={slug}
+                                    value={p.slug}
                                     checked={checked}
-                                    onChange={() => setPlan(slug)}
+                                    onChange={() => setPlan(p.slug)}
                                     className="sr-only"
                                 />
                                 {checked && (
@@ -89,11 +82,11 @@ export default function LicenseRenewalForm() {
                                         <Check aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={3} />
                                     </span>
                                 )}
-                                <span className="text-sm font-semibold capitalize text-ink-900 dark:text-ink-50">{planLabel(slug)}</span>
-                                <span className="font-display text-lg font-bold tabular-nums text-ink-900 dark:text-white">{money(config.price)}</span>
+                                <span className="text-sm font-semibold text-ink-900 dark:text-ink-50">{p.name}</span>
+                                <span className="font-display text-lg font-bold tabular-nums text-ink-900 dark:text-white">{money(p.price)}</span>
                                 <span className="inline-flex items-center gap-1 text-xs text-ink-600 dark:text-ink-350">
                                     <CalendarClock aria-hidden="true" className="h-3.5 w-3.5" />
-                                    {t('license.days', { days: config.days })}
+                                    {t('license.days', { days: p.days })}
                                 </span>
                             </label>
                         );

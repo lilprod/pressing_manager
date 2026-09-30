@@ -21,11 +21,18 @@ class InvoiceController extends ApiController
         $this->authorizePermission($request->user(), 'invoices.manage');
         $agencyId = $this->resolveAgencyFilter($request, $request->user());
 
-        $invoices = Invoice::query()
-            ->with('client')
+        $baseQuery = Invoice::query()
             ->whereIn('status', ['emise', 'partiellement_payee'])
             ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
-            ->withSum(['payments as paid_amount' => fn ($query) => $query->where('status', 'complete')], 'amount')
+            ->withSum(['payments as paid_amount' => fn ($query) => $query->where('status', 'complete')], 'amount');
+
+        // Calculé sur l'ensemble des factures impayées correspondant aux filtres, pas
+        // seulement la page affichée : sinon ce total serait faux dès qu'il y a plus
+        // d'une page de résultats.
+        $totalOutstanding = (clone $baseQuery)->get()
+            ->sum(fn (Invoice $invoice) => $invoice->total_amount - (int) ($invoice->paid_amount ?? 0));
+
+        $invoices = $baseQuery->with('client')
             ->oldest('issued_at')
             ->paginate($request->integer('per_page', 20));
 
@@ -35,7 +42,10 @@ class InvoiceController extends ApiController
             return $invoice;
         });
 
-        return response()->json($invoices);
+        return response()->json([
+            ...$invoices->toArray(),
+            'total_outstanding' => $totalOutstanding,
+        ]);
     }
 
     public function storeForOrder(Request $request, Order $order): JsonResponse

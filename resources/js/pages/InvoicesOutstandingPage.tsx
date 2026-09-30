@@ -8,6 +8,7 @@ import { useFormat } from '../lib/format';
 import PageHeader, { Avatar } from '../components/ui/PageHeader';
 import StatusBadge from '../components/ui/StatusBadge';
 import { EmptyState, LoadingState } from '../components/ui/Feedback';
+import Pagination from '../components/ui/Pagination';
 import { card, cx } from '../components/ui/styles';
 import type { Invoice, Paginated } from '../types';
 
@@ -16,21 +17,31 @@ export default function InvoicesOutstandingPage() {
     const { money, dateTime } = useFormat();
     const { activeAgencyId } = useAuth();
     const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [meta, setMeta] = useState<Pick<Paginated<Invoice>, 'current_page' | 'last_page' | 'total'>>({
+        current_page: 1,
+        last_page: 1,
+        total: 0,
+    });
+    const [page, setPage] = useState(1);
+    const [totalDue, setTotalDue] = useState(0);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         setLoading(true);
-        const params = new URLSearchParams();
+        const params = new URLSearchParams({ page: String(page) });
         if (activeAgencyId) params.set('agency_id', String(activeAgencyId));
-        const query = params.toString() ? `?${params}` : '';
         api
-            .get<Paginated<Invoice>>(`/invoices${query}`)
-            .then((res) => setInvoices(res.data))
+            .get<Paginated<Invoice> & { total_outstanding: number }>(`/invoices?${params}`)
+            .then((res) => {
+                setInvoices(res.data);
+                setMeta({ current_page: res.current_page, last_page: res.last_page, total: res.total });
+                setTotalDue(res.total_outstanding);
+            })
             .catch(() => setInvoices([]))
             .finally(() => setLoading(false));
-    }, [activeAgencyId]);
+    }, [activeAgencyId, page]);
 
-    const totalDue = invoices.reduce((sum, invoice) => sum + (invoice.balance_due ?? 0), 0);
+    useEffect(() => setPage(1), [activeAgencyId]);
 
     return (
         <div className="space-y-6">
@@ -104,6 +115,7 @@ export default function InvoicesOutstandingPage() {
                                 );
                             })}
                         </ul>
+                        <Pagination meta={meta} onPageChange={setPage} />
                     </div>
                 </>
             )}

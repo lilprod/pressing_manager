@@ -4,15 +4,22 @@ import { useI18n } from '../contexts/I18nContext';
 import { api, ApiError } from '../lib/api';
 import PageHeader, { Avatar } from '../components/ui/PageHeader';
 import { Alert, EmptyState, LoadingState, Spinner } from '../components/ui/Feedback';
+import Pagination from '../components/ui/Pagination';
 import { Pill } from '../components/ui/StatusBadge';
 import { button, card, cardPadded, cx, input, label, select, sectionTitle } from '../components/ui/styles';
 import { Copy, KeyRound, Pencil, TriangleAlert, UsersRound, X } from 'lucide-react';
-import type { Role, User } from '../types';
+import type { Paginated, Role, User } from '../types';
 
 export default function UsersPage() {
     const { t } = useI18n();
     const { user: me, activeAgencyId } = useAuth();
     const [users, setUsers] = useState<User[]>([]);
+    const [meta, setMeta] = useState<Pick<Paginated<User>, 'current_page' | 'last_page' | 'total'>>({
+        current_page: 1,
+        last_page: 1,
+        total: 0,
+    });
+    const [page, setPage] = useState(1);
     const [roles, setRoles] = useState<Role[]>([]);
     const [loading, setLoading] = useState(true);
     const [temporaryPassword, setTemporaryPassword] = useState<{ email: string; password: string } | null>(null);
@@ -20,17 +27,19 @@ export default function UsersPage() {
 
     function reload() {
         setLoading(true);
-        const params = new URLSearchParams({ full: '1' });
+        const params = new URLSearchParams({ full: '1', page: String(page) });
         if (activeAgencyId) params.set('agency_id', String(activeAgencyId));
-        Promise.all([api.get<User[]>(`/users?${params}`), api.get<Role[]>('/roles')])
+        Promise.all([api.get<Paginated<User>>(`/users?${params}`), api.get<Role[]>('/roles')])
             .then(([usersRes, rolesRes]) => {
-                setUsers(usersRes);
+                setUsers(usersRes.data);
+                setMeta({ current_page: usersRes.current_page, last_page: usersRes.last_page, total: usersRes.total });
                 setRoles(rolesRes);
             })
             .finally(() => setLoading(false));
     }
 
-    useEffect(reload, [activeAgencyId]);
+    useEffect(reload, [activeAgencyId, page]);
+    useEffect(() => setPage(1), [activeAgencyId]);
 
     async function resetPassword(target: User) {
         const result = await api.post<{ temporary_password: string }>(`/users/${target.id}/reset-password`);
@@ -112,6 +121,7 @@ export default function UsersPage() {
                                 ))}
                             </ul>
                         )}
+                        <Pagination meta={meta} onPageChange={setPage} />
                     </div>
 
                     <CreateUserForm roles={roles} onCreated={(email, password) => { setTemporaryPassword({ email, password }); reload(); }} />

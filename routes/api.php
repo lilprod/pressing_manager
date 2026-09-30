@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\IntakeConditionController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\LicenseController;
+use App\Http\Controllers\Api\LicensePlanController;
 use App\Http\Controllers\Api\LoyaltyTierController;
 use App\Http\Controllers\Api\NotificationLogController;
 use App\Http\Controllers\Api\NotificationSettingController;
@@ -60,10 +61,19 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/license/plans', [LicenseController::class, 'plans']);
     Route::post('/license/renew', [LicenseController::class, 'renew']);
 
+    Route::get('/license-plans', [LicensePlanController::class, 'index']);
+    Route::post('/license-plans', [LicensePlanController::class, 'store']);
+    Route::patch('/license-plans/{licensePlan}', [LicensePlanController::class, 'update']);
+    Route::delete('/license-plans/{licensePlan}', [LicensePlanController::class, 'destroy']);
+
     Route::apiResource('clients', ClientController::class)->except(['destroy'])->parameters(['clients' => 'client']);
     Route::delete('/clients/{client}', [ClientController::class, 'destroy']);
 
     Route::get('/services', [ServiceController::class, 'index']);
+    Route::get('/services/catalog', [ServiceController::class, 'catalog']);
+    Route::post('/services', [ServiceController::class, 'store']);
+    Route::patch('/services/{service}', [ServiceController::class, 'update']);
+    Route::patch('/agencies/{agency}/services/{service}', [ServiceController::class, 'updatePricing']);
 
     Route::get('/intake-conditions', [IntakeConditionController::class, 'index']);
 
@@ -121,6 +131,9 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/deliveries/{delivery}/signature', [DeliveryController::class, 'signature']);
 
     Route::get('/roles', [RoleController::class, 'index']);
+    Route::post('/roles', [RoleController::class, 'store']);
+    Route::patch('/roles/{role}', [RoleController::class, 'update']);
+    Route::delete('/roles/{role}', [RoleController::class, 'destroy']);
     Route::get('/permissions', [PermissionController::class, 'index']);
 
     Route::get('/users', [UserController::class, 'index']);

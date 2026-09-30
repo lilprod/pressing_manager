@@ -13,9 +13,12 @@ export interface AppSettings {
     password_require_uppercase: boolean;
     password_require_number: boolean;
     password_require_symbol: boolean;
+    tax_rate: number;
 }
 
 export type RoleSlug = 'admin' | 'manager' | 'accueil' | 'technicien' | 'livreur' | 'client';
+
+export const SYSTEM_ROLE_SLUGS: RoleSlug[] = ['admin', 'manager', 'accueil', 'technicien', 'livreur', 'client'];
 
 export interface Permission {
     id: number;
@@ -24,11 +27,13 @@ export interface Permission {
     group: string;
 }
 
+export type RoleScope = 'global' | 'agency' | 'flexible';
+
 export interface Role {
     id: number;
-    slug: RoleSlug;
+    slug: string;
     name: string;
-    scope: 'global' | 'agency' | 'flexible';
+    scope: RoleScope;
     permissions?: Permission[];
 }
 
@@ -69,6 +74,7 @@ export interface Client {
     loyalty_discount_rate: number;
     loyalty_tier_name: string | null;
     notes: string | null;
+    is_active: boolean;
 }
 
 export interface LoyaltyTier {
@@ -79,14 +85,20 @@ export interface LoyaltyTier {
     is_active: boolean;
 }
 
+export type ServiceCategory = 'nettoyage' | 'lavage' | 'repassage' | 'retouche' | 'teinture' | 'autre';
+
 export interface Service {
     id: number;
     code: string;
     name: string;
-    category: string;
+    category: ServiceCategory;
+    description: string | null;
     base_price: number;
     estimated_duration_hours: number;
+    is_active: boolean;
+    effective_price?: number;
     pivot?: { price_override: number | null; is_active: boolean };
+    agency_pivot?: { price_override: number | null; is_active: boolean } | null;
 }
 
 export type OrderItemStatus =
@@ -205,9 +217,13 @@ export interface LicensePayment {
 
 export type LicensePlanSlug = string;
 
-export interface LicensePlanConfig {
+export interface LicensePlan {
+    id: number;
+    slug: string;
+    name: string;
     days: number;
     price: number;
+    is_active: boolean;
 }
 
 export interface SubscriptionPlan {

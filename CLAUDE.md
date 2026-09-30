@@ -4,6 +4,15 @@ Laravel 12 (API) + React 19/TypeScript (SPA Vite) + PostgreSQL. Multi-agence,
 **mono-tenant par déploiement** (une base par client pressing — voir `docs/ARCHITECTURE.md`
 hypothèse H1, ne pas remettre en cause sans validation produit).
 
+**Décision d'architecture actée (2026-09-30)** : le Cahier des charges v3.0 vise
+Next.js + MySQL/MariaDB + Spatie Permission (voir analyse détaillée référencée en
+§2) ; l'utilisateur a tranché explicitement en faveur de la **stack existante**
+(React/Vite servi par Laravel, même origine, PostgreSQL, RBAC maison). **Ne pas
+migrer vers Next.js/MySQL/Spatie** sauf nouvelle instruction explicite — continuer
+tout développement sur la stack actuelle. Les écarts fonctionnels du CDC restent
+valides et à traiter (liste et priorités en §2) ; seul le socle technique du CDC
+est écarté.
+
 ## Référence design : Figma « SPARK PRESSING »
 
 Maquette cible pour la refonte visuelle en cours :
@@ -74,7 +83,7 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait** (commit `d52b79b`) — retour utilisateur du 2026-09-30 : le design a des écrans dédiés séparés de la liste, pas un panneau/modale inline ; voir convention ci-dessous |
 | 08 Rapports & bilans | Rapports et bilans | `pages/KpiPage.tsx` (route `/kpi`, libellé nav « Rapports & bilans ») | **fait** (2026-09-30) — filtres période + raccourcis, 4 KPI avec variation vs période précédente, tableau « Performance des agences », indicateurs opérationnels existants conservés (hors maquette mais déjà exposés par l'API), raccourcis vers les écrans détaillés. Histogramme CA / répartition paiements / synthèse fidélité / planification omis (§2) |
 | 08 Rapports & bilans | Bilan journalier et performance caissiers | — | **non construit** : quasi intégralement dépendant d'agrégats absents (recettes par mode de paiement et par heure, performance par caissier, remises du jour). Les données existantes (clôture de caisse théorique/compté/écart) sont déjà sur `/cash/closures/:id` ; lien depuis « Rapports détaillés ». Voir §2 |
-| 09 Paramètres | Paramètres (hub) | `pages/SettingsPage.tsx` (route `/settings`) | **fait** (2026-09-30) — l'ancien formulaire unique devient un hub : recherche + filtres par groupe, « État de configuration » (checklist d'identité réelle, `lib/brandingChecklist.ts`), cartes vers les écrans existants uniquement (gating par permission), « Mis à jour le » via `updated_at` (colonne existante, désormais exposée par `GET /settings`) |
+| 09 Paramètres | Paramètres (hub) | `pages/SettingsPage.tsx` (route `/settings`) | **fait** (2026-09-30) — l'ancien formulaire unique devient un hub : recherche + filtres par groupe, « État de configuration » (checklist d'identité réelle, `lib/brandingChecklist.ts`), cartes vers les écrans existants uniquement (gating par permission, y compris « Agences » vers le CRUD livré en parallèle), « Mis à jour le » via `updated_at` (colonne existante, désormais exposée par `GET /settings`) |
 | 09 Paramètres | Branding du pressing | `pages/settings/BrandingSettingsPage.tsx` (route `/settings/branding`) | **fait** (2026-09-30) — nom, logo, favicon, coordonnées + NIF, aperçu en direct (en-tête app + documents), checklist, barre « non enregistré » ; enregistrement partiel de `/settings` (testé) |
 | 09 Paramètres | Sécurité (politique de mots de passe) | `pages/settings/SecuritySettingsPage.tsx` (route `/settings/security`) | **fait** (2026-09-30) — pas d'écran dédié dans la maquette : mise en page calquée sur « Paramètres opérationnels » (node `25:12525`, champs suffixés + bascules). Les réglages opérationnels eux-mêmes (codes agence, délais, workflow, tarification) n'existent pas (§2) |
 | 09 Paramètres | Promotions et fidélité | `pages/LoyaltyPage.tsx` (route `/loyalty`) | **fait** (2026-09-30) — volet fidélité seulement : KPI dérivés de la config (paliers actifs, remise max, règle d'acquisition réelle via `loyalty_amount_per_point` exposé par `GET /settings`), paliers éditables en ligne (le `PATCH /loyalty-tiers/{id}` existait sans UI d'édition). Volet promotions entièrement absent du backend (§2) |
@@ -94,9 +103,17 @@ Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
 - **Retraits en agence** (section 05) : pas de flux dédié comptoir (file "prêt à
   retirer", remise d'articles, encaissement du solde). Seule la livraison à domicile
   (`DeliveriesPage.tsx`) existe — flux différent.
-- **Gestion des agences** (section 10, Multi-agences) : `GET /agencies` est en
-  lecture seule, aucun CRUD. Pas de vue consolidée multi-agences ni de détail
-  d'agence.
+- ~~**Gestion des agences** (section 10, Multi-agences)~~ **fait** (2026-09-30) :
+  CRUD complet (`AgencyController::manage/show/store/update`, permission
+  `agencies.manage`), écrans `pages/agencies/AgenciesPage.tsx` (liste, avec
+  compteurs staff/clients par agence) et `pages/agencies/AgencyFormPage.tsx`
+  (création/édition séparées, routes `/agencies/new` et `/agencies/:id/edit`,
+  convention liste/création/édition habituelle). `GET /agencies` (actives
+  uniquement, utilisé par le sélecteur d'en-tête) reste inchangé et distinct de
+  `GET /agencies/manage` (toutes, paginé, pour cet écran). Construit sans accès
+  Figma direct (rate-limit MCP toujours actif) — à comparer visuellement si
+  l'accès est rétabli. Toujours **pas de vue consolidée multi-agences** (dashboard
+  cross-agences avec devise) — dépend du chantier multi-devise (§2 ci-dessus).
 - **Atelier en vue Kanban** (section 04) : `OrdersList.tsx` est une liste filtrable
   par statut, pas un tableau Kanban par étape. Amélioration UX, pas un gap de
   données (le modèle `OrderItemStatus` le permet déjà).
@@ -105,7 +122,60 @@ Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
   explicitement mono-tenant** (voir `docs/ARCHITECTURE.md`). Ne pas coder cette
   section sans clarifier au préalable si c'est une réinterprétation (l'admin global
   actuel = ce superadmin) ou un vrai chantier multi-tenant — décision produit à
-  prendre avec l'utilisateur avant tout code.
+  prendre avec l'utilisateur avant tout code. **Confirmé par le CDC v3.0** (EF-SUP-01
+  à 04) : Spark (l'éditeur) y est bien un superadmin plateforme avec CRUD `pressings`
+  — cette question (mono-tenant vs multi-tenant) reste ouverte, **distincte** du choix
+  de stack technique tranché ci-dessous (on peut garder React/Vite + PostgreSQL tout
+  en devenant multi-tenant, ou rester mono-tenant — les deux sont orthogonaux).
+
+### Écarts identifiés par le Cahier des charges v3.0 (analyse du 2026-09-30)
+
+Le CDC (`Spark_Pressing_CDC_v3.0.pdf`, fourni par l'utilisateur) décrit une cible
+plus large que la maquette Figma seule. Analyse complète et argumentée :
+[Spark Pressing — CDC v3.0 vs existant](https://claude.ai/artifact/1KQnYZsD1joHDmYcZUDiCF).
+**Point d'architecture tranché (2026-09-30)** : le CDC §7 visait Next.js +
+MySQL/MariaDB + Spatie Permission (front/back découplés) ; l'utilisateur a choisi de
+**continuer sur la stack existante** (React/Vite même origine que l'API Laravel,
+PostgreSQL, RBAC maison) — voir la décision actée en tête de ce fichier. Ne pas
+proposer de migration vers la stack du CDC.
+
+Écarts fonctionnels (hors question d'architecture), par ordre de priorité suggéré :
+
+1. **Multi-devise et tarification historisée par agence** (CDC §8, EF-DEV-01 à 05) —
+   le plus structurant. Manque : `currency_code` (ISO 4217) sur `agencies` ; une vraie
+   `price_list` (agence × article × service × prix × devise × **date d'effet**), alors
+   qu'aujourd'hui `agency_services.price_override` est un prix courant unique sans
+   historique — changer un tarif ne doit jamais modifier le montant d'une facture déjà
+   émise (non négociable, §8.2). Condition préalable au reporting consolidé
+   multi-agences.
+2. **Séparation Article × Service avec règles de ratio de prix automatiques** (CDC
+   §11.1-11.3) — le CDC distingue le catalogue d'Articles (vêtements, global) du
+   Service (type de prestation : classique/express/repassage…, avec des règles du
+   type express = classique × 1,5). L'existant conflate les deux dans un seul modèle
+   `Service` (nom, code, catégorie, prix) ; pas de règle de calcul automatique, pas
+   d'import Excel du catalogue/prix (EF-ART-03, §11.5).
+3. **Tournées de livraison et encaissement mobile** (CDC §10.15, EF-LIV-01 et 03) —
+   `Delivery` existe (photo, signature, statuts, `livreur_id`) mais sans regroupement
+   en tournée (`delivery_round`) et sans collecte du solde restant à la livraison
+   (`DeliveryController::complete()` ne gère aucun paiement, vérifié en code).
+4. **Moteur de règles marketing génériques** (CDC §11.4, EF-CFG-10, EF-CLI-06) —
+   remplacerait à terme les paliers de fidélité actuels (`LoyaltyTier`, simple
+   seuil de points → taux de remise) par un moteur paramétrable (type : bienvenue,
+   palier, saisonnière, volume, code promo, parrainage ; condition JSON ; cumulable ;
+   portée pressing ou agence). Aucun système de codes promo n'existe aujourd'hui.
+5. **QR par lot** (CDC §11.6) : le QR existant est généré par article (`order_items.qr_code`,
+   toujours actif) mais pas regroupable en "lot" pour plusieurs vêtements d'un même
+   dépôt, et pas configurable en option par agence comme le prévoit le CDC.
+6. **Blocage du retrait si impayé, configurable par agence** (EF-RET-05) — à vérifier
+   dans `OrderController`/`RetrieveController` si c'est aujourd'hui figé ou déjà
+   paramétrable ; non confirmé lors de l'analyse.
+
+Points notables où l'existant est **en avance** sur le phasage du CDC (construit avant
+que ce document n'existe, sur demande utilisateur directe) : file hors ligne au
+comptoir (le CDC la met hors périmètre v1, §4.2), rôle Livreur (le CDC l'envisage en
+MVP ou Phase 2, à trancher), notifications SMS/e-mail (le CDC les met en Phase 3).
+Ne pas les retirer sans raison — documenter plutôt l'écart de phasage auprès du
+Product Owner.
 
 #### Éléments de maquette omis faute de données (refonte écran par écran, 2026-09-30)
 
@@ -192,8 +262,7 @@ côté front : chaque élément a été **omis** et attend le backend décrit ic
   badge) : aucun audit des paramètres. Il faudrait une table `settings_audits`
   (clé, ancienne/nouvelle valeur, `user_id`, date) alimentée par
   `SettingsController::update` (et les autres écrans de réglage) + `GET /settings/audit`.
-- Cartes de catégories sans écran/backend, omises : **Agences** (building-2 — CRUD
-  agences, chantier parallèle §10), **Numérotation** (hash — préfixes/format des
+- Cartes de catégories sans écran/backend, omises : **Numérotation** (hash — préfixes/format des
   n° de commande et facture ; `OrderNumberGenerator` est codé en dur), **Horaires et
   délais** (clock-3 — horaires d'ouverture, délais standard/express par défaut),
   **Promotions** (ticket-percent — voir ci-dessous), **Workflow atelier** (workflow —

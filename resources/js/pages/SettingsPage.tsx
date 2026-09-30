@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
     ArrowRight,
     Bell,
+    Building2,
     Crown,
     Gift,
     KeyRound,
@@ -63,6 +64,15 @@ export default function SettingsPage() {
     const expiry = settings?.password_expiry_days;
 
     const categories: Category[] = [
+        {
+            key: 'agencies',
+            group: 'organisation',
+            to: '/agencies',
+            icon: Building2,
+            title: t('agency.title'),
+            detail: t('settingsHub.card.agencies'),
+            allowed: hasPermission(user, 'agencies.manage'),
+        },
         {
             key: 'users',
             group: 'organisation',

@@ -54,6 +54,10 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::post('/profile/password', [ProfileController::class, 'changePassword']);
     Route::get('/users/{user}/photo', [ProfileController::class, 'photo']);
     Route::get('/agencies', [AgencyController::class, 'index']);
+    Route::get('/agencies/manage', [AgencyController::class, 'manage']);
+    Route::get('/agencies/{agency}', [AgencyController::class, 'show']);
+    Route::post('/agencies', [AgencyController::class, 'store']);
+    Route::patch('/agencies/{agency}', [AgencyController::class, 'update']);
 
     Route::post('/settings', [SettingsController::class, 'update']);
 

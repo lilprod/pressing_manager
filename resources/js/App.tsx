@@ -30,6 +30,8 @@ import SecuritySettingsPage from './pages/settings/SecuritySettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import UsersPage from './pages/UsersPage';
 import RolesPermissionsPage from './pages/RolesPermissionsPage';
+import AgenciesPage from './pages/agencies/AgenciesPage';
+import AgencyFormPage from './pages/agencies/AgencyFormPage';
 import StockPage from './pages/StockPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import RhPage from './pages/RhPage';
@@ -103,6 +105,9 @@ export default function App() {
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/users" element={<UsersPage />} />
                     <Route path="/roles-permissions" element={<RolesPermissionsPage />} />
+                    <Route path="/agencies" element={<AgenciesPage />} />
+                    <Route path="/agencies/new" element={<AgencyFormPage />} />
+                    <Route path="/agencies/:id/edit" element={<AgencyFormPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowDownCircle, ArrowUpCircle, Lock, Plus, Wallet } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Lock, Plus, ShieldAlert, Wallet } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
 import { useFormat } from '../../lib/format';
 import { api } from '../../lib/api';
 import PageHeader from '../../components/ui/PageHeader';
-import { EmptyState, LoadingState } from '../../components/ui/Feedback';
+import { Alert, EmptyState, LoadingState, Spinner } from '../../components/ui/Feedback';
 import { Pill } from '../../components/ui/StatusBadge';
 import { button, card, cardPadded, cx, sectionTitle } from '../../components/ui/styles';
 import type { CashClosure, CashMovement, CashSummary, Paginated } from '../../types';
@@ -19,31 +19,50 @@ export default function CashRegisterPage() {
 
     const [summary, setSummary] = useState<CashSummary | null>(null);
     const [movements, setMovements] = useState<CashMovement[]>([]);
+    const [pending, setPending] = useState<CashMovement[]>([]);
     const [closures, setClosures] = useState<CashClosure[]>([]);
     const [loading, setLoading] = useState(true);
+    const [validating, setValidating] = useState<number | null>(null);
+
+    function reload() {
+        if (!agencyId) return;
+        const params = new URLSearchParams({ agency_id: String(agencyId) });
+        return Promise.all([
+            api.get<CashSummary>(`/cash/summary?${params}`),
+            api.get<Paginated<CashMovement>>(`/cash/movements?${params}&per_page=8`),
+            api.get<Paginated<CashMovement>>(`/cash/movements?${params}&status=en_attente&per_page=20`),
+            api.get<Paginated<CashClosure>>(`/cash/closures?${params}&per_page=5`),
+        ]).then(([summaryRes, movementsRes, pendingRes, closuresRes]) => {
+            setSummary(summaryRes);
+            setMovements(movementsRes.data);
+            setPending(pendingRes.data);
+            setClosures(closuresRes.data);
+        });
+    }
 
     useEffect(() => {
         if (!agencyId) {
             setSummary(null);
             setMovements([]);
+            setPending([]);
             setClosures([]);
             setLoading(false);
             return;
         }
         setLoading(true);
-        const params = new URLSearchParams({ agency_id: String(agencyId) });
-        Promise.all([
-            api.get<CashSummary>(`/cash/summary?${params}`),
-            api.get<Paginated<CashMovement>>(`/cash/movements?${params}&per_page=8`),
-            api.get<Paginated<CashClosure>>(`/cash/closures?${params}&per_page=5`),
-        ])
-            .then(([summaryRes, movementsRes, closuresRes]) => {
-                setSummary(summaryRes);
-                setMovements(movementsRes.data);
-                setClosures(closuresRes.data);
-            })
-            .finally(() => setLoading(false));
+        reload()?.finally(() => setLoading(false));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [agencyId]);
+
+    async function handleValidate(movementId: number) {
+        setValidating(movementId);
+        try {
+            await api.post(`/cash/movements/${movementId}/validate`);
+            await reload();
+        } finally {
+            setValidating(null);
+        }
+    }
 
     if (!agencyId) {
         return (
@@ -78,6 +97,37 @@ export default function CashRegisterPage() {
                 <LoadingState />
             ) : (
                 <>
+                    {pending.length > 0 && (
+                        <section className={cx(cardPadded, 'space-y-3 border-amber-300 dark:border-amber-400/30')}>
+                            <Alert tone="warning" icon={ShieldAlert}>
+                                {t('cash.pending.blocker', { count: pending.length })}
+                            </Alert>
+                            <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                                {pending.map((m) => (
+                                    <li key={m.id} className="flex flex-wrap items-center gap-3 py-3">
+                                        <div className="min-w-0 flex-1 basis-full sm:basis-auto">
+                                            <p className="font-semibold text-ink-900 dark:text-ink-50">{m.reason}</p>
+                                            <p className="text-xs text-ink-500 dark:text-ink-400">
+                                                {t(`cash.movementCategory.${m.category}`)} · {dateTime(m.occurred_at)}
+                                                {m.creator && ` · ${m.creator.name}`}
+                                            </p>
+                                        </div>
+                                        <span className="font-display font-bold tabular-nums text-ink-900 dark:text-white">{money(m.amount)}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => void handleValidate(m.id)}
+                                            disabled={validating === m.id}
+                                            className={button('primary', 'sm')}
+                                        >
+                                            {validating === m.id ? <Spinner className="h-4 w-4" /> : null}
+                                            {t('cash.pending.validate')}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </section>
+                    )}
+
                     {summary && (
                         <section className={cx(cardPadded, 'space-y-4')}>
                             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -105,6 +155,22 @@ export default function CashRegisterPage() {
                                 <div>
                                     <dt className="text-ink-500 dark:text-ink-400">{t('cash.summary.manualOut')}</dt>
                                     <dd className="font-semibold tabular-nums text-red-700 dark:text-red-400">-{money(summary.manual_out_total)}</dd>
+                                </div>
+                            </dl>
+                            <dl className="grid grid-cols-3 gap-4 border-t border-ink-200/80 pt-4 text-sm dark:border-ink-800">
+                                <div>
+                                    <dt className="text-ink-500 dark:text-ink-400">{t('cash.method.espece')}</dt>
+                                    <dd className="font-semibold tabular-nums text-ink-900 dark:text-white">{money(summary.by_method.espece.theoretical)}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-ink-500 dark:text-ink-400">{t('cash.method.mobile_money')}</dt>
+                                    <dd className="font-semibold tabular-nums text-ink-900 dark:text-white">
+                                        {money(summary.by_method.mobile_money.theoretical)}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt className="text-ink-500 dark:text-ink-400">{t('cash.method.carte')}</dt>
+                                    <dd className="font-semibold tabular-nums text-ink-900 dark:text-white">{money(summary.by_method.carte.theoretical)}</dd>
                                 </div>
                             </dl>
                         </section>
@@ -140,6 +206,7 @@ export default function CashRegisterPage() {
                                                     {m.creator && ` · ${m.creator.name}`}
                                                 </p>
                                             </div>
+                                            {m.status === 'en_attente' && <Pill tone="amber">{t('cash.pending.badge')}</Pill>}
                                             <span
                                                 className={cx(
                                                     'shrink-0 font-display font-bold tabular-nums',

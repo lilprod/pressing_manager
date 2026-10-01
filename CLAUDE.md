@@ -78,7 +78,7 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`) |
 | 03 Clients & fidélité | Nouveau/Modifier client | `pages/clients/ClientFormPage.tsx` (routes `/clients/new`, `/clients/:id/edit`) | **fait** (commit `11de473`, écrans séparés depuis commit `eaf68bf`) — a aussi exposé le champ `notes` (backend déjà prêt, jamais affiché côté front) |
 | 03 Clients & fidélité | Fiche client (consultation) | panneau détail dans `ClientsList.tsx` | **fait** — reste un panneau latéral sur la liste (pas de retour utilisateur demandant un écran séparé pour la consultation, contrairement à la création/édition) |
-| 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait, mais écart de fidélité important confirmé** (captures Figma fournies le 2026-09-30, voir §2) — construit sans accès Figma direct, version MVP fonctionnelle (mouvements simples, clôture = comptant vs théorique) mais la maquette réelle est beaucoup plus riche : rapprochement par moyen de paiement, checklist de clôture, double contrôle/validation sur mouvement sensible, pièces justificatives, rapport PDF. Détail complet en §2 — chantier de renforcement à prioriser avec l'utilisateur, pas juste un ajustement visuel |
+| 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait, renforcement livré** (2026-10-01) — rapprochement par moyen de paiement (espèces/mobile money/carte), checklist de clôture obligatoire, double contrôle sur mouvement sensible (seuil configurable), pièces justificatives, rapport PDF de clôture. Restent différés : distinction dépôt/solde sur `Payment`, vue « opérateurs de la journée », notification au contrôleur (aucun canal interne staff n'existe) — détail en §2 |
 | 07 Articles & tarifs | Catalogue (liste) | `pages/ServicesPage.tsx` | **fait, mais écart de fidélité important confirmé** (captures Figma fournies le 2026-09-30, voir §2) — liste fonctionnelle simple ; la maquette montre un vrai hub (stats, tarifs au kilo, import Excel, historique, filtres avancés) |
 | 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait, mais écart de fidélité important confirmé** (voir §2) — formulaire simple (prix fixe unique) ; la maquette montre un système de facturation Pièce/Kilo/Mixte avec grilles de prix dégressives, règles de validation, disponibilité par agence détaillée. Convention liste/création/édition elle-même correcte, voir ci-dessous |
 | 08 Rapports & bilans | Rapports et bilans | `pages/KpiPage.tsx` (route `/kpi`, libellé nav « Rapports & bilans ») | **fait** (2026-09-30) — filtres période + raccourcis, 4 KPI avec variation vs période précédente, tableau « Performance des agences », indicateurs opérationnels existants conservés (hors maquette mais déjà exposés par l'API), raccourcis vers les écrans détaillés. Histogramme CA / répartition paiements / synthèse fidélité / planification omis (§2) |
@@ -490,48 +490,51 @@ de documenter des gaps définitifs (non fait ici faute de temps — capture reç
 fin de session).
 
 **06 Caisse — Clôture et rapprochement journalier, Nouveau mouvement** (captures
-Figma fournies par l'utilisateur le 2026-09-30, pas de node Figma exact) — la
-maquette réelle est nettement plus riche que `CashService`/`CashClosure` actuels :
-- **Rapprochement par moyen de paiement** (Espèces / Mobile Money / Carte-Virement,
-  théorique vs réel/relevé, statut Conforme par ligne) : `CashClosure` ne stocke
-  qu'un solde espèces global (`counted_balance`), aucune ventilation par méthode de
-  paiement. Il faudrait décomposer `cash_payments_total` par `payments.method` et
-  saisir un compté par méthode à la clôture (`closure_counts` : méthode, théorique,
-  compté).
-- **Distinction recettes de nouveaux dépôts vs paiements de solde** (612 500 FCFA/31
-  dépôts vs 248 000 FCFA/18 retraits) : notre `Payment` ne distingue pas
-  acompte-à-la-création vs règlement de solde ultérieur ; même agrégat aujourd'hui.
-- **Checklist de clôture obligatoire** (6 étapes : journal vérifié, espèces
-  recomptées, relevés Mobile Money, paiements carte vérifiés, anomalies traitées,
-  double contrôle) : aucune notion de checklist, la clôture actuelle est un simple
-  formulaire à un seul champ (`counted_balance`).
-- **Justification obligatoire si écart non nul** (motif + preuve, validation manager
-  tracée) : `CashClosure.notes` existe mais n'est jamais rendu obligatoire même à
-  écart ≠ 0 ; pas de workflow d'approbation manager séparé.
-- **Rapport PDF de clôture** (« Clôture_BG_2026-09-28.pdf ») : aucune génération PDF
-  pour les clôtures (contrairement aux tickets/factures qui existent déjà via
-  DomPDF — même moteur réutilisable).
-- **Opérateurs de la journée** (qui a fait quoi : ouverture, comptage, validations,
-  statut « Vérifié ») : pas de vue agrégée par utilisateur sur la période, seul
-  `CashMovement.created_by`/`CashClosure.closed_by` existent en base brute.
-- **Mouvement de caisse structuré** : la maquette a une **Catégorie*** (dropdown,
-  obligatoire), un **Mode de paiement**, un **Bénéficiaire/fournisseur***, une
-  **Référence interne**, un **Commentaire**, et une **pièce justificative**
-  (upload, chiffré, lié au journal d'audit). `CashMovement` actuel n'a que
-  `type`/`amount`/`reason` (texte libre)/`note` — pas de catégorie structurée, pas
-  de bénéficiaire, pas de pièce jointe.
-- **Double contrôle / validation manager sur mouvement sensible** (seuil 250 000
-  FCFA → état « Brouillon » puis « En attente » jusqu'à seconde validation, avec
-  notification au contrôleur) : `CashMovement` est créé instantanément, sans état de
-  brouillon ni workflow d'approbation. Implique un champ `status`
-  (brouillon/en_attente/validé), un seuil configurable, et une notification.
-- **Traçabilité horodatée du mouvement** (brouillon créé → règle appliquée →
-  seconde validation, avec acteur et heure à chaque étape) : `AuditLog` générique
-  existe mais n'est pas présenté sous cette forme dédiée au mouvement.
-- Conclusion : le module livré est un MVP fonctionnel correct (calcul du solde
-  théorique, clôture simple) mais qui ne couvre qu'une fraction de ce que montre la
-  maquette. À traiter comme un **chantier de renforcement à part entière** si la
-  fidélité complète est souhaitée, pas comme un ajustement cosmétique.
+Figma fournies par l'utilisateur le 2026-09-30, renforcement livré le 2026-10-01)
+— **la majorité du chantier est faite**, deux points restent explicitement différés :
+- ~~**Rapprochement par moyen de paiement**~~ **fait** : table `cash_closure_counts`
+  (méthode espece/mobile_money/carte, théorique/compté/écart), `CashService::previewBalance()`
+  retourne `by_method`, `CashClosureFormPage.tsx` affiche les 3 lignes avec saisie du
+  compté. « Carte-Virement » de la maquette couvre uniquement `payments.method = carte`
+  (aucun moyen « virement » n'existe dans l'enum) — simplification assumée.
+- **Distinction recettes de nouveaux dépôts vs paiements de solde** : **différé** —
+  `Payment` ne porte toujours aucun champ de contexte (dépôt/solde/manuel) ; l'ajouter
+  proprement demande de retoucher tous les points d'entrée (`PaymentController::storeCash`,
+  `PickupService`, `InvoicePanel.tsx`), gardé hors scope de cette passe.
+- ~~**Checklist de clôture obligatoire**~~ **fait** : `cash_closures.checklist` (JSON),
+  les 6 étapes de `config('cash.closure_checklist_steps')` sont exigées intégralement
+  par `CashService::closeRegister()` (422 sinon) — pas un simple habillage visuel.
+- ~~**Justification obligatoire si écart non nul**~~ **fait** : si un écart est détecté
+  sur n'importe laquelle des 3 méthodes, `notes` devient obligatoire côté service (422
+  sinon). Le **workflow d'approbation manager séparé sur la clôture elle-même** (pas sur
+  les mouvements, voir double contrôle ci-dessous) reste absent — différé, non demandé
+  explicitement par la maquette au-delà de la justification textuelle.
+- ~~**Rapport PDF de clôture**~~ **fait** : `CashService::closeRegister()` génère un PDF
+  (DomPDF, `resources/views/cash/closure-pdf.blade.php`) à chaque clôture, stocké et
+  téléchargeable via `GET /cash/closures/{id}/pdf` (bouton sur `CashClosureDetail.tsx`).
+- **Opérateurs de la journée** (vue agrégée par utilisateur : ouverture, comptage,
+  validations) : **différé** — relève du reporting (recoupe l'agrégat
+  `GET /reports/daily` déjà noté en §2 « 08 Bilan journalier »), pas ajouté ici.
+- ~~**Mouvement de caisse structuré**~~ **fait** : `cash_movements` gagne `category`
+  (enum fourniture/salaire/dépôt banque/retrait banque/remboursement/autre — liste posée
+  par hypothèse, aucun Figma exact disponible, à confirmer), `counterparty`, `reference`,
+  et `proof_path` (upload chiffré par le disque de stockage configuré, servi via
+  `GET /cash/movements/{id}/proof` avec vérification d'agence, jamais d'URL publique
+  directe).
+- ~~**Double contrôle / validation manager sur mouvement sensible**~~ **fait, simplifié** :
+  seuil configurable (`config('cash.sensitive_movement_threshold')`, 250 000 FCFA par
+  défaut, pas encore par agence), `CashMovement.status` (`valide`/`en_attente` — pas de
+  3e état « brouillon », jugé redondant), `POST /cash/movements/{id}/validate`. **Aucune
+  notification au contrôleur** (aucun canal de notification interne aux utilisateurs
+  n'existe dans l'application, seul `NotificationService` cible les clients) — le
+  mouvement en attente n'est donc visible que via la bannière de blocage sur
+  `CashRegisterPage.tsx`. La clôture est bloquée tant qu'un mouvement reste en attente
+  (vérifié par `CashService::closeRegister()`).
+- **Traçabilité horodatée du mouvement** (brouillon créé → règle appliquée → seconde
+  validation, avec acteur et heure à chaque étape) : partiellement fait —
+  `validated_by`/`validated_at` tracent la validation, mais pas de présentation
+  chronologique dédiée façon « journal d'audit » à l'écran (differé, recoupe le même
+  besoin que pour les Retraits et la Fiche dépôt).
 
 **07 Articles & tarifs — Catalogue et fiche article** (captures Figma fournies par
 l'utilisateur le 2026-09-30, pas de node Figma exact) :

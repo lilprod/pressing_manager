@@ -11,13 +11,15 @@ class CashMovement extends Model
     use Auditable;
 
     protected $fillable = [
-        'agency_id', 'type', 'amount', 'reason', 'note', 'created_by', 'occurred_at',
+        'agency_id', 'type', 'category', 'amount', 'reason', 'counterparty', 'reference', 'note',
+        'proof_path', 'status', 'created_by', 'validated_by', 'validated_at', 'occurred_at',
     ];
 
     protected function casts(): array
     {
         return [
             'occurred_at' => 'datetime',
+            'validated_at' => 'datetime',
         ];
     }
 
@@ -34,5 +36,11 @@ class CashMovement extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    // Même piège que `creator()` : nommée `validator`, pas `validatedBy`.
+    public function validator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'validated_by');
     }
 }

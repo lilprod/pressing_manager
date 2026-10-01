@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Lock, StickyNote } from 'lucide-react';
+import { ArrowLeft, Download, Lock, StickyNote } from 'lucide-react';
 import { useI18n } from '../../contexts/I18nContext';
 import { useFormat } from '../../lib/format';
 import { api, ApiError } from '../../lib/api';
 import { Alert, LoadingState } from '../../components/ui/Feedback';
 import { Pill } from '../../components/ui/StatusBadge';
-import { cardPadded, cx, sectionTitle, textLink } from '../../components/ui/styles';
+import { button, cardPadded, cx, sectionTitle, textLink } from '../../components/ui/styles';
 import type { CashClosure } from '../../types';
+
+const CHECKLIST_STEPS = [
+    'journal_verified',
+    'cash_recounted',
+    'mobile_money_statements_checked',
+    'card_payments_verified',
+    'anomalies_handled',
+    'double_control_done',
+] as const;
 
 export default function CashClosureDetail() {
     const { id } = useParams<{ id: string }>();
@@ -28,6 +37,14 @@ export default function CashClosureDetail() {
             })
             .finally(() => setLoading(false));
     }, [id]);
+
+    async function downloadPdf() {
+        if (!closure) return;
+        const blob = await api.blob(`/cash/closures/${closure.id}/pdf`);
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    }
 
     const backLink = (
         <Link to="/cash" className={cx(textLink, 'inline-flex items-center gap-1.5 text-sm')}>
@@ -54,15 +71,66 @@ export default function CashClosureDetail() {
             {backLink}
 
             <section className={cx(cardPadded, 'space-y-5')}>
-                <div className="flex items-center gap-3">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-ink-100 text-ink-700 ring-1 ring-inset ring-ink-200 dark:bg-ink-800 dark:text-ink-200 dark:ring-ink-700">
-                        <Lock aria-hidden="true" className="h-5 w-5" />
-                    </span>
-                    <div>
-                        <h1 className="font-display text-xl font-bold text-ink-900 dark:text-white">{t('cash.closureDetail.title')}</h1>
-                        <p className="text-sm text-ink-600 dark:text-ink-350">{date(closure.business_date)}</p>
+                <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-ink-100 text-ink-700 ring-1 ring-inset ring-ink-200 dark:bg-ink-800 dark:text-ink-200 dark:ring-ink-700">
+                            <Lock aria-hidden="true" className="h-5 w-5" />
+                        </span>
+                        <div>
+                            <h1 className="font-display text-xl font-bold text-ink-900 dark:text-white">{t('cash.closureDetail.title')}</h1>
+                            <p className="text-sm text-ink-600 dark:text-ink-350">{date(closure.business_date)}</p>
+                        </div>
                     </div>
+                    {closure.pdf_path && (
+                        <button type="button" onClick={() => void downloadPdf()} className={button('secondary', 'sm')}>
+                            <Download aria-hidden="true" className="h-4 w-4" />
+                            {t('cash.closureDetail.downloadPdf')}
+                        </button>
+                    )}
                 </div>
+
+                {closure.counts && closure.counts.length > 0 && (
+                    <div className="space-y-2 border-t border-ink-200/80 pt-4 dark:border-ink-800">
+                        <h3 className={cx(sectionTitle, 'text-sm')}>{t('cash.closureForm.reconciliation')}</h3>
+                        <ul className="space-y-2">
+                            {closure.counts.map((c) => (
+                                <li key={c.id} className="flex items-center justify-between rounded-xl border border-ink-200/80 px-3 py-2 text-sm dark:border-ink-800">
+                                    <span className="font-medium text-ink-800 dark:text-ink-100">{t(`cash.method.${c.method}`)}</span>
+                                    <span className="text-xs text-ink-500 dark:text-ink-400">
+                                        {t('cash.closureForm.theoretical')} {money(c.theoretical_amount)} · {t('cash.closures.counted')} {money(c.counted_amount)}
+                                    </span>
+                                    {c.variance === 0 ? (
+                                        <Pill tone="emerald">{t('cash.closureForm.varianceOk')}</Pill>
+                                    ) : (
+                                        <Pill tone={c.variance > 0 ? 'sky' : 'rose'}>
+                                            {c.variance > 0 ? '+' : ''}
+                                            {money(c.variance)}
+                                        </Pill>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
+                {closure.checklist && (
+                    <div className="space-y-1.5 border-t border-ink-200/80 pt-4 dark:border-ink-800">
+                        <h3 className={cx(sectionTitle, 'text-sm')}>{t('cash.closureForm.checklist')}</h3>
+                        <ul className="space-y-1 text-sm text-ink-700 dark:text-ink-200">
+                            {CHECKLIST_STEPS.map((step) => (
+                                <li key={step} className="flex items-center gap-2">
+                                    <span
+                                        className={cx(
+                                            'h-1.5 w-1.5 shrink-0 rounded-full',
+                                            closure.checklist.includes(step) ? 'bg-emerald-600 dark:bg-emerald-400' : 'bg-ink-300 dark:bg-ink-600',
+                                        )}
+                                    />
+                                    {t(`cash.checklist.${step}`)}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 <dl className="space-y-2 border-t border-ink-200/80 pt-4 text-sm dark:border-ink-800">
                     <div className="flex justify-between">

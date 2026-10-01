@@ -7,11 +7,22 @@ import { useFormat } from '../../lib/format';
 import { api, ApiError } from '../../lib/api';
 import { Alert, LoadingState, Spinner } from '../../components/ui/Feedback';
 import { button, cardPadded, cx, input, label, textLink } from '../../components/ui/styles';
-import type { CashSummary } from '../../types';
+import type { CashReconciliationMethod, CashSummary } from '../../types';
 
 function today(): string {
     return new Date().toISOString().slice(0, 10);
 }
+
+const METHODS: CashReconciliationMethod[] = ['espece', 'mobile_money', 'carte'];
+
+const CHECKLIST_STEPS = [
+    'journal_verified',
+    'cash_recounted',
+    'mobile_money_statements_checked',
+    'card_payments_verified',
+    'anomalies_handled',
+    'double_control_done',
+] as const;
 
 export default function CashClosureFormPage() {
     const navigate = useNavigate();
@@ -24,7 +35,8 @@ export default function CashClosureFormPage() {
     const [summary, setSummary] = useState<CashSummary | null>(null);
     const [loading, setLoading] = useState(true);
     const [businessDate, setBusinessDate] = useState(today());
-    const [counted, setCounted] = useState('');
+    const [counts, setCounts] = useState<Record<CashReconciliationMethod, string>>({ espece: '', mobile_money: '', carte: '' });
+    const [checklist, setChecklist] = useState<Set<string>>(new Set());
     const [notes, setNotes] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -40,13 +52,38 @@ export default function CashClosureFormPage() {
             .finally(() => setLoading(false));
     }, [agencyId]);
 
+    function toggleStep(step: string) {
+        setChecklist((current) => {
+            const next = new Set(current);
+            if (next.has(step)) next.delete(step);
+            else next.add(step);
+            return next;
+        });
+    }
+
+    function variance(method: CashReconciliationMethod): number | null {
+        if (!summary || counts[method] === '') return null;
+        return Number(counts[method]) - summary.by_method[method].theoretical;
+    }
+
+    const variances = METHODS.map(variance);
+    const hasAnyVariance = variances.some((v) => v !== null && v !== 0);
+    const checklistComplete = CHECKLIST_STEPS.every((step) => checklist.has(step));
+    const allCounted = METHODS.every((m) => counts[m] !== '' && Number(counts[m]) >= 0);
+    const canSubmit = allCounted && businessDate !== '' && summary !== null && checklistComplete && (!hasAnyVariance || notes.trim() !== '');
+
     async function handleSubmit() {
         setBusy(true);
         setError(null);
         try {
             await api.post('/cash/closures', {
                 business_date: businessDate,
-                counted_balance: Number(counted),
+                counts: {
+                    espece: Number(counts.espece),
+                    mobile_money: Number(counts.mobile_money),
+                    carte: Number(counts.carte),
+                },
+                checklist: Array.from(checklist),
                 notes: notes || null,
                 ...(isGlobal ? { agency_id: activeAgencyId } : {}),
             });
@@ -62,11 +99,8 @@ export default function CashClosureFormPage() {
         }
     }
 
-    const variance = summary && counted !== '' ? Number(counted) - summary.expected_balance : null;
-    const canSubmit = counted !== '' && Number(counted) >= 0 && businessDate !== '' && summary !== null;
-
     return (
-        <div className="max-w-xl space-y-4">
+        <div className="max-w-2xl space-y-4">
             <Link to="/cash" className={cx(textLink, 'inline-flex items-center gap-1.5 text-sm')}>
                 <ArrowLeft aria-hidden="true" className="h-4 w-4" />
                 {t('cash.backToRegister')}
@@ -83,36 +117,6 @@ export default function CashClosureFormPage() {
 
                     {error && <Alert tone="error">{error}</Alert>}
 
-                    {summary && (
-                        <div className="space-y-2 rounded-xl border border-ink-200/80 bg-ink-50 p-4 text-sm dark:border-ink-800 dark:bg-ink-950/40">
-                            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-500 dark:text-ink-400">
-                                {t('cash.closureForm.breakdown')}
-                            </p>
-                            <div className="flex justify-between">
-                                <span className="text-ink-600 dark:text-ink-350">{t('cash.summary.opening')}</span>
-                                <span className="font-semibold tabular-nums text-ink-900 dark:text-white">{money(summary.opening_balance)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-ink-600 dark:text-ink-350">{t('cash.summary.cashPayments')}</span>
-                                <span className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                                    +{money(summary.cash_payments_total)}
-                                </span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-ink-600 dark:text-ink-350">{t('cash.summary.manualIn')}</span>
-                                <span className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">+{money(summary.manual_in_total)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-ink-600 dark:text-ink-350">{t('cash.summary.manualOut')}</span>
-                                <span className="font-semibold tabular-nums text-red-700 dark:text-red-400">-{money(summary.manual_out_total)}</span>
-                            </div>
-                            <div className="flex justify-between border-t border-ink-200/80 pt-2 dark:border-ink-800">
-                                <span className="font-semibold text-ink-900 dark:text-white">{t('cash.summary.expected')}</span>
-                                <span className="font-display font-bold tabular-nums text-ink-900 dark:text-white">{money(summary.expected_balance)}</span>
-                            </div>
-                        </div>
-                    )}
-
                     <label className="block">
                         <span className={label}>{t('cash.closureForm.date')}</span>
                         <input
@@ -124,33 +128,71 @@ export default function CashClosureFormPage() {
                         />
                     </label>
 
-                    <label className="block">
-                        <span className={label}>{t('cash.closureForm.counted')}</span>
-                        <input type="number" min={0} value={counted} onChange={(e) => setCounted(e.target.value)} className={cx(input, 'w-full')} />
-                    </label>
-
-                    {variance !== null && (
-                        <div
-                            className={cx(
-                                'rounded-xl px-4 py-3 text-sm font-semibold',
-                                variance === 0
-                                    ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300'
-                                    : variance > 0
-                                      ? 'bg-sky-50 text-sky-800 dark:bg-sky-400/10 dark:text-sky-300'
-                                      : 'bg-red-50 text-red-800 dark:bg-red-400/10 dark:text-red-300',
-                            )}
-                        >
-                            {variance === 0
-                                ? t('cash.closureForm.varianceOk')
-                                : variance > 0
-                                  ? `${t('cash.closureForm.varianceOver')} : +${money(variance)}`
-                                  : `${t('cash.closureForm.varianceShort')} : ${money(variance)}`}
+                    {summary && (
+                        <div className="space-y-3">
+                            <p className={label}>{t('cash.closureForm.reconciliation')}</p>
+                            {METHODS.map((methodKey) => {
+                                const v = variance(methodKey);
+                                return (
+                                    <div key={methodKey} className="space-y-2 rounded-xl border border-ink-200/80 p-4 dark:border-ink-800">
+                                        <div className="flex items-center justify-between">
+                                            <span className="font-semibold text-ink-900 dark:text-ink-50">{t(`cash.method.${methodKey}`)}</span>
+                                            <span className="text-xs text-ink-500 dark:text-ink-400">
+                                                {t('cash.closureForm.theoretical')} : {money(summary.by_method[methodKey].theoretical)}
+                                            </span>
+                                        </div>
+                                        <label className="block">
+                                            <span className="sr-only">{t('cash.closureForm.counted')}</span>
+                                            <input
+                                                type="number"
+                                                min={0}
+                                                value={counts[methodKey]}
+                                                onChange={(e) => setCounts((c) => ({ ...c, [methodKey]: e.target.value }))}
+                                                className={cx(input, 'w-full')}
+                                                placeholder={t('cash.closureForm.counted')}
+                                            />
+                                        </label>
+                                        {v !== null && (
+                                            <p
+                                                className={cx(
+                                                    'text-sm font-semibold',
+                                                    v === 0
+                                                        ? 'text-emerald-700 dark:text-emerald-400'
+                                                        : v > 0
+                                                          ? 'text-sky-700 dark:text-sky-400'
+                                                          : 'text-red-700 dark:text-red-400',
+                                                )}
+                                            >
+                                                {v === 0 ? t('cash.closureForm.varianceOk') : `${v > 0 ? '+' : ''}${money(v)}`}
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
 
+                    <div className="space-y-2">
+                        <span className={label}>{t('cash.closureForm.checklist')}</span>
+                        <ul className="space-y-1.5">
+                            {CHECKLIST_STEPS.map((step) => (
+                                <li key={step}>
+                                    <label className="flex items-center gap-2 text-sm text-ink-800 dark:text-ink-100">
+                                        <input type="checkbox" checked={checklist.has(step)} onChange={() => toggleStep(step)} className="h-4 w-4 rounded" />
+                                        {t(`cash.checklist.${step}`)}
+                                    </label>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+
                     <label className="block">
-                        <span className={label}>{t('cash.closureForm.notes')}</span>
+                        <span className={label}>
+                            {t('cash.closureForm.notes')}
+                            {hasAnyVariance && <span className="text-red-600 dark:text-red-400"> *</span>}
+                        </span>
                         <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={cx(input, 'w-full')} />
+                        {hasAnyVariance && <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{t('cash.closureForm.notesRequiredHint')}</p>}
                     </label>
 
                     <div className="flex justify-end gap-2 border-t border-ink-200/80 pt-5 dark:border-ink-800">

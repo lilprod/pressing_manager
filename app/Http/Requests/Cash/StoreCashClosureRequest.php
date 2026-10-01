@@ -16,7 +16,12 @@ class StoreCashClosureRequest extends FormRequest
         return [
             'agency_id' => [$this->user()->agency_id ? 'prohibited' : 'required', 'integer', 'exists:agencies,id'],
             'business_date' => ['required', 'date', 'before_or_equal:today'],
-            'counted_balance' => ['required', 'integer', 'min:0'],
+            'counts' => ['required', 'array'],
+            'counts.espece' => ['required', 'integer', 'min:0'],
+            'counts.mobile_money' => ['required', 'integer', 'min:0'],
+            'counts.carte' => ['required', 'integer', 'min:0'],
+            'checklist' => ['required', 'array'],
+            'checklist.*' => ['string'],
             'notes' => ['nullable', 'string'],
         ];
     }

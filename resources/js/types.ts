@@ -92,16 +92,26 @@ export interface LoyaltyTier {
 }
 
 export type CashMovementType = 'entree' | 'sortie';
+export type CashMovementCategory = 'fourniture' | 'salaire' | 'depot_banque' | 'retrait_banque' | 'remboursement' | 'autre';
+export type CashMovementStatus = 'valide' | 'en_attente';
 
 export interface CashMovement {
     id: number;
     agency_id: number;
     type: CashMovementType;
+    category: CashMovementCategory;
     amount: number;
     reason: string;
+    counterparty: string | null;
+    reference: string | null;
     note: string | null;
+    proof_path: string | null;
+    status: CashMovementStatus;
     created_by: number | null;
     creator?: { id: number; name: string } | null;
+    validated_by: number | null;
+    validator?: { id: number; name: string } | null;
+    validated_at: string | null;
     occurred_at: string;
 }
 
@@ -112,6 +122,18 @@ export interface CashSummary {
     manual_out_total: number;
     expected_balance: number;
     since: string | null;
+    by_method: Record<'espece' | 'mobile_money' | 'carte', { theoretical: number }>;
+}
+
+export type CashReconciliationMethod = 'espece' | 'mobile_money' | 'carte';
+
+export interface CashClosureCount {
+    id: number;
+    cash_closure_id: number;
+    method: CashReconciliationMethod;
+    theoretical_amount: number;
+    counted_amount: number;
+    variance: number;
 }
 
 export interface CashClosure {
@@ -126,8 +148,11 @@ export interface CashClosure {
     counted_balance: number;
     variance: number;
     notes: string | null;
+    checklist: string[];
+    pdf_path: string | null;
     closed_by: number | null;
     closer?: { id: number; name: string } | null;
+    counts?: CashClosureCount[];
     closed_at: string;
 }
 

@@ -1,23 +1,30 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, Check } from 'lucide-react';
+import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, Check, Paperclip } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
 import { api, ApiError } from '../../lib/api';
 import { Alert, Spinner } from '../../components/ui/Feedback';
-import { button, cardPadded, cx, input, label, textLink } from '../../components/ui/styles';
-import type { CashMovementType } from '../../types';
+import { button, cardPadded, cx, input, label, select, textLink } from '../../components/ui/styles';
+import type { CashMovementCategory, CashMovementType } from '../../types';
+
+const CATEGORIES: CashMovementCategory[] = ['fourniture', 'salaire', 'depot_banque', 'retrait_banque', 'remboursement', 'autre'];
 
 export default function CashMovementFormPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
     const { user, activeAgencyId } = useAuth();
     const isGlobal = user?.agency_id === null;
+    const fileInput = useRef<HTMLInputElement>(null);
 
     const [type, setType] = useState<CashMovementType>('sortie');
+    const [category, setCategory] = useState<CashMovementCategory>('autre');
     const [amount, setAmount] = useState('');
     const [reason, setReason] = useState('');
+    const [counterparty, setCounterparty] = useState('');
+    const [reference, setReference] = useState('');
     const [note, setNote] = useState('');
+    const [proof, setProof] = useState<File | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
@@ -30,13 +37,18 @@ export default function CashMovementFormPage() {
             return;
         }
         try {
-            await api.post('/cash/movements', {
-                type,
-                amount: Number(amount),
-                reason,
-                note: note || null,
-                ...(isGlobal ? { agency_id: activeAgencyId } : {}),
-            });
+            const formData = new FormData();
+            formData.append('type', type);
+            formData.append('category', category);
+            formData.append('amount', amount);
+            formData.append('reason', reason);
+            if (counterparty) formData.append('counterparty', counterparty);
+            if (reference) formData.append('reference', reference);
+            if (note) formData.append('note', note);
+            if (proof) formData.append('proof', proof);
+            if (isGlobal && activeAgencyId) formData.append('agency_id', String(activeAgencyId));
+
+            await api.postForm('/cash/movements', formData);
             navigate('/cash');
         } catch (err) {
             setError(err instanceof ApiError ? err.message : t('common.error'));
@@ -95,6 +107,17 @@ export default function CashMovementFormPage() {
                 </div>
 
                 <label className="block">
+                    <span className={label}>{t('cash.movementForm.category')}</span>
+                    <select value={category} onChange={(e) => setCategory(e.target.value as CashMovementCategory)} className={cx(select, 'w-full')}>
+                        {CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                                {t(`cash.movementCategory.${c}`)}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+
+                <label className="block">
                     <span className={label}>{t('cash.movementForm.amount')}</span>
                     <input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} className={cx(input, 'w-full')} />
                 </label>
@@ -110,9 +133,38 @@ export default function CashMovementFormPage() {
                 </label>
 
                 <label className="block">
+                    <span className={label}>{t('cash.movementForm.counterparty')}</span>
+                    <input value={counterparty} onChange={(e) => setCounterparty(e.target.value)} className={cx(input, 'w-full')} />
+                </label>
+
+                <label className="block">
+                    <span className={label}>{t('cash.movementForm.reference')}</span>
+                    <input value={reference} onChange={(e) => setReference(e.target.value)} className={cx(input, 'w-full')} />
+                </label>
+
+                <label className="block">
                     <span className={label}>{t('cash.movementForm.note')}</span>
                     <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} className={cx(input, 'w-full')} />
                 </label>
+
+                <div className="space-y-2">
+                    <span className={label}>{t('cash.movementForm.proof')}</span>
+                    <input
+                        ref={fileInput}
+                        type="file"
+                        accept="image/png,image/jpeg,application/pdf"
+                        onChange={(e) => setProof(e.target.files?.[0] ?? null)}
+                        className="hidden"
+                    />
+                    <button type="button" onClick={() => fileInput.current?.click()} className={button('secondary', 'md')}>
+                        <Paperclip aria-hidden="true" className="h-4 w-4" />
+                        {proof ? proof.name : t('cash.movementForm.proofAttach')}
+                    </button>
+                </div>
+
+                {Number(amount) >= 250000 && (
+                    <Alert tone="warning">{t('cash.movementForm.sensitiveWarning')}</Alert>
+                )}
 
                 <div className="flex justify-end gap-2 border-t border-ink-200/80 pt-5 dark:border-ink-800">
                     <Link to="/cash" className={button('ghost', 'md')}>

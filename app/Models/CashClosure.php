@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CashClosure extends Model
 {
@@ -12,7 +13,8 @@ class CashClosure extends Model
 
     protected $fillable = [
         'agency_id', 'business_date', 'opening_balance', 'cash_payments_total', 'manual_in_total',
-        'manual_out_total', 'expected_balance', 'counted_balance', 'variance', 'notes', 'closed_by', 'closed_at',
+        'manual_out_total', 'expected_balance', 'counted_balance', 'variance', 'notes', 'checklist',
+        'pdf_path', 'closed_by', 'closed_at',
     ];
 
     protected function casts(): array
@@ -20,12 +22,18 @@ class CashClosure extends Model
         return [
             'business_date' => 'date',
             'closed_at' => 'datetime',
+            'checklist' => 'array',
         ];
     }
 
     public function agency(): BelongsTo
     {
         return $this->belongsTo(Agency::class);
+    }
+
+    public function counts(): HasMany
+    {
+        return $this->hasMany(CashClosureCount::class);
     }
 
     /**

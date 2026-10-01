@@ -112,9 +112,12 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/cash/summary', [CashController::class, 'summary']);
     Route::get('/cash/movements', [CashController::class, 'indexMovements']);
     Route::post('/cash/movements', [CashController::class, 'storeMovement']);
+    Route::post('/cash/movements/{movement}/validate', [CashController::class, 'validateMovement']);
+    Route::get('/cash/movements/{movement}/proof', [CashController::class, 'movementProof']);
     Route::get('/cash/closures', [CashController::class, 'indexClosures']);
     Route::get('/cash/closures/{closure}', [CashController::class, 'showClosure']);
     Route::post('/cash/closures', [CashController::class, 'storeClosure']);
+    Route::get('/cash/closures/{closure}/pdf', [CashController::class, 'closurePdf']);
 
     Route::get('/subscription-plans', [SubscriptionPlanController::class, 'index']);
     Route::post('/subscription-plans', [SubscriptionPlanController::class, 'store']);

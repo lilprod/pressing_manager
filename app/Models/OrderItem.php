@@ -15,7 +15,7 @@ class OrderItem extends Model
 
     protected $fillable = [
         'order_id', 'agency_id', 'service_id', 'qr_code', 'description', 'intake_notes', 'quantity',
-        'quantity_delivered', 'unit_price',
+        'quantity_delivered', 'weight_kg', 'unit_price',
         'status', 'quality_check_result', 'quality_check_notes', 'is_damaged',
         'damage_compensation_amount', 'alteration_requested', 'ready_at', 'delivered_at',
     ];
@@ -25,6 +25,7 @@ class OrderItem extends Model
         return [
             'is_damaged' => 'boolean',
             'alteration_requested' => 'boolean',
+            'weight_kg' => 'float',
             'ready_at' => 'datetime',
             'delivered_at' => 'datetime',
         ];

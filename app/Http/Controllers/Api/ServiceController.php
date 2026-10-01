@@ -7,12 +7,15 @@ use App\Http\Requests\Service\UpdateAgencyServicePricingRequest;
 use App\Http\Requests\Service\UpdateServiceRequest;
 use App\Models\Agency;
 use App\Models\Service;
+use App\Services\ServicePricingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class ServiceController extends ApiController
 {
+    public function __construct(private readonly ServicePricingService $pricing) {}
+
     /**
      * Catalogue de services actifs pour une agence, avec le tarif effectif
      * (surcharge d'agence si définie, sinon tarif de base).
@@ -31,6 +34,7 @@ class ServiceController extends ApiController
         $services = $agency->services()
             ->wherePivot('is_active', true)
             ->where('services.is_active', true)
+            ->with('priceTiers')
             ->get()
             ->map(function ($service) {
                 $service->effective_price = $service->pivot->price_override ?? $service->base_price;
@@ -59,6 +63,7 @@ class ServiceController extends ApiController
                 $term = '%'.$request->string('search')->value().'%';
                 $query->where(fn ($q) => $q->where('name', 'ilike', $term)->orWhere('code', 'ilike', $term));
             })
+            ->with('priceTiers')
             ->orderBy('name')
             ->paginate($request->integer('per_page', 20));
 
@@ -100,19 +105,34 @@ class ServiceController extends ApiController
             $service->agency_pivot = $pivot ? ['price_override' => $pivot->price_override, 'is_active' => $pivot->is_active] : null;
         }
 
-        return response()->json($service);
+        return response()->json($service->load('priceTiers', 'priceHistories.actor'));
     }
 
     public function store(StoreServiceRequest $request): JsonResponse
     {
-        return response()->json(Service::create($request->validated()), 201);
+        $service = $this->pricing->createService($request->validated(), $request->user());
+
+        return response()->json($service, 201);
     }
 
     public function update(UpdateServiceRequest $request, Service $service): JsonResponse
     {
-        $service->update($request->validated());
+        $service = $this->pricing->updateService($service, $request->validated(), $request->user());
 
         return response()->json($service);
+    }
+
+    /** Tableau de bord du catalogue : actifs, catégories, tarif moyen, "à réviser". */
+    public function stats(Request $request): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'services.manage');
+
+        return response()->json([
+            'active_count' => Service::where('is_active', true)->count(),
+            'category_count' => Service::distinct('category')->count('category'),
+            'average_base_price' => (int) round(Service::where('billing_mode', '!=', 'kg')->avg('base_price') ?? 0),
+            'stale_count' => Service::where('updated_at', '<', now()->subMonths(12))->count(),
+        ]);
     }
 
     /**

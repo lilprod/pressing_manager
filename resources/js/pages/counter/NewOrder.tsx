@@ -44,9 +44,25 @@ const SERVICE_CATEGORY_ORDER: ServiceCategory[] = ['nettoyage', 'lavage', 'repas
 interface CartLine {
     service_id: number;
     quantity: number;
+    weight_kg: number | null;
     description: string;
     intake_condition_ids: number[];
     intake_notes: string;
+}
+
+/** Aperçu client du prix au kilo — le serveur recalcule et fait foi à la création du dépôt. */
+function resolveTierPrice(service: Service | undefined, weightKg: number): number | null {
+    const tier = service?.price_tiers?.find((t) => weightKg >= t.weight_min && (t.weight_max === null || weightKg <= t.weight_max));
+    if (!tier) return null;
+    const raw = tier.price_per_kg * weightKg;
+    return service?.round_to_hundred ? Math.round(raw / 100) * 100 : Math.round(raw);
+}
+
+function lineTotal(service: Service | undefined, line: CartLine): number {
+    if (service?.billing_mode === 'kg' && line.weight_kg) {
+        return resolveTierPrice(service, line.weight_kg) ?? 0;
+    }
+    return (service?.effective_price ?? 0) * line.quantity;
 }
 
 export default function NewOrder() {
@@ -136,7 +152,7 @@ export default function NewOrder() {
         () =>
             cart.reduce((sum, line) => {
                 const service = services.find((s) => s.id === line.service_id);
-                return sum + (service?.effective_price ?? 0) * line.quantity;
+                return sum + lineTotal(service, line);
             }, 0),
         [cart, services],
     );
@@ -156,13 +172,32 @@ export default function NewOrder() {
     const grandTotal = taxableBase + taxAmount;
 
     function addLine(serviceId: number) {
+        const service = services.find((s) => s.id === serviceId);
+        const billedByWeight = service?.billing_mode === 'kg';
         setCart((current) => {
             const existing = current.find((l) => l.service_id === serviceId);
             if (existing) {
+                // Un article facturé au kilo n'a qu'une seule ligne : on modifie le poids
+                // directement plutôt que d'incrémenter une quantité qui n'a pas de sens ici.
+                if (billedByWeight) return current;
                 return current.map((l) => (l.service_id === serviceId ? { ...l, quantity: l.quantity + 1 } : l));
             }
-            return [...current, { service_id: serviceId, quantity: 1, description: '', intake_condition_ids: [], intake_notes: '' }];
+            return [
+                ...current,
+                {
+                    service_id: serviceId,
+                    quantity: 1,
+                    weight_kg: billedByWeight ? 0 : null,
+                    description: '',
+                    intake_condition_ids: [],
+                    intake_notes: '',
+                },
+            ];
         });
+    }
+
+    function toggleWeightBilling(serviceId: number) {
+        setCart((current) => current.map((l) => (l.service_id === serviceId ? { ...l, weight_kg: l.weight_kg === null ? 0 : null } : l)));
     }
 
     function updateLine(serviceId: number, patch: Partial<CartLine>) {
@@ -194,6 +229,7 @@ export default function NewOrder() {
             items: cart.map((l) => ({
                 service_id: l.service_id,
                 quantity: l.quantity,
+                weight_kg: l.weight_kg ?? undefined,
                 description: l.description || null,
                 intake_condition_ids: l.intake_condition_ids.length > 0 ? l.intake_condition_ids : undefined,
                 intake_notes: l.intake_notes || null,
@@ -260,7 +296,14 @@ export default function NewOrder() {
     }
 
     const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0);
-    const submitHint = !selectedClient ? t('order.hintClient') : cart.length === 0 ? t('order.hintItems') : null;
+    const hasInvalidWeight = cart.some((l) => l.weight_kg !== null && l.weight_kg <= 0);
+    const submitHint = !selectedClient
+        ? t('order.hintClient')
+        : cart.length === 0
+          ? t('order.hintItems')
+          : hasInvalidWeight
+            ? t('order.hintWeight')
+            : null;
 
     // Le catalogue peut compter plusieurs centaines de services : regroupés par
     // catégorie, et sans recherche limités par catégorie, pour garder l'écran
@@ -459,41 +502,68 @@ export default function NewOrder() {
                                                 <div className="min-w-0">
                                                     <p className="font-semibold leading-snug text-ink-900 dark:text-ink-50">{service?.name}</p>
                                                     <p className="text-xs tabular-nums text-ink-600 dark:text-ink-350">
-                                                        {money(service?.effective_price ?? 0)} × {line.quantity}
+                                                        {line.weight_kg !== null
+                                                            ? t('order.weightKg', { weight: line.weight_kg })
+                                                            : `${money(service?.effective_price ?? 0)} × ${line.quantity}`}
                                                     </p>
                                                 </div>
                                                 <p className="shrink-0 font-display font-bold tabular-nums text-ink-900 dark:text-white">
-                                                    {money((service?.effective_price ?? 0) * line.quantity)}
+                                                    {money(lineTotal(service, line))}
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
-                                                <div className="inline-flex items-center rounded-xl border border-ink-400 bg-white dark:border-ink-500 dark:bg-ink-950">
+                                                {line.weight_kg !== null ? (
+                                                    <label className="inline-flex items-center gap-1.5">
+                                                        <input
+                                                            type="number"
+                                                            min={0.01}
+                                                            step={0.01}
+                                                            value={line.weight_kg || ''}
+                                                            aria-label={t('order.weight')}
+                                                            placeholder={t('order.weight')}
+                                                            onChange={(e) => updateLine(line.service_id, { weight_kg: Math.max(0, Number(e.target.value)) })}
+                                                            className={cx(inputSm, 'h-10 w-24')}
+                                                        />
+                                                        <span className="text-xs font-semibold text-ink-500 dark:text-ink-400">kg</span>
+                                                    </label>
+                                                ) : (
+                                                    <div className="inline-flex items-center rounded-xl border border-ink-400 bg-white dark:border-ink-500 dark:bg-ink-950">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateLine(line.service_id, { quantity: Math.max(1, line.quantity - 1) })}
+                                                            disabled={line.quantity <= 1}
+                                                            aria-label={t('common.decrease')}
+                                                            className="flex h-10 w-10 items-center justify-center rounded-l-xl text-ink-700 transition hover:bg-ink-100 active:scale-95 disabled:opacity-40 dark:text-ink-200 dark:hover:bg-ink-800"
+                                                        >
+                                                            <Minus aria-hidden="true" className="h-4 w-4" />
+                                                        </button>
+                                                        <input
+                                                            type="number"
+                                                            min={1}
+                                                            value={line.quantity}
+                                                            aria-label={t('common.quantity')}
+                                                            onChange={(e) => updateLine(line.service_id, { quantity: Math.max(1, Number(e.target.value)) })}
+                                                            className="h-10 w-12 border-x border-ink-200 bg-transparent text-center font-semibold tabular-nums text-ink-900 [appearance:textfield] focus:outline-none dark:border-ink-700 dark:text-ink-50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => updateLine(line.service_id, { quantity: line.quantity + 1 })}
+                                                            aria-label={t('common.increase')}
+                                                            className="flex h-10 w-10 items-center justify-center rounded-r-xl text-ink-700 transition hover:bg-ink-100 active:scale-95 dark:text-ink-200 dark:hover:bg-ink-800"
+                                                        >
+                                                            <Plus aria-hidden="true" className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {service?.billing_mode === 'mixte' && (
                                                     <button
                                                         type="button"
-                                                        onClick={() => updateLine(line.service_id, { quantity: Math.max(1, line.quantity - 1) })}
-                                                        disabled={line.quantity <= 1}
-                                                        aria-label={t('common.decrease')}
-                                                        className="flex h-10 w-10 items-center justify-center rounded-l-xl text-ink-700 transition hover:bg-ink-100 active:scale-95 disabled:opacity-40 dark:text-ink-200 dark:hover:bg-ink-800"
+                                                        onClick={() => toggleWeightBilling(line.service_id)}
+                                                        className={button('ghost', 'sm')}
                                                     >
-                                                        <Minus aria-hidden="true" className="h-4 w-4" />
+                                                        {line.weight_kg !== null ? t('order.billByPiece') : t('order.billByWeight')}
                                                     </button>
-                                                    <input
-                                                        type="number"
-                                                        min={1}
-                                                        value={line.quantity}
-                                                        aria-label={t('common.quantity')}
-                                                        onChange={(e) => updateLine(line.service_id, { quantity: Math.max(1, Number(e.target.value)) })}
-                                                        className="h-10 w-12 border-x border-ink-200 bg-transparent text-center font-semibold tabular-nums text-ink-900 [appearance:textfield] focus:outline-none dark:border-ink-700 dark:text-ink-50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => updateLine(line.service_id, { quantity: line.quantity + 1 })}
-                                                        aria-label={t('common.increase')}
-                                                        className="flex h-10 w-10 items-center justify-center rounded-r-xl text-ink-700 transition hover:bg-ink-100 active:scale-95 dark:text-ink-200 dark:hover:bg-ink-800"
-                                                    >
-                                                        <Plus aria-hidden="true" className="h-4 w-4" />
-                                                    </button>
-                                                </div>
+                                                )}
                                                 <input
                                                     type="text"
                                                     placeholder={t('order.itemDescription')}
@@ -658,7 +728,7 @@ export default function NewOrder() {
                         <button
                             type="button"
                             onClick={() => void handleSubmit()}
-                            disabled={!selectedClient || cart.length === 0 || submitting}
+                            disabled={!selectedClient || cart.length === 0 || submitting || hasInvalidWeight}
                             className={button('primary', 'lg', 'w-full text-lg')}
                         >
                             {submitting ? <Spinner className="h-5 w-5" /> : <Check aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />}

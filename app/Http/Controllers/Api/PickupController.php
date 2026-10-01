@@ -31,6 +31,8 @@ class PickupController extends ApiController
                     ->orWhere('last_name', 'ilike', "%{$term}%")
                     ->orWhere('phone', 'ilike', "%{$term}%"));
             })
+            ->when($request->filled('promised_from'), fn ($query) => $query->whereDate('promised_at', '>=', $request->date('promised_from')))
+            ->when($request->filled('promised_to'), fn ($query) => $query->whereDate('promised_at', '<=', $request->date('promised_to')))
             ->orderBy('promised_at')
             ->paginate($request->integer('per_page', 20));
 
@@ -68,6 +70,18 @@ class PickupController extends ApiController
             ->whereDate('processed_at', now()->toDateString())
             ->count();
 
+        $dueToday = $readyOrders
+            ->filter(fn (Order $order) => $order->promised_at && $order->promised_at->isToday())
+            ->sortBy('promised_at')
+            ->values()
+            ->map(fn (Order $order) => [
+                'id' => $order->id,
+                'order_number' => $order->order_number,
+                'client_name' => trim(($order->client->first_name ?? '').' '.($order->client->last_name ?? '')),
+                'promised_at' => $order->promised_at,
+                'pieces_remaining' => $order->items->whereIn('status', ['pret', 'non_recupere'])->sum(fn ($item) => $item->quantity - $item->quantity_delivered),
+            ]);
+
         return response()->json([
             'ready_orders' => $readyOrders->count(),
             'pieces_ready' => $piecesReady,
@@ -75,6 +89,7 @@ class PickupController extends ApiController
             'pickups_today' => $pickupsToday,
             'unpaid_orders' => $unpaid->count(),
             'unpaid_amount' => $unpaid->sum(fn (Order $order) => $this->balanceDue($order)),
+            'due_today' => $dueToday,
         ]);
     }
 

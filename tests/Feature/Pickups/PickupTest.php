@@ -278,4 +278,39 @@ class PickupTest extends TestCase
         $response->assertJsonPath('unpaid_orders', 1);
         $response->assertJsonPath('unpaid_amount', 3540); // 3000 + TVA 18%
     }
+
+    public function test_the_summary_endpoint_lists_orders_due_today(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $dueToday = $this->makeReadyOrder($agency, quantity: 2);
+        $dueToday->update(['promised_at' => now()]);
+        $dueTomorrow = $this->makeReadyOrder($agency, quantity: 1);
+        $dueTomorrow->update(['promised_at' => now()->addDay()]);
+
+        $response = $this->actingAs($accueil)->getJson('/api/pickups/summary');
+
+        $response->assertOk();
+        $this->assertCount(1, $response->json('due_today'));
+        $response->assertJsonPath('due_today.0.id', $dueToday->id);
+        $response->assertJsonPath('due_today.0.pieces_remaining', 2);
+    }
+
+    public function test_the_list_endpoint_can_be_filtered_by_promised_date_range(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $inRange = $this->makeReadyOrder($agency);
+        $inRange->update(['promised_at' => now()]);
+        $outOfRange = $this->makeReadyOrder($agency);
+        $outOfRange->update(['promised_at' => now()->addDays(10)]);
+
+        $response = $this->actingAs($accueil)->getJson('/api/pickups?promised_from='.now()->toDateString().'&promised_to='.now()->toDateString());
+
+        $response->assertOk();
+        $this->assertCount(1, $response->json('data'));
+        $this->assertSame($inRange->id, $response->json('data.0.id'));
+    }
 }

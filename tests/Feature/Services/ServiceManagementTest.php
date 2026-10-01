@@ -21,6 +21,7 @@ class ServiceManagementTest extends TestCase
             'code' => 'NETT-TEST',
             'name' => 'Nettoyage test',
             'category' => 'nettoyage',
+            'billing_mode' => 'piece',
             'base_price' => 1000,
             'estimated_duration_hours' => 24,
         ]);
@@ -83,6 +84,7 @@ class ServiceManagementTest extends TestCase
             'code' => 'NETT-TEST',
             'name' => 'Nettoyage test',
             'category' => 'nettoyage',
+            'billing_mode' => 'piece',
             'base_price' => 1000,
             'estimated_duration_hours' => 24,
         ]);
@@ -112,5 +114,61 @@ class ServiceManagementTest extends TestCase
 
         $this->actingAs($accueilB)->getJson('/api/services')
             ->assertJsonFragment(['id' => $service->id, 'effective_price' => 1000]);
+    }
+
+    public function test_creating_a_kg_billed_service_requires_price_tiers(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+
+        $missingTiers = $this->actingAs($admin)->postJson('/api/services', [
+            'code' => 'KG-TEST', 'name' => 'Linge de maison', 'category' => 'lavage',
+            'billing_mode' => 'kg', 'estimated_duration_hours' => 24,
+        ]);
+        $missingTiers->assertStatus(422);
+
+        $created = $this->actingAs($admin)->postJson('/api/services', [
+            'code' => 'KG-TEST', 'name' => 'Linge de maison', 'category' => 'lavage',
+            'billing_mode' => 'kg', 'estimated_duration_hours' => 24,
+            'price_tiers' => [
+                ['weight_min' => 0, 'weight_max' => 3, 'price_per_kg' => 1500],
+                ['weight_min' => 3.01, 'weight_max' => 8, 'price_per_kg' => 1200],
+                ['weight_min' => 8.01, 'weight_max' => null, 'price_per_kg' => 1000],
+            ],
+        ]);
+        $created->assertCreated();
+        $this->assertCount(3, $created->json('price_tiers'));
+    }
+
+    public function test_updating_the_base_price_logs_a_history_entry(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+        $service = Service::factory()->create(['base_price' => 1000]);
+
+        $this->actingAs($admin)->patchJson("/api/services/{$service->id}", ['base_price' => 1200])->assertOk();
+
+        $this->assertDatabaseHas('service_price_histories', [
+            'service_id' => $service->id, 'field' => 'base_price', 'old_value' => '1000', 'new_value' => '1200',
+        ]);
+
+        // Pas de nouvelle entrée si le prix ne change pas réellement.
+        $this->actingAs($admin)->patchJson("/api/services/{$service->id}", ['base_price' => 1200])->assertOk();
+        $this->assertSame(1, \App\Models\ServicePriceHistory::where('service_id', $service->id)->count());
+    }
+
+    public function test_the_stats_endpoint_summarizes_the_catalog(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+        Service::factory()->create(['is_active' => true, 'category' => 'nettoyage', 'base_price' => 1000]);
+        Service::factory()->create(['is_active' => true, 'category' => 'repassage', 'base_price' => 2000]);
+        Service::factory()->create(['is_active' => false, 'category' => 'nettoyage', 'base_price' => 3000]);
+
+        $response = $this->actingAs($admin)->getJson('/api/services/stats');
+
+        $response->assertOk();
+        $response->assertJsonPath('active_count', 2);
+        $response->assertJsonPath('category_count', 2);
     }
 }

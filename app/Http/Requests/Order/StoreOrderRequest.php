@@ -24,6 +24,7 @@ class StoreOrderRequest extends FormRequest
             'items' => ['required', 'array', 'min:1'],
             'items.*.service_id' => ['required', 'integer', 'exists:services,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'items.*.weight_kg' => ['nullable', 'numeric', 'min:0.01'],
             'items.*.description' => ['nullable', 'string', 'max:255'],
             'items.*.intake_notes' => ['nullable', 'string'],
             'items.*.intake_condition_ids' => ['nullable', 'array'],

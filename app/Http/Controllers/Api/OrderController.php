@@ -10,6 +10,7 @@ use App\Models\CustomerSubscription;
 use App\Models\OrderSyncLog;
 use App\Services\OrderNumberGenerator;
 use App\Services\QrCodeGenerator;
+use App\Services\ServicePricingService;
 use App\Services\SubscriptionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class OrderController extends ApiController
         private readonly OrderNumberGenerator $orderNumbers,
         private readonly QrCodeGenerator $qrCodes,
         private readonly SubscriptionService $subscriptions,
+        private readonly ServicePricingService $pricing,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -92,8 +94,27 @@ class OrderController extends ApiController
             $maxDurationHours = 0;
             foreach ($data['items'] as $itemData) {
                 $service = $agency->services()->findOrFail($itemData['service_id']);
-                $unitPrice = $service->pivot->price_override ?? $service->base_price;
                 $maxDurationHours = max($maxDurationHours, $service->estimated_duration_hours);
+
+                $weightKg = $itemData['weight_kg'] ?? null;
+                if ($weightKg !== null) {
+                    if (! in_array($service->billing_mode, ['kg', 'mixte'], true)) {
+                        throw new HttpException(422, "« {$service->name} » n'est pas facturable au kilo.");
+                    }
+
+                    $tier = $this->pricing->resolveTier($service, (float) $weightKg);
+                    if ($tier === null) {
+                        throw new HttpException(422, "Aucune grille de prix ne couvre {$weightKg} kg pour « {$service->name} ».");
+                    }
+
+                    // Un dépôt au kilo est traité comme un seul lot (quantity = 1) : le
+                    // retrait partiel par quantité n'a pas de sens pour un poids global.
+                    $quantity = 1;
+                    $unitPrice = $this->pricing->roundAmount($service, (int) round($tier->price_per_kg * $weightKg));
+                } else {
+                    $quantity = $itemData['quantity'];
+                    $unitPrice = $service->pivot->price_override ?? $service->base_price;
+                }
 
                 $item = $order->items()->create([
                     'agency_id' => $agencyId,
@@ -101,7 +122,8 @@ class OrderController extends ApiController
                     'qr_code' => $this->qrCodes->generateCode($agency->code),
                     'description' => $itemData['description'] ?? null,
                     'intake_notes' => $itemData['intake_notes'] ?? null,
-                    'quantity' => $itemData['quantity'],
+                    'quantity' => $quantity,
+                    'weight_kg' => $weightKg,
                     'unit_price' => $unitPrice,
                     'status' => 'recu',
                 ]);
@@ -110,7 +132,7 @@ class OrderController extends ApiController
                     $item->intakeConditions()->sync($itemData['intake_condition_ids']);
                 }
 
-                $total += $unitPrice * $itemData['quantity'];
+                $total += $unitPrice * $quantity;
             }
 
             $order->total_amount = $total;

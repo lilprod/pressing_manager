@@ -41,12 +41,12 @@ import BrandMark from './BrandMark';
 import { Avatar } from './ui/PageHeader';
 import { cx, iconButton } from './ui/styles';
 
+// Sidebar toujours sombre (brand-950), indépendamment du thème clair/sombre du
+// contenu — c'est ce que montrent systématiquement les captures Figma fournies.
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     cx(
         'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition duration-150',
-        isActive
-            ? 'bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-100 dark:bg-brand-400/15 dark:text-brand-200 dark:ring-brand-400/20'
-            : 'text-ink-600 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-300 dark:hover:bg-ink-800 dark:hover:text-white',
+        isActive ? 'bg-brand-400/20 text-white ring-1 ring-inset ring-brand-400/25' : 'text-brand-100/80 hover:bg-white/10 hover:text-white',
     );
 
 function NavItem({ to, icon: Icon, label, end, onClick }: { to: string; icon: LucideIcon; label: string; end?: boolean; onClick?: () => void }) {
@@ -61,7 +61,7 @@ function NavItem({ to, icon: Icon, label, end, onClick }: { to: string; icon: Lu
 function NavSection({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="space-y-1">
-            <p className="px-3 pb-1 pt-3 text-xs font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400">{label}</p>
+            <p className="px-3 pb-1 pt-3 text-xs font-bold uppercase tracking-wider text-brand-300/70">{label}</p>
             {children}
         </div>
     );
@@ -80,18 +80,18 @@ function useSidebarSections(onNavigate?: () => void) {
             )}
             <NavSection label={t('nav.section.counter')}>
                 <NavItem to="/" end icon={ShoppingBag} label={t('nav.newOrder')} onClick={onNavigate} />
-                <NavItem to="/orders" icon={ClipboardList} label={t('nav.orders')} onClick={onNavigate} />
+                <NavItem to="/orders" icon={ClipboardList} label={t('nav.deposits')} onClick={onNavigate} />
+                {hasPermission(user, 'clients.manage') && <NavItem to="/clients" icon={Users} label={t('nav.clients')} onClick={onNavigate} />}
                 {hasPermission(user, 'orders.manage') && <NavItem to="/pickups" icon={PackageCheck} label={t('nav.pickups')} onClick={onNavigate} />}
-                <NavItem to="/scan" icon={ScanLine} label={t('nav.scan')} onClick={onNavigate} />
                 {hasPermission(user, 'payments.manage') && <NavItem to="/cash" icon={Wallet} label={t('nav.cash')} onClick={onNavigate} />}
+                <NavItem to="/scan" icon={ScanLine} label={t('nav.scan')} onClick={onNavigate} />
                 {(hasPermission(user, 'deliveries.manage') || hasPermission(user, 'deliveries.fulfill')) && (
                     <NavItem to="/deliveries" icon={Truck} label={t('nav.deliveries')} onClick={onNavigate} />
                 )}
             </NavSection>
 
-            {(hasPermission(user, 'clients.manage') || hasPermission(user, 'subscriptions.manage')) && (
+            {(hasPermission(user, 'subscriptions.manage') || hasPermission(user, 'clients.manage')) && (
                 <NavSection label={t('nav.section.clients')}>
-                    {hasPermission(user, 'clients.manage') && <NavItem to="/clients" icon={Users} label={t('nav.clients')} onClick={onNavigate} />}
                     {hasPermission(user, 'subscriptions.manage') && (
                         <NavItem to="/subscriptions" icon={Crown} label={t('subscription.title')} onClick={onNavigate} />
                     )}
@@ -116,7 +116,7 @@ function useSidebarSections(onNavigate?: () => void) {
                         <NavItem to="/roles-permissions" icon={ShieldCheck} label={t('rbac.title')} onClick={onNavigate} />
                     )}
                     {hasPermission(user, 'agencies.manage') && (
-                        <NavItem to="/agencies" icon={Building2} label={t('agency.title')} onClick={onNavigate} />
+                        <NavItem to="/agencies" icon={Building2} label={t('nav.agencies')} onClick={onNavigate} />
                     )}
                 </NavSection>
             )}
@@ -168,9 +168,9 @@ export default function AppLayout() {
             </a>
 
             {/* Sidebar — desktop */}
-            <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-ink-200/80 bg-white lg:flex dark:border-ink-800 dark:bg-ink-950">
-                <Link to="/" className="flex h-16 shrink-0 items-center px-5" aria-label={t('app.title')}>
-                    <BrandMark />
+            <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-brand-900/60 bg-brand-950 lg:flex">
+                <Link to="/" className="flex h-16 shrink-0 items-center border-b border-white/10 px-5" aria-label={t('app.title')}>
+                    <BrandMark inverted />
                 </Link>
                 <nav aria-label={t('nav.main')} className="flex-1 overflow-y-auto px-3 pb-4">
                     {sidebarSections}
@@ -181,16 +181,16 @@ export default function AppLayout() {
             {mobileNavOpen && (
                 <div className="fixed inset-0 z-50 lg:hidden">
                     <div className="fixed inset-0 bg-black/40" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
-                    <aside className="relative flex h-full w-72 max-w-[85vw] flex-col bg-white shadow-xl dark:bg-ink-950">
-                        <div className="flex h-16 shrink-0 items-center justify-between px-4">
+                    <aside className="relative flex h-full w-72 max-w-[85vw] flex-col bg-brand-950 shadow-xl">
+                        <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 px-4">
                             <Link to="/" aria-label={t('app.title')}>
-                                <BrandMark />
+                                <BrandMark inverted />
                             </Link>
                             <button
                                 type="button"
                                 onClick={() => setMobileNavOpen(false)}
                                 aria-label={t('common.close')}
-                                className={iconButton}
+                                className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-brand-100/80 transition hover:bg-white/10 hover:text-white"
                             >
                                 <X aria-hidden="true" className="h-5 w-5" />
                             </button>

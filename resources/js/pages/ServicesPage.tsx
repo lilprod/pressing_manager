@@ -9,18 +9,21 @@ import { EmptyState, LoadingState, Spinner } from '../components/ui/Feedback';
 import Pagination from '../components/ui/Pagination';
 import { Pill, TONES } from '../components/ui/StatusBadge';
 import { button, card, cx, inputLg, inputSm } from '../components/ui/styles';
-import { Pencil, Plus, Search, Shirt } from 'lucide-react';
+import { Layers, Pencil, Plus, Search, Shirt, TrendingUp, TriangleAlert } from 'lucide-react';
+import { StatCard } from '../components/ui/Metrics';
 import { categoryMeta } from '../lib/serviceCategory';
-import type { Paginated, Service, ServiceCategory } from '../types';
+import type { Paginated, Service, ServiceCategory, ServiceStats } from '../types';
 
 const CATEGORIES: ServiceCategory[] = ['nettoyage', 'lavage', 'repassage', 'retouche', 'teinture', 'autre'];
 
 export default function ServicesPage() {
     const { t } = useI18n();
+    const { money } = useFormat();
     const { user, activeAgencyId } = useAuth();
     const agencyId = user?.agency_id ?? activeAgencyId;
 
     const [services, setServices] = useState<Service[]>([]);
+    const [stats, setStats] = useState<ServiceStats | null>(null);
     const [meta, setMeta] = useState<Pick<Paginated<Service>, 'current_page' | 'last_page' | 'total'>>({
         current_page: 1,
         last_page: 1,
@@ -30,6 +33,10 @@ export default function ServicesPage() {
     const [category, setCategory] = useState<ServiceCategory | ''>('');
     const [search, setSearch] = useState('');
     const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        api.get<ServiceStats>('/services/stats').then(setStats).catch(() => setStats(null));
+    }, []);
 
     function reload() {
         setLoading(true);
@@ -64,6 +71,15 @@ export default function ServicesPage() {
                     {t('service.new')}
                 </Link>
             </div>
+
+            {stats && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <StatCard label={t('service.stats.active')} value={stats.active_count} icon={Shirt} tone="brand" />
+                    <StatCard label={t('service.stats.categories')} value={stats.category_count} icon={Layers} tone="sky" />
+                    <StatCard label={t('service.stats.averagePrice')} value={money(stats.average_base_price)} icon={TrendingUp} tone="emerald" />
+                    <StatCard label={t('service.stats.stale')} value={stats.stale_count} icon={TriangleAlert} tone="amber" hint={t('service.stats.staleHint')} />
+                </div>
+            )}
 
             <div className="relative">
                 <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-500 dark:text-ink-350" />
@@ -199,12 +215,19 @@ function ServiceRow({
                 </p>
             </div>
 
-            <div className="w-auto shrink-0 sm:w-28">
+            <div className="flex w-auto shrink-0 flex-col items-start gap-1 sm:w-28">
                 <Pill tone="neutral">{t(`service.category.${service.category}`)}</Pill>
+                {service.billing_mode !== 'piece' && <Pill tone="violet">{t(`service.billingModeOption.${service.billing_mode}`)}</Pill>}
             </div>
 
             <div className="w-auto shrink-0 text-left sm:w-28 sm:text-right">
-                {agencyId ? (
+                {service.billing_mode === 'kg' ? (
+                    <span className="text-sm text-ink-600 dark:text-ink-350">
+                        {service.price_tiers && service.price_tiers.length > 0
+                            ? t('service.fromPerKg', { amount: money(service.price_tiers[0].price_per_kg) })
+                            : '—'}
+                    </span>
+                ) : agencyId ? (
                     <label className="inline-flex items-center gap-1.5">
                         <span className="sr-only">{t('service.priceOverride')}</span>
                         <input
@@ -213,7 +236,7 @@ function ServiceRow({
                             value={override}
                             onBlur={() => void saveOverride()}
                             onChange={(e) => setOverride(e.target.value)}
-                            placeholder={String(service.base_price)}
+                            placeholder={String(service.base_price ?? '')}
                             className={cx(inputSm, 'h-8 w-24 text-right tabular-nums')}
                         />
                         {busy && <Spinner className="h-3.5 w-3.5 shrink-0" />}

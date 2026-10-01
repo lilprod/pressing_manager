@@ -79,8 +79,8 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 03 Clients & fidélité | Nouveau/Modifier client | `pages/clients/ClientFormPage.tsx` (routes `/clients/new`, `/clients/:id/edit`) | **fait** (commit `11de473`, écrans séparés depuis commit `eaf68bf`) — a aussi exposé le champ `notes` (backend déjà prêt, jamais affiché côté front) |
 | 03 Clients & fidélité | Fiche client (consultation) | panneau détail dans `ClientsList.tsx` | **fait** — reste un panneau latéral sur la liste (pas de retour utilisateur demandant un écran séparé pour la consultation, contrairement à la création/édition) |
 | 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait, renforcement livré** (2026-10-01) — rapprochement par moyen de paiement (espèces/mobile money/carte), checklist de clôture obligatoire, double contrôle sur mouvement sensible (seuil configurable), pièces justificatives, rapport PDF de clôture. Restent différés : distinction dépôt/solde sur `Payment`, vue « opérateurs de la journée », notification au contrôleur (aucun canal interne staff n'existe) — détail en §2 |
-| 07 Articles & tarifs | Catalogue (liste) | `pages/ServicesPage.tsx` | **fait, mais écart de fidélité important confirmé** (captures Figma fournies le 2026-09-30, voir §2) — liste fonctionnelle simple ; la maquette montre un vrai hub (stats, tarifs au kilo, import Excel, historique, filtres avancés) |
-| 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait, mais écart de fidélité important confirmé** (voir §2) — formulaire simple (prix fixe unique) ; la maquette montre un système de facturation Pièce/Kilo/Mixte avec grilles de prix dégressives, règles de validation, disponibilité par agence détaillée. Convention liste/création/édition elle-même correcte, voir ci-dessous |
+| 07 Articles & tarifs | Catalogue (liste) | `pages/ServicesPage.tsx` | **fait, renforcement livré** (2026-10-01) — tableau de bord (4 `StatCard` via `/services/stats`), badge mode de facturation + « Dès X FCFA/kg ». Restent différés : import Excel, onglets Catégories/Tarifs au kilo/Indisponibles/Historique, filtres avancés (détail §2) |
+| 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait, renforcement livré** (2026-10-01) — sélecteur Pièce/Kilo/Mixte, grilles de prix dégressives au kilo (`ServicePriceTier`), options `allow_discount`/`round_to_hundred`/`price_editable_at_counter`, historique des changements de prix (`ServicePriceHistory`). Intégré jusqu'au comptoir : `NewOrder.tsx` facture réellement au poids (résolution de palier + arrondi). Restent différés : états acceptés/rendus compatibles configurables, disponibilité par agence récapitulative, checklist de publication, historique des tarifs par agence (détail §2) |
 | 08 Rapports & bilans | Rapports et bilans | `pages/KpiPage.tsx` (route `/kpi`, libellé nav « Rapports & bilans ») | **fait** (2026-09-30) — filtres période + raccourcis, 4 KPI avec variation vs période précédente, tableau « Performance des agences », indicateurs opérationnels existants conservés (hors maquette mais déjà exposés par l'API), raccourcis vers les écrans détaillés. Histogramme CA / répartition paiements / synthèse fidélité / planification omis (§2) |
 | 08 Rapports & bilans | Bilan journalier et performance caissiers | — | **non construit** : quasi intégralement dépendant d'agrégats absents (recettes par mode de paiement et par heure, performance par caissier, remises du jour). Les données existantes (clôture de caisse théorique/compté/écart) sont déjà sur `/cash/closures/:id` ; lien depuis « Rapports détaillés ». Voir §2 |
 | 09 Paramètres | Paramètres (hub) | `pages/SettingsPage.tsx` (route `/settings`) | **fait** (2026-09-30) — l'ancien formulaire unique devient un hub : recherche + filtres par groupe, « État de configuration » (checklist d'identité réelle, `lib/brandingChecklist.ts`), cartes vers les écrans existants uniquement (gating par permission, y compris « Agences » vers le CRUD livré en parallèle), « Mis à jour le » via `updated_at` (colonne existante, désormais exposée par `GET /settings`) |
@@ -394,13 +394,19 @@ une table de réglages par agence (`agency_settings`) + endpoints `GET/PATCH
 - **Centre de retrait** (`PickupsList.tsx`, route `/pickups`) : KPI réels (prêts
   aujourd'hui + pièces disponibles, en attente de notification — dernier
   `NotificationLog.order_id` à `sent`, retraits effectués aujourd'hui, soldes impayés
-  agrégés), recherche (nom/téléphone client), tableau dépôts prêts avec reste à payer
-  et état de notification. **Omis faute de données réelles** : comparaison « vs lundi
-  dernier » (demanderait un historique, pas juste la période précédente — ambigu),
-  planning des rendez-vous du jour, filtre par mode de paiement et scan code-barres/QR
-  direct sur cet écran (le scan existe déjà ailleurs, `pages/Scan.tsx`, non dupliqué
-  ici), colonne « sync » (la file hors ligne ne couvre pas encore les retraits, voir
-  ci-dessous).
+  agrégés), recherche (nom/téléphone client), tableau dépôts prêts avec colonnes
+  téléphone, articles, **atelier** (badge dérivé des statuts réels des articles —
+  « Non récupéré » si au moins un article `non_recupere`, sinon « Prêt » — pas de
+  3e état fabriqué), retrait prévu, **total**, reste à payer et notification.
+  **Renforcement livré le 2026-10-01** : carte « Retraits du jour » (dépôts dont
+  `promised_at` tombe aujourd'hui, `GET /pickups/summary` → `due_today`), filtre de
+  période (Tous/Aujourd'hui/7 prochains jours, `GET /pickups?promised_from&promised_to`),
+  carte de recherche stylée (fond `brand-700→brand-900`), bannière de procédure de
+  sécurité statique en pied de page. **Omis faute de données réelles** : comparaison
+  « vs lundi dernier » (demanderait un historique, pas juste la période précédente —
+  ambigu), filtre par mode de paiement, scan code-barres/QR direct sur cet écran (le
+  scan existe déjà ailleurs, `pages/Scan.tsx`, non dupliqué ici), colonne « sync » (la
+  file hors ligne ne couvre pas encore les retraits, voir ci-dessous).
 - **Traiter le retrait** (`PickupProcessPage.tsx`, route `/pickups/:orderId`) :
   vérification article par article avec **retrait partiel réel au niveau de la
   quantité** (`order_items.quantity_delivered`, pas juste un statut binaire — un
@@ -537,47 +543,48 @@ Figma fournies par l'utilisateur le 2026-09-30, renforcement livré le 2026-10-0
   besoin que pour les Retraits et la Fiche dépôt).
 
 **07 Articles & tarifs — Catalogue et fiche article** (captures Figma fournies par
-l'utilisateur le 2026-09-30, pas de node Figma exact) :
-- **Mode de facturation par article** (Pièce / Kilo / Mixte, sélecteur sur la fiche
-  article) : `Service.base_price` est un prix fixe unique, aucune notion de mode de
-  facturation. Recoupe et précise le gap « séparation Article × Service » déjà noté
-  plus haut (§ CDC v3.0) — ici clairement une propriété de l'article lui-même, pas
-  seulement une règle de ratio entre services.
-- **Grilles de prix dégressives au kilo** (tranches de poids progressives, ex.
-  0–3 kg / 3,01–8 kg / 8,01 kg et + avec prix par kg et par service) : aucune table
-  de paliers de prix n'existe. Il faudrait un modèle `ServicePriceTier` (service_id,
-  poids_min, poids_max, prix_classique, prix_express…).
-- **Options de tarification par article** (autoriser une remise, arrondi à 100 FCFA,
-  prix modifiable en caisse) : aucun de ces booléens n'existe sur `Service`.
+l'utilisateur le 2026-09-30, renforcement livré le 2026-10-01, pas de node Figma
+exact) — la majorité du chantier est faite, les points les plus structurels
+d'abord :
+- ~~**Mode de facturation par article**~~ **fait** : `Service.billing_mode`
+  (`piece`/`kg`/`mixte`), `base_price` devenu nullable (requis seulement hors
+  `kg`). En mode `mixte`, le choix pièce vs poids se fait ligne par ligne au
+  dépôt (`order_items.weight_kg`, `NewOrder.tsx`), pas sur l'article.
+- ~~**Grilles de prix dégressives au kilo**~~ **fait** : modèle `ServicePriceTier`
+  (poids_min/poids_max nullable/prix_par_kg), résolution de palier dans
+  `ServicePricingService::resolveTier()`, appliquée réellement à la création de
+  commande (`OrderController::store`) — pas seulement configurable en back-office.
+- ~~**Options de tarification par article**~~ **fait** : `allow_discount`,
+  `round_to_hundred` (arrondi appliqué au total de la ligne via
+  `ServicePricingService::roundAmount()`), `price_editable_at_counter` (champ
+  stocké, pas encore branché sur un contrôle de saisie au comptoir — différé).
+- ~~**Historique des modifications par article**~~ **fait** : `ServicePriceHistory`
+  (changement de `base_price` et des paliers, acteur + horodatage), affiché sur
+  `ServiceFormPage.tsx`. La garantie fiscale elle-même (un prix modifié ne change
+  jamais une facture déjà émise) était déjà assurée par l'existant :
+  `order_items.unit_price` est figé à la création, jamais recalculé.
+- ~~**Tableau de bord du catalogue**~~ **fait** : `GET /services/stats` (actifs,
+  catégories, tarif moyen, « à réviser » = non modifié depuis 12 mois via
+  `ServicePriceHistory`), 4 `StatCard` sur `ServicesPage.tsx`.
 - **États acceptés / rendus compatibles / services associés** (cases à cocher
-  paramétrables par article, ex. taches importantes, sur cintre, collecte) : notre
-  `IntakeCondition` existe mais n'est pas rattaché à une liste configurable par
-  article ; « rendus compatibles » et « services associés » (croisement avec
-  collecte/livraison/traitement anti-odeur) n'existent pas du tout.
-- **Disponibilité par agence détaillée** (statut disponible/indisponible par agence,
-  avec « prix local +5 % ») : `agency_services` (price_override, is_active) couvre
-  la donnée brute mais aucune UI ne l'affiche sous cette forme récapitulative
-  agence-par-agence sur la fiche article.
-- **Contrôle avant publication** (checklist : informations obligatoires, tarifs
-  cohérents, délais renseignés, une agence active) et **recommandations
-  automatiques** (« le tarif Express ne doit pas dépasser de 40 % ») : aucune
-  validation métier de ce type, juste les règles de validation HTTP basiques.
-- **Historique des modifications par article** (« Dernière modification », « Voir
-  l'historique ») : pas d'historisation des changements de prix (même gap que la
-  tarification par agence, §2 CDC v3.0 — non négociable pour la conformité
-  fiscale : un prix modifié ne doit jamais changer une facture déjà émise).
-- **Tableau de bord du catalogue** (Articles actifs, Catégories, Tarif moyen, « À
-  réviser » = tarifs non mis à jour depuis 12 mois) : aucun agrégat de ce type
-  (`GET /services/stats`).
-- **Import Excel** du catalogue : déjà noté comme gap CDC (EF-ART-03), confirmé ici
-  visuellement (bouton « Importer Excel » à côté d'« Exporter »).
-- **Onglets Catégories / Tarifs au kilo / Indisponibles / Historique** sur la liste :
-  structure de navigation différente de la liste plate actuelle.
-- Conclusion : même constat que pour la Caisse — le CRUD actuel (prix fixe, une
-  seule liste) est correct pour un MVP mais très en retrait par rapport à la
-  maquette, qui décrit un vrai système de tarification (modes de facturation,
-  grilles dégressives, règles de validation, historique). Chantier de renforcement
-  à part entière.
+  paramétrables par article) : **différé** — `IntakeCondition` existe toujours
+  sans liste configurable par article ; « rendus compatibles »/« services
+  associés » n'existent pas.
+- **Disponibilité par agence détaillée** (récapitulatif agence par agence avec
+  « prix local +X % » sur la fiche article) : **différé** — `agency_services`
+  (price_override, is_active) couvre la donnée brute, aucune UI dédiée.
+- **Contrôle avant publication** (checklist) et **recommandations automatiques**
+  (« le tarif Express ne doit pas dépasser de 40 % ») : **différé** — seules les
+  règles de validation HTTP basiques existent (ex. tranches de poids cohérentes).
+- **Import Excel** du catalogue (EF-ART-03) : **différé**, toujours non construit.
+- **Onglets Catégories / Tarifs au kilo / Indisponibles / Historique** sur la
+  liste : **différé** — liste plate avec filtres/recherche uniquement.
+- Conclusion : le système de tarification (modes de facturation, grilles
+  dégressives, historique, tableau de bord) est maintenant un vrai renforcement,
+  pas un simple ajustement visuel — intégré jusqu'au comptoir. Restent hors scope
+  de cette passe : configuration fine par article (états/rendus/services
+  associés, disponibilité par agence détaillée), contrôle de publication, import
+  Excel, navigation par onglets.
 
 Le catalogue articles/tarifs (CRUD) et la sidebar de navigation groupée, qui étaient
 dans une version précédente de cette liste, sont **déjà faits** (commits `7dd2fae`,
@@ -585,6 +592,15 @@ dans une version précédente de cette liste, sont **déjà faits** (commits `7d
 
 ## Conventions établies dans ce projet (à respecter)
 
+- **Sidebar toujours sombre** (`AppLayout.tsx`, commit du 2026-10-01) : les deux
+  `<aside>` (desktop et overlay mobile) sont fixés en `bg-brand-950`, **indépendamment
+  du thème clair/sombre du contenu** — c'est ce que montrent systématiquement les
+  captures Figma (toutes les sections). `BrandMark` y est rendu avec `inverted`
+  (texte blanc). Si un nouvel élément est ajouté dans la sidebar, ne pas utiliser de
+  couleurs `dark:` conditionnelles dessus — utiliser directement les tons clairs
+  (`text-brand-100/80`, `hover:bg-white/10`) adaptés à un fond sombre permanent.
+  Correctif similaire pour tout futur écran dont le Figma montre un fond
+  systématiquement sombre indépendant du thème.
 - **Discipline par module** : backend → tests backend → frontend → valider
   (`tsc --noEmit`, `npm run build`, `php artisan test`, parité i18n, smoke test
   Playwright) → commit → push → **stop pour validation utilisateur**. Ne pas

@@ -157,19 +157,51 @@ export interface CashClosure {
 }
 
 export type ServiceCategory = 'nettoyage' | 'lavage' | 'repassage' | 'retouche' | 'teinture' | 'autre';
+export type ServiceBillingMode = 'piece' | 'kg' | 'mixte';
+
+export interface ServicePriceTier {
+    id: number;
+    service_id: number;
+    weight_min: number;
+    weight_max: number | null;
+    price_per_kg: number;
+}
+
+export interface ServicePriceHistory {
+    id: number;
+    service_id: number;
+    field: 'base_price' | 'price_tiers';
+    old_value: string | null;
+    new_value: string | null;
+    changed_at: string;
+    actor?: { id: number; name: string } | null;
+}
 
 export interface Service {
     id: number;
     code: string;
     name: string;
     category: ServiceCategory;
+    billing_mode: ServiceBillingMode;
     description: string | null;
-    base_price: number;
+    base_price: number | null;
     estimated_duration_hours: number;
     is_active: boolean;
+    allow_discount: boolean;
+    round_to_hundred: boolean;
+    price_editable_at_counter: boolean;
     effective_price?: number;
     pivot?: { price_override: number | null; is_active: boolean };
     agency_pivot?: { price_override: number | null; is_active: boolean } | null;
+    price_tiers?: ServicePriceTier[];
+    price_histories?: ServicePriceHistory[];
+}
+
+export interface ServiceStats {
+    active_count: number;
+    category_count: number;
+    average_base_price: number;
+    stale_count: number;
 }
 
 export type OrderItemStatus =
@@ -201,6 +233,7 @@ export interface OrderItem {
     intake_conditions?: IntakeCondition[];
     quantity: number;
     quantity_delivered: number;
+    weight_kg: number | null;
     unit_price: number;
     status: OrderItemStatus;
     quality_check_result: 'ok' | 'echec' | null;
@@ -277,6 +310,14 @@ export interface OrderPickup {
     items?: OrderPickupItem[];
 }
 
+export interface PickupDueToday {
+    id: number;
+    order_number: number;
+    client_name: string;
+    promised_at: string;
+    pieces_remaining: number;
+}
+
 export interface PickupSummary {
     ready_orders: number;
     pieces_ready: number;
@@ -284,6 +325,7 @@ export interface PickupSummary {
     pickups_today: number;
     unpaid_orders: number;
     unpaid_amount: number;
+    due_today: PickupDueToday[];
 }
 
 export interface Invoice {

@@ -108,6 +108,94 @@ class OrderCreationTest extends TestCase
         $this->assertTrue($chosenDate->equalTo($response->json('promised_at')));
     }
 
+    public function test_a_weight_billed_item_is_priced_from_the_matching_tier(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['billing_mode' => 'kg', 'base_price' => null]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+        $service->priceTiers()->createMany([
+            ['weight_min' => 0, 'weight_max' => 3, 'price_per_kg' => 1500],
+            ['weight_min' => 3.01, 'weight_max' => null, 'price_per_kg' => 1200],
+        ]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [
+                ['service_id' => $service->id, 'quantity' => 1, 'weight_kg' => 4.8],
+            ],
+        ]);
+
+        $response->assertCreated();
+        // 4,8 kg tombe dans la tranche > 3,01 kg : 4,8 * 1200 = 5760
+        $this->assertSame(5760, $response->json('total_amount'));
+        $this->assertSame(1, $response->json('items.0.quantity'));
+        $this->assertEquals(4.8, $response->json('items.0.weight_kg'));
+    }
+
+    public function test_round_to_hundred_rounds_the_weight_billed_line_total(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['billing_mode' => 'kg', 'base_price' => null, 'round_to_hundred' => true]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+        $service->priceTiers()->create(['weight_min' => 0, 'weight_max' => null, 'price_per_kg' => 1000]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [
+                ['service_id' => $service->id, 'quantity' => 1, 'weight_kg' => 2.34],
+            ],
+        ]);
+
+        $response->assertCreated();
+        // 2,34 * 1000 = 2340, arrondi à la centaine -> 2300
+        $this->assertSame(2300, $response->json('total_amount'));
+    }
+
+    public function test_a_weight_outside_every_tier_is_rejected(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['billing_mode' => 'kg', 'base_price' => null]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+        $service->priceTiers()->create(['weight_min' => 0, 'weight_max' => 3, 'price_per_kg' => 1500]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [
+                ['service_id' => $service->id, 'quantity' => 1, 'weight_kg' => 10],
+            ],
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_a_weight_cannot_be_submitted_for_a_piece_only_service(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['billing_mode' => 'piece', 'base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [
+                ['service_id' => $service->id, 'quantity' => 1, 'weight_kg' => 2],
+            ],
+        ]);
+
+        $response->assertStatus(422);
+    }
+
     public function test_showing_an_order_includes_its_agency_for_the_printed_ticket(): void
     {
         $this->seedRbac();

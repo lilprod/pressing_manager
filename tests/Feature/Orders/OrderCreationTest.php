@@ -209,4 +209,18 @@ class OrderCreationTest extends TestCase
         $response->assertJsonPath('agency.name', 'Pressing Lomé Centre');
         $response->assertJsonPath('agency.address', 'Boulevard du 13 janvier');
     }
+
+    public function test_showing_an_order_includes_the_balance_due_from_its_invoice(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $order = Order::factory()->create(['agency_id' => $agency->id]);
+        $invoice = $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/invoice")->json();
+
+        $response = $this->actingAs($accueil)->getJson("/api/orders/{$order->id}");
+
+        $response->assertOk();
+        $response->assertJsonPath('balance_due', $invoice['total_amount']);
+    }
 }

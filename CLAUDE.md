@@ -274,9 +274,15 @@ côté front : chaque élément a été **omis** et attend le backend décrit ic
 
 **09 Paramètres — hub** (node `25:12184`)
 - Bouton « Historique » et journal « Dernières modifications » (date, détail, auteur,
-  badge) : aucun audit des paramètres. Il faudrait une table `settings_audits`
-  (clé, ancienne/nouvelle valeur, `user_id`, date) alimentée par
-  `SettingsController::update` (et les autres écrans de réglage) + `GET /settings/audit`.
+  badge) : **revu le 2026-10-01, plus simple que prévu** — pas besoin d'une nouvelle
+  table `settings_audits` dédiée : le système d'audit générique `AuditLog`/`Auditable`
+  existe déjà (voir « Conventions établies » ci-dessus) et couvre exactement ce besoin.
+  Il suffirait d'ajouter `use Auditable;` à `AppSetting` (et `Role`/`Permission` pour
+  le gap équivalent noté en §11 ci-dessous) puis de réutiliser `AuditLogController`/
+  `lib/auditLog.ts` déjà construits pour la fiche dépôt — reste à faire : ajouter
+  `app_setting`/`role` à `AuditLogController::TYPES`, et un lien/filtre dédié sur cet
+  écran vers `/audit-logs?type=app_setting`. Non fait ici (hors scope de cette passe,
+  mais le coût réel est maintenant faible, à reprioriser).
 - Cartes de catégories sans écran/backend, omises : **Numérotation** (hash — préfixes/format des
   n° de commande et facture ; `OrderNumberGenerator` est codé en dur), **Horaires et
   délais** (clock-3 — horaires d'ouverture, délais standard/express par défaut),
@@ -503,19 +509,41 @@ pas de node exact) — écarts additionnels à ceux déjà notés :
   hors connexion (probablement non, à confirmer avant de documenter comme gap).
 
 **02 Dépôts — Gestion des dépôts (vue globale) et Fiche dépôt enrichie** (captures
-Figma fournies le 2026-10-01) : la vue « Gestion des dépôts » multi-agences (KPI CA/
-dépôts du jour/reste à encaisser, colonnes État atelier + Synchro séparées, export,
-colonnes configurables) correspond à `OrdersList.tsx` déjà jugé conforme — à
-revérifier visuellement avec ces captures précises (colonnes « Synchro » par ligne et
-bouton « Colonnes » configurables probablement absents). La **fiche dépôt** (détail
-d'une commande) montrée est nettement plus riche que `OrderDetail.tsx` actuel :
-statut commercial + état atelier + synchronisation + reste à payer en 4 cartes
-distinctes, **chronologie atelier horodatée par étape** (recoupe le gap déjà noté en
-§2 Dashboard : `GET /order-items/counts-by-status` et étape finition), **journal
-d'audit par dépôt** (recoupe le même besoin que pour les Retraits ci-dessus), et un
-bouton « Suivre l'atelier » séparé. À comparer précisément à `OrderDetail.tsx` avant
-de documenter des gaps définitifs (non fait ici faute de temps — capture reçue en
-fin de session).
+Figma fournies le 2026-10-01) : la vue « Gestion des dépôts » multi-agences
+(`OrdersList.tsx`) reste à enrichir de KPI (détail en §2 CDC-restylage ci-dessous) ;
+colonnes « Synchro » par ligne et bouton « Colonnes » configurables toujours hors
+scope (données non disponibles / fonctionnalité non prioritaire).
+
+**Fiche dépôt — renforcement livré (2026-10-01)**, `OrderDetail.tsx` :
+- ~~**4 cartes (statut commercial/état atelier/synchronisation/reste à payer)**~~
+  **fait, 3 cartes** : Statut commercial (dérivé de `invoice.status` — Non facturé/
+  Émise/Partiellement payée/Payée, pas de carte Synchronisation fabriquée : aucune
+  donnée de sync par dépôt n'existe, voir Synchronisation hors ligne ci-dessous),
+  État atelier (`order.status`), Reste à payer (nouveau `balance_due` calculé par
+  `OrderController::show()`, même formule que `PickupController`).
+- ~~**Chronologie atelier horodatée**~~ **fait** : réutilise `order_items.status_histories`
+  déjà en base (acteur + horodatage), fusionnée across tous les articles du dépôt,
+  via un composant `Timeline` partagé (`components/ui/Timeline.tsx`).
+- ~~**Journal d'audit par dépôt**~~ **fait — découverte majeure** : un système d'audit
+  générique existait déjà silencieusement (`AuditLog` + trait `Auditable`, utilisé par
+  11 modèles dont `Order`/`OrderItem`/`Payment`/`Invoice`/`Client`/`CashMovement`/
+  `CashClosure`/`Delivery`/`StockMovement` — chaque création/modification/suppression y
+  est journalisée automatiquement) mais **sans aucun endpoint ni écran pour le lire**.
+  Nouveau `AuditLogController::forOrder()` (`GET /orders/{id}/audit-logs`, résout les
+  types/ids liés : commande + articles + facture + paiements) et formateur
+  `lib/auditLog.ts` (diffs bruts → phrases lisibles, couverture correcte pour
+  statuts/paiements/factures, repli générique « {type} modifié(e) » pour le reste).
+  **Piège évité** : `Order::createdBy()` a été renommée `creator()` avant d'être
+  chargée pour la première fois (collision FK documentée ci-dessous — jamais exploitée
+  jusqu'ici car la relation n'était chargée nulle part).
+  **Corollaire** : ceci rend aussi possible l'écran « Audit & logs » du menu
+  PILOTAGE (jusqu'ici jamais construit faute de backend) — `AuditLogController::index()`
+  (`GET /audit-logs`, permission dédiée `audit.view`, admin/manager) +
+  `pages/AuditLogsPage.tsx` (route `/audit-logs`), journal filtrable par type/période,
+  données réelles dès la première ouverture (toute l'activité déjà enregistrée
+  silencieusement apparaît).
+- Bouton « Suivre l'atelier » séparé : **différé**, en attente du chantier Atelier/Kanban
+  (voir §09 ci-dessous) — pointera vers `/atelier?order=` une fois cette page construite.
 
 **06 Caisse — Clôture et rapprochement journalier, Nouveau mouvement** (captures
 Figma fournies par l'utilisateur le 2026-09-30, renforcement livré le 2026-10-01)
@@ -651,7 +679,26 @@ dans une version précédente de cette liste, sont **déjà faits** (commits `7d
   dans le `with()`. Nommer la relation différemment (`creator()`, `closer()`…).
   Bug détecté et corrigé avant publication sur `CashMovement`/`CashClosure`
   (commit du module Caisse) — vérifier ce pattern sur toute nouvelle relation
-  `xxx_by`.
+  `xxx_by`. **Deuxième occurrence trouvée et corrigée le 2026-10-01** sur
+  `Order::createdBy()` (jamais exploitée jusque-là car la relation n'était chargée
+  nulle part) — renommée `creator()` avant son premier chargement dans
+  `OrderController::show()`.
+- **Un système d'audit générique existe déjà** (`App\Models\AuditLog` + trait
+  `App\Models\Concerns\Auditable`) : 11 modèles l'utilisent (`Order`, `OrderItem`,
+  `Client`, `Payment`, `Invoice`, `Delivery`, `CashMovement`, `CashClosure`,
+  `StockMovement`, `Attendance`, `Shift`) et journalisent automatiquement chaque
+  create/update/delete (`old_values`/`new_values`/acteur/IP/user-agent) dans
+  `audit_logs` — **avant le 2026-10-01 aucun endpoint ni écran ne le lisait**, la
+  table s'empilait silencieusement depuis le tout début du projet. Avant d'ajouter
+  un `created_by`/journal/historique sur un nouveau modèle, vérifier s'il n'a pas
+  déjà `use Auditable` (il suffit souvent d'exposer les entrées existantes plutôt
+  que d'inventer un nouveau mécanisme) — voir `AuditLogController` (`GET
+  /audit-logs`, `GET /orders/{id}/audit-logs`) et `lib/auditLog.ts` (formatage des
+  diffs bruts en phrases lisibles) pour le patron à suivre. Pour ajouter l'audit à
+  un modèle qui ne l'a pas encore : `use Auditable;` sur le modèle (expose
+  `agency_id` ou surcharge `auditAgencyId()`), puis ajouter son nom court à
+  `AuditLogController::TYPES` et à `TYPE_LABEL_KEYS`/`audit.type.*` (i18n) côté
+  front pour qu'il apparaisse dans le filtre de `/audit-logs`.
 - **Bug corrigé en marge du chantier clients (commit `eaf68bf`)** : `Client::create()`
   ne reflète pas en mémoire le défaut DB de `loyalty_points` (0), donc l'accesseur
   `loyaltyDiscountRate()` plantait la sérialisation JSON à chaque création de

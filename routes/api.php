@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AgencyController;
 use App\Http\Controllers\Api\AttendanceController;
+use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CashController;
 use App\Http\Controllers\Api\ClientController;
@@ -93,6 +94,9 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::post('/orders/{order}/invoice', [InvoiceController::class, 'storeForOrder']);
+    Route::get('/orders/{order}/audit-logs', [AuditLogController::class, 'forOrder']);
+
+    Route::get('/audit-logs', [AuditLogController::class, 'index']);
 
     Route::get('/pickups', [PickupController::class, 'index']);
     Route::get('/pickups/summary', [PickupController::class, 'summary']);

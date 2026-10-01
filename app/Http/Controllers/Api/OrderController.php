@@ -171,9 +171,21 @@ class OrderController extends ApiController
     {
         $this->authorizeAgency($request->user(), $order->agency_id);
 
-        return response()->json($order->load(
+        $order->load(
             'items.service', 'items.intakeConditions', 'items.statusHistories.actor',
-            'client', 'invoice.payments', 'agency', 'pickups.items.orderItem', 'pickups.processor',
-        ));
+            'client', 'invoice.payments', 'agency', 'pickups.items.orderItem', 'pickups.processor', 'creator',
+        );
+        $order->setAttribute('balance_due', $this->balanceDue($order));
+
+        return response()->json($order);
+    }
+
+    private function balanceDue(Order $order): int
+    {
+        return (int) $order->invoice->sum(function ($invoice) {
+            $paid = $invoice->payments->where('status', 'complete')->sum('amount');
+
+            return max(0, $invoice->total_amount - $paid);
+        });
     }
 }

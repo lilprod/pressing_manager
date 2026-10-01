@@ -276,10 +276,22 @@ export interface Order {
     items: OrderItem[];
     invoice?: Invoice[];
     pickups?: OrderPickup[];
-    // Présents uniquement sur les réponses de /pickups (Centre de retrait).
+    creator?: { id: number; name: string } | null;
+    // Présent sur GET /orders/{id} et sur les réponses de /pickups (Centre de retrait).
     balance_due?: number;
     pieces_remaining?: number;
     notification_status?: 'sent' | 'simulated' | 'failed' | null;
+}
+
+export interface AuditLog {
+    id: number;
+    action: string;
+    auditable_type: string;
+    auditable_id: number;
+    old_values: Record<string, unknown> | null;
+    new_values: Record<string, unknown> | null;
+    user: { id: number; name: string } | null;
+    created_at: string;
 }
 
 export type PickupRecipientType = 'client' | 'tiers';

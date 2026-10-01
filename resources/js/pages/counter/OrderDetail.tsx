@@ -1,18 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, Clock, FileQuestion, Phone, Printer, StickyNote, Zap } from 'lucide-react';
+import { ArrowLeft, Banknote, CalendarDays, ClipboardCheck, Clock, FileQuestion, Phone, Printer, ScrollText, StickyNote, Workflow, Zap } from 'lucide-react';
 import { useI18n } from '../../contexts/I18nContext';
 import { api } from '../../lib/api';
 import { useFormat } from '../../lib/format';
+import { auditLogLabel } from '../../lib/auditLog';
 import OrderItemRow from '../../components/OrderItemRow';
 import PrintableTicket from '../../components/PrintableTicket';
 import PrintableLabel from '../../components/PrintableLabel';
 import InvoicePanel from '../../components/InvoicePanel';
 import { Avatar } from '../../components/ui/PageHeader';
-import StatusBadge, { Pill } from '../../components/ui/StatusBadge';
+import StatusBadge, { Pill, statusTone } from '../../components/ui/StatusBadge';
 import { EmptyState, LoadingState } from '../../components/ui/Feedback';
+import { StatCard } from '../../components/ui/Metrics';
+import { Timeline, type TimelineEntry } from '../../components/ui/Timeline';
 import { button, card, cardPadded, cx, sectionTitle, textLink } from '../../components/ui/styles';
-import type { Order, OrderItem } from '../../types';
+import type { AuditLog, Order, OrderItem } from '../../types';
 
 type PrintTarget = { kind: 'ticket' } | { kind: 'label'; item: OrderItem; dataUri: string } | null;
 
@@ -23,6 +26,7 @@ export default function OrderDetail() {
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
     const [printTarget, setPrintTarget] = useState<PrintTarget>(null);
+    const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
     useEffect(() => {
         if (!id) return;
@@ -30,7 +34,43 @@ export default function OrderDetail() {
             .get<Order>(`/orders/${id}`)
             .then(setOrder)
             .finally(() => setLoading(false));
+        api
+            .get<AuditLog[]>(`/orders/${id}/audit-logs`)
+            .then(setAuditLogs)
+            .catch(() => setAuditLogs([]));
     }, [id]);
+
+    const workshopTimeline = useMemo<TimelineEntry[]>(() => {
+        if (!order) return [];
+        const entries: TimelineEntry[] = order.items.flatMap(
+            (item) =>
+                item.status_histories?.map((h) => ({
+                    id: `history-${h.id}`,
+                    label: t('order.timeline.itemStatus', { item: item.service?.name ?? t('order.item'), status: t(`status.${h.to_status}`) }),
+                    detail: h.notes ?? undefined,
+                    at: h.changed_at,
+                    actor: h.actor?.name ?? null,
+                })) ?? [],
+        );
+        entries.push({
+            id: 'order-created',
+            label: t('order.timeline.created'),
+            at: order.created_at,
+            actor: order.creator?.name ?? null,
+        });
+        return entries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    }, [order, t]);
+
+    const auditTimeline = useMemo<TimelineEntry[]>(
+        () =>
+            auditLogs.map((log) => ({
+                id: log.id,
+                label: auditLogLabel(log, t, money),
+                at: log.created_at,
+                actor: log.user?.name ?? t('order.audit.systemActor'),
+            })),
+        [auditLogs, t, money],
+    );
 
     useEffect(() => {
         if (printTarget) {
@@ -143,6 +183,22 @@ export default function OrderDetail() {
                 </div>
             </header>
 
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <StatCard
+                    label={t('order.commercialStatus.title')}
+                    value={order.invoice && order.invoice.length > 0 ? t(`invoice.status.${order.invoice[0].status}`) : t('order.commercialStatus.notInvoiced')}
+                    icon={ClipboardCheck}
+                    tone={order.invoice && order.invoice.length > 0 ? statusTone('invoice', order.invoice[0].status) : 'neutral'}
+                />
+                <StatCard label={t('order.workshopStatus.title')} value={t(`status.${order.status}`)} icon={Workflow} tone={statusTone('order', order.status)} />
+                <StatCard
+                    label={t('order.balanceDue.title')}
+                    value={order.invoice && order.invoice.length > 0 ? (order.balance_due ? money(order.balance_due) : t('order.balanceDue.settled')) : '—'}
+                    icon={Banknote}
+                    tone={order.balance_due ? 'rose' : 'emerald'}
+                />
+            </div>
+
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
                 <section aria-labelledby="items-heading" className="space-y-3">
                     <div className="flex items-center justify-between gap-2">
@@ -161,6 +217,24 @@ export default function OrderDetail() {
                 <div className="lg:sticky lg:top-20">
                     <InvoicePanel order={order} />
                 </div>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-2">
+                <section aria-labelledby="timeline-heading" className={cx(cardPadded, 'space-y-4')}>
+                    <h2 id="timeline-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
+                        <Workflow aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
+                        {t('order.timeline.title')}
+                    </h2>
+                    <Timeline entries={workshopTimeline} emptyLabel={t('order.timeline.empty')} />
+                </section>
+
+                <section aria-labelledby="audit-heading" className={cx(cardPadded, 'space-y-4')}>
+                    <h2 id="audit-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
+                        <ScrollText aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
+                        {t('order.audit.title')}
+                    </h2>
+                    <Timeline entries={auditTimeline} emptyLabel={t('order.audit.empty')} />
+                </section>
             </div>
 
             {printTarget?.kind === 'ticket' && <PrintableTicket order={order} />}

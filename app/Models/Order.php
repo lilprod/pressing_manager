@@ -38,7 +38,12 @@ class Order extends Model
         return $this->belongsTo(Client::class);
     }
 
-    public function createdBy(): BelongsTo
+    /**
+     * Nommée `creator` (pas `createdBy`) : une relation chargée sous une clé qui
+     * correspond au snake_case du nom de colonne FK (`created_by`) écraserait
+     * silencieusement la valeur brute de la colonne dans la sérialisation JSON.
+     */
+    public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
     }

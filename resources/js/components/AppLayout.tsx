@@ -15,6 +15,7 @@ import {
     Moon,
     PackageCheck,
     ScanLine,
+    ScrollText,
     Settings as SettingsIcon,
     Shirt,
     ShieldCheck,
@@ -125,7 +126,8 @@ function useSidebarSections(onNavigate?: () => void) {
                 hasPermission(user, 'reports.view') ||
                 hasPermission(user, 'notifications.manage') ||
                 hasPermission(user, 'licenses.manage') ||
-                hasPermission(user, 'agencies.manage')) && (
+                hasPermission(user, 'agencies.manage') ||
+                hasPermission(user, 'audit.view')) && (
                 <NavSection label={t('nav.section.insights')}>
                     {hasPermission(user, 'invoices.manage') && (
                         <NavItem to="/invoices/outstanding" icon={CircleDollarSign} label={t('invoice.outstandingTitle')} onClick={onNavigate} />
@@ -133,6 +135,9 @@ function useSidebarSections(onNavigate?: () => void) {
                     {hasPermission(user, 'reports.view') && <NavItem to="/kpi" icon={ChartNoAxesCombined} label={t('nav.kpi')} onClick={onNavigate} />}
                     {hasPermission(user, 'notifications.manage') && (
                         <NavItem to="/notifications" icon={Bell} label={t('nav.notifications')} onClick={onNavigate} />
+                    )}
+                    {hasPermission(user, 'audit.view') && (
+                        <NavItem to="/audit-logs" icon={ScrollText} label={t('auditLogs.title')} onClick={onNavigate} />
                     )}
                     {hasPermission(user, 'licenses.manage') && <NavItem to="/license" icon={KeyRound} label={t('nav.license')} onClick={onNavigate} />}
                     {hasPermission(user, 'agencies.manage') && (

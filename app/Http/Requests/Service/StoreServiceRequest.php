@@ -21,6 +21,7 @@ class StoreServiceRequest extends FormRequest
             'description' => ['nullable', 'string'],
             'base_price' => ['required_unless:billing_mode,kg', 'nullable', 'integer', 'min:0'],
             'estimated_duration_hours' => ['required', 'integer', 'min:1'],
+            'priority' => ['sometimes', 'in:standard,haute'],
             'is_active' => ['boolean'],
             'allow_discount' => ['boolean'],
             'round_to_hundred' => ['boolean'],

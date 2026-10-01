@@ -34,6 +34,64 @@ class ServiceManagementTest extends TestCase
         $updated->assertJsonPath('base_price', 1200);
     }
 
+    public function test_a_service_defaults_to_standard_priority(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+
+        $created = $this->actingAs($admin)->postJson('/api/services', [
+            'code' => 'NETT-PRIO',
+            'name' => 'Nettoyage priorité',
+            'category' => 'nettoyage',
+            'billing_mode' => 'piece',
+            'base_price' => 1000,
+            'estimated_duration_hours' => 24,
+        ]);
+
+        $created->assertCreated();
+        $created->assertJsonPath('priority', 'standard');
+    }
+
+    public function test_an_admin_can_set_a_service_to_high_priority(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+
+        $created = $this->actingAs($admin)->postJson('/api/services', [
+            'code' => 'NETT-HAUTE',
+            'name' => 'Nettoyage express',
+            'category' => 'nettoyage',
+            'billing_mode' => 'piece',
+            'base_price' => 1000,
+            'estimated_duration_hours' => 24,
+            'priority' => 'haute',
+        ]);
+        $created->assertCreated();
+        $created->assertJsonPath('priority', 'haute');
+
+        $updated = $this->actingAs($admin)->patchJson("/api/services/{$created->json('id')}", [
+            'priority' => 'standard',
+        ]);
+        $updated->assertOk();
+        $updated->assertJsonPath('priority', 'standard');
+    }
+
+    public function test_an_invalid_service_priority_is_rejected(): void
+    {
+        $this->seedRbac();
+        $admin = $this->makeUser('admin');
+
+        $this->actingAs($admin)->postJson('/api/services', [
+            'code' => 'NETT-BAD',
+            'name' => 'Nettoyage invalide',
+            'category' => 'nettoyage',
+            'billing_mode' => 'piece',
+            'base_price' => 1000,
+            'estimated_duration_hours' => 24,
+            'priority' => 'urgente',
+        ])->assertStatus(422);
+    }
+
     public function test_an_admin_can_fetch_a_single_service(): void
     {
         $this->seedRbac();

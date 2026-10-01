@@ -495,6 +495,20 @@ une table de réglages par agence (`agency_settings`) + endpoints `GET/PATCH
   « dernier envoi » sur cet écran (aurait demandé la permission `notifications.manage`,
   incohérente avec le gating `orders.manage` déjà utilisé ici pour voir/envoyer les
   documents — le retour inline du résultat d'envoi suffit).
+  **Renforcement livré (2026-10-01, audit Drive `Pressing/New`)** : champ
+  **Exemplaires** (`PrintableTicket.tsx` accepte désormais `copies`, rend ce nombre de
+  blocs dans le DOM imprimable avec `page-break-after` entre chacun — `window.print()`
+  n'offre aucun paramètre de nombre de copies, donc c'est le DOM imprimé qui porte
+  plusieurs exemplaires en un seul job d'impression ; limité au format Ticket, testé
+  en Playwright avec `window.print` stubbé). Carte **« hors connexion »** basée sur
+  le vrai `orders.sync_status`/`client_local_uuid` (colonnes déjà en base, jamais
+  exposées côté front jusqu'ici) — affichée uniquement si le dépôt n'est pas
+  `synced` (`pending`→numéro local, `conflict`→avertissement), omise pour le cas
+  normal plutôt que d'afficher un faux « Toujours disponible ». **Explicitement
+  omis** : sélecteur « Imprimante » (la capture montre « POS-01 », mais aucun
+  registre de périphériques n'existe côté backend — le fabriquer serait inventer
+  une donnée ; le dialogue d'impression du navigateur propose déjà le choix
+  d'imprimante, l'app n'a pas à le dupliquer).
 - **Bug corrigé au passage, prérequis bloquant pour ce module** : `orders.status`
   n'était jamais réécrit après la création de la commande (`OrderController::store`
   le fixe une fois à `recu`) — seul `order_items.status` progressait. Le filtre
@@ -876,6 +890,15 @@ d'abord :
 - ~~**Tableau de bord du catalogue**~~ **fait** : `GET /services/stats` (actifs,
   catégories, tarif moyen, « à réviser » = non modifié depuis 12 mois via
   `ServicePriceHistory`), 4 `StatCard` sur `ServicesPage.tsx`.
+- ~~**Champ « Priorité »**~~ **fait** (2026-10-01, audit Drive `Pressing/New`) :
+  `services.priority` (enum `standard`/`haute`, défaut `standard`), sélecteur sur
+  `ServiceFormPage.tsx` section Tarification. **Indicatif uniquement** — ne modifie
+  **pas** automatiquement `orders.priority` (qui reste calculé par dépôt, voir
+  chantier Atelier ci-dessus) : un dépôt peut contenir plusieurs articles de
+  priorités différentes, la priorité d'article n'est donc pas transposable 1:1 en
+  priorité de commande sans règle métier supplémentaire non demandée ici. Stocké et
+  modifiable dès maintenant ; branchement vers un usage concret (tri atelier,
+  alerte) différé, même principe que `price_editable_at_counter` ci-dessus.
 - **États acceptés / rendus compatibles / services associés** (cases à cocher
   paramétrables par article) : **différé** — `IntakeCondition` existe toujours
   sans liste configurable par article ; « rendus compatibles »/« services

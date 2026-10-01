@@ -623,6 +623,9 @@
     "service.category.autre": "Autre",
     "service.basePrice": "Tarif de base (FCFA)",
     "service.duration": "Délai estimé (heures)",
+    "service.priority": "Priorité",
+    "service.priorityOption.standard": "Standard",
+    "service.priorityOption.haute": "Haute",
     "service.durationHours": "{count} h",
     "service.active": "Actif",
     "service.inactive": "Inactif",
@@ -1178,5 +1181,8 @@
     "documents.invoiceMissingHint": "Générez la facture depuis la fiche dépôt pour l'envoyer ou l'imprimer.",
     "documents.backToOrder": "Retour à la fiche dépôt",
     "documents.ticketPreview": "Ticket de dépôt",
-    "documents.invoicePreview": "Facture"
+    "documents.invoicePreview": "Facture",
+    "documents.copies": "Exemplaires",
+    "documents.offline.pending": "Ce dépôt n'est pas encore synchronisé (créé hors connexion). Numéro local : {uuid}. L'impression du ticket reste possible — le numéro définitif apparaîtra après synchronisation.",
+    "documents.offline.conflict": "Un conflit de synchronisation a été détecté sur ce dépôt. Vérifiez les données avant d'imprimer ou d'envoyer un document."
 }

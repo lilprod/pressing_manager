@@ -13,7 +13,7 @@ class Service extends Model
 
     protected $fillable = [
         'code', 'name', 'category', 'billing_mode', 'description', 'base_price', 'estimated_duration_hours',
-        'is_active', 'allow_discount', 'round_to_hundred', 'price_editable_at_counter',
+        'priority', 'is_active', 'allow_discount', 'round_to_hundred', 'price_editable_at_counter',
     ];
 
     protected function casts(): array

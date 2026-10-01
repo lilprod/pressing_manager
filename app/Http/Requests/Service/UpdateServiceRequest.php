@@ -22,6 +22,7 @@ class UpdateServiceRequest extends FormRequest
             'description' => ['nullable', 'string'],
             'base_price' => ['sometimes', 'nullable', 'integer', 'min:0'],
             'estimated_duration_hours' => ['sometimes', 'required', 'integer', 'min:1'],
+            'priority' => ['sometimes', 'in:standard,haute'],
             'is_active' => ['boolean'],
             'allow_discount' => ['boolean'],
             'round_to_hundred' => ['boolean'],

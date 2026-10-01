@@ -9,10 +9,11 @@ import { categoryMeta } from '../../lib/serviceCategory';
 import { Alert, LoadingState, Spinner } from '../../components/ui/Feedback';
 import { Pill, TONES } from '../../components/ui/StatusBadge';
 import { button, cardPadded, cx, input, inputSm, label, select, sectionTitle, textLink } from '../../components/ui/styles';
-import type { Service, ServiceBillingMode, ServiceCategory, ServicePriceTier } from '../../types';
+import type { Service, ServiceBillingMode, ServiceCategory, ServicePriceTier, ServicePriority } from '../../types';
 
 const CATEGORIES: ServiceCategory[] = ['nettoyage', 'lavage', 'repassage', 'retouche', 'teinture', 'autre'];
 const BILLING_MODES: ServiceBillingMode[] = ['piece', 'kg', 'mixte'];
+const PRIORITIES: ServicePriority[] = ['standard', 'haute'];
 
 type TierDraft = { weight_min: string; weight_max: string; price_per_kg: string };
 
@@ -40,6 +41,7 @@ export default function ServiceFormPage() {
     const [description, setDescription] = useState('');
     const [basePrice, setBasePrice] = useState('');
     const [durationHours, setDurationHours] = useState('24');
+    const [priority, setPriority] = useState<ServicePriority>('standard');
     const [isActive, setIsActive] = useState(true);
     const [allowDiscount, setAllowDiscount] = useState(true);
     const [roundToHundred, setRoundToHundred] = useState(false);
@@ -66,6 +68,7 @@ export default function ServiceFormPage() {
                 setDescription(s.description ?? '');
                 setBasePrice(s.base_price !== null ? String(s.base_price) : '');
                 setDurationHours(String(s.estimated_duration_hours));
+                setPriority(s.priority);
                 setIsActive(s.is_active);
                 setAllowDiscount(s.allow_discount);
                 setRoundToHundred(s.round_to_hundred);
@@ -114,6 +117,7 @@ export default function ServiceFormPage() {
                 description: description || null,
                 base_price: billingMode === 'kg' ? null : Number(basePrice),
                 estimated_duration_hours: Number(durationHours),
+                priority,
                 is_active: isEdit ? isActive : undefined,
                 allow_discount: allowDiscount,
                 round_to_hundred: roundToHundred,
@@ -281,6 +285,16 @@ export default function ServiceFormPage() {
                     <label className="block">
                         <span className={label}>{t('service.duration')}</span>
                         <input type="number" min={1} value={durationHours} onChange={(e) => setDurationHours(e.target.value)} className={cx(input, 'w-full')} />
+                    </label>
+                    <label className="block">
+                        <span className={label}>{t('service.priority')}</span>
+                        <select value={priority} onChange={(e) => setPriority(e.target.value as ServicePriority)} className={select}>
+                            {PRIORITIES.map((p) => (
+                                <option key={p} value={p}>
+                                    {t(`service.priorityOption.${p}`)}
+                                </option>
+                            ))}
+                        </select>
                     </label>
                 </div>
 

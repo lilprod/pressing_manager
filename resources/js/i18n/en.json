@@ -623,6 +623,9 @@
     "service.category.autre": "Other",
     "service.basePrice": "Base price (FCFA)",
     "service.duration": "Estimated duration (hours)",
+    "service.priority": "Priority",
+    "service.priorityOption.standard": "Standard",
+    "service.priorityOption.haute": "High",
     "service.durationHours": "{count}h",
     "service.active": "Active",
     "service.inactive": "Inactive",
@@ -1178,5 +1181,8 @@
     "documents.invoiceMissingHint": "Generate the invoice from the order page to send or print it.",
     "documents.backToOrder": "Back to the order",
     "documents.ticketPreview": "Deposit ticket",
-    "documents.invoicePreview": "Invoice"
+    "documents.invoicePreview": "Invoice",
+    "documents.copies": "Copies",
+    "documents.offline.pending": "This deposit is not yet synced (created offline). Local number: {uuid}. The ticket can still be printed — the final number will appear once synced.",
+    "documents.offline.conflict": "A sync conflict was detected on this deposit. Check the data before printing or sending a document."
 }

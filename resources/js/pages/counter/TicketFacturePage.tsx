@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, FileQuestion, Mail, Printer, Receipt } from 'lucide-react';
+import { ArrowLeft, FileQuestion, Mail, Printer, Receipt, WifiOff } from 'lucide-react';
 import { useI18n } from '../../contexts/I18nContext';
 import { api, ApiError } from '../../lib/api';
 import PrintableTicket from '../../components/PrintableTicket';
@@ -8,7 +8,7 @@ import TicketReceiptContent from '../../components/TicketReceiptContent';
 import PageHeader from '../../components/ui/PageHeader';
 import { Alert, EmptyState, LoadingState, Spinner } from '../../components/ui/Feedback';
 import { ChipToggle } from '../../components/ui/Metrics';
-import { button, card, cx, textLink } from '../../components/ui/styles';
+import { button, card, cx, input, label, textLink } from '../../components/ui/styles';
 import type { Order } from '../../types';
 
 type DocumentFormat = 'ticket' | 'invoice';
@@ -27,6 +27,7 @@ export default function TicketFacturePage() {
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
     const [format, setFormat] = useState<DocumentFormat>('ticket');
+    const [copies, setCopies] = useState(1);
     const [invoicePdfUrl, setInvoicePdfUrl] = useState<string | null>(null);
     const [printTicket, setPrintTicket] = useState(false);
     const [sending, setSending] = useState(false);
@@ -158,17 +159,40 @@ export default function TicketFacturePage() {
                 }
             />
 
-            <div className="flex flex-wrap items-center gap-3 no-print">
-                <span className="text-xs font-semibold uppercase tracking-wide text-ink-500 dark:text-ink-400">{t('documents.format')}</span>
-                <div role="group" aria-label={t('documents.format')} className="flex flex-wrap gap-2">
-                    <ChipToggle active={format === 'ticket'} onClick={() => setFormat('ticket')}>
-                        {t('documents.format.ticket')}
-                    </ChipToggle>
-                    <ChipToggle active={format === 'invoice'} onClick={() => setFormat('invoice')}>
-                        {t('documents.format.invoice')}
-                    </ChipToggle>
+            <div className="flex flex-wrap items-end gap-4 no-print">
+                <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-ink-500 dark:text-ink-400">{t('documents.format')}</span>
+                    <div role="group" aria-label={t('documents.format')} className="flex flex-wrap gap-2">
+                        <ChipToggle active={format === 'ticket'} onClick={() => setFormat('ticket')}>
+                            {t('documents.format.ticket')}
+                        </ChipToggle>
+                        <ChipToggle active={format === 'invoice'} onClick={() => setFormat('invoice')}>
+                            {t('documents.format.invoice')}
+                        </ChipToggle>
+                    </div>
                 </div>
+                {format === 'ticket' && (
+                    <label className="block">
+                        <span className={label}>{t('documents.copies')}</span>
+                        <input
+                            type="number"
+                            min={1}
+                            max={5}
+                            value={copies}
+                            onChange={(e) => setCopies(Math.min(5, Math.max(1, Number(e.target.value) || 1)))}
+                            className={cx(input, 'w-24')}
+                        />
+                    </label>
+                )}
             </div>
+
+            {order.sync_status !== 'synced' && (
+                <Alert tone={order.sync_status === 'conflict' ? 'error' : 'warning'} icon={WifiOff} className="no-print">
+                    {order.sync_status === 'pending'
+                        ? t('documents.offline.pending', { uuid: order.client_local_uuid ?? '—' })
+                        : t('documents.offline.conflict')}
+                </Alert>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-2 no-print">
                 <section className={cx(card, 'space-y-3 p-5')}>
@@ -210,7 +234,7 @@ export default function TicketFacturePage() {
                 )}
             </section>
 
-            {printTicket && <PrintableTicket order={order} />}
+            {printTicket && <PrintableTicket order={order} copies={copies} />}
         </div>
     );
 }

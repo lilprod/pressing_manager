@@ -177,6 +177,7 @@ export interface CashClosure {
 
 export type ServiceCategory = 'nettoyage' | 'lavage' | 'repassage' | 'retouche' | 'teinture' | 'autre';
 export type ServiceBillingMode = 'piece' | 'kg' | 'mixte';
+export type ServicePriority = 'standard' | 'haute';
 
 export interface ServicePriceTier {
     id: number;
@@ -205,6 +206,7 @@ export interface Service {
     description: string | null;
     base_price: number | null;
     estimated_duration_hours: number;
+    priority: ServicePriority;
     is_active: boolean;
     allow_discount: boolean;
     round_to_hundred: boolean;
@@ -298,6 +300,7 @@ export interface Order {
     agency?: Agency;
     order_number: number;
     client_local_uuid: string | null;
+    sync_status: 'synced' | 'pending' | 'conflict';
     status: OrderStatus;
     is_express: boolean;
     total_amount: number;

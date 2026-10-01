@@ -50,6 +50,15 @@ honnête sur ce que l'API expose déjà ; voir le commit `408e94e` pour l'exempl
 colonnes/tableau : un enfant `flex-1` sans `basis-full sm:basis-auto` se fait
 écraser par ses voisins au lieu de passer à la ligne (bug rencontré et corrigé sur
 `ClientsList.tsx`, commit `08a8922`).
+**Grilles de `StatCard` avec des montants (FCFA)** : ne jamais démarrer à `grid-cols-2`
+dès le mobile — `StatCard` tronque sa valeur (`truncate`), et un montant à 6-7
+caractères (« 177 310 FCFA ») ne tient pas dans la moitié d'un écran à 390px.
+Toujours `grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-4` (ou `grid-cols-1
+sm:grid-cols-N` selon le nombre de cartes) pour les grilles de cartes dont au moins
+une valeur est un montant ; `grid-cols-2` direct reste correct uniquement pour des
+valeurs courtes (compteurs). Bug rencontré deux fois le même jour (2026-10-01, sur
+`OrdersList.tsx` et `ClientDetailPage.tsx`) — toujours vérifier par capture Playwright
+à 390px, pas seulement à l'œil sur le code.
 **Pages avec panneau latéral permanent** (formulaire de création à côté de la liste,
 comme `ClientsList.tsx`) : la colonne de liste est nettement plus étroite qu'une
 page pleine largeur (`OrdersList.tsx`). Un tableau y dépasse vite — enrober
@@ -77,7 +86,7 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 02 Dépôts & POS | Nouveau dépôt (formulaire) | `pages/counter/NewOrder.tsx` | jugé déjà conforme le 2026-09-30 — hérite des tokens, structure (client→catalogue groupé par catégorie→panier sticky) déjà proche de Figma et plus riche (recherche live, remise fidélité auto, conditions de réception, file offline). Ne pas réécrire sans raison concrète. |
 | 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`), KPI en-tête ajoutés le 2026-10-01 (voir détail en §2) |
 | 03 Clients & fidélité | Nouveau/Modifier client | `pages/clients/ClientFormPage.tsx` (routes `/clients/new`, `/clients/:id/edit`) | **fait** (commit `11de473`, écrans séparés depuis commit `eaf68bf`) — a aussi exposé le champ `notes` (backend déjà prêt, jamais affiché côté front) |
-| 03 Clients & fidélité | Fiche client (consultation) | panneau détail dans `ClientsList.tsx` | **fait** — reste un panneau latéral sur la liste (pas de retour utilisateur demandant un écran séparé pour la consultation, contrairement à la création/édition) |
+| 03 Clients & fidélité | Fiche client (consultation) | `pages/clients/ClientDetailPage.tsx` (route `/clients/:id`) | **fait** (2026-10-01) — remplace l'ancien panneau latéral par un écran dédié, suite à la capture Figma fournie le 2026-10-01 montrant 4 KPI (détail en §2) |
 | 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait, renforcement livré** (2026-10-01) — rapprochement par moyen de paiement (espèces/mobile money/carte), checklist de clôture obligatoire, double contrôle sur mouvement sensible (seuil configurable), pièces justificatives, rapport PDF de clôture. Restent différés : distinction dépôt/solde sur `Payment`, vue « opérateurs de la journée », notification au contrôleur (aucun canal interne staff n'existe) — détail en §2 |
 | 07 Articles & tarifs | Catalogue (liste) | `pages/ServicesPage.tsx` | **fait, renforcement livré** (2026-10-01) — tableau de bord (4 `StatCard` via `/services/stats`), badge mode de facturation + « Dès X FCFA/kg ». Restent différés : import Excel, onglets Catégories/Tarifs au kilo/Indisponibles/Historique, filtres avancés (détail §2) |
 | 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait, renforcement livré** (2026-10-01) — sélecteur Pièce/Kilo/Mixte, grilles de prix dégressives au kilo (`ServicePriceTier`), options `allow_discount`/`round_to_hundred`/`price_editable_at_counter`, historique des changements de prix (`ServicePriceHistory`). Intégré jusqu'au comptoir : `NewOrder.tsx` facture réellement au poids (résolution de palier + arrondi). Restent différés : états acceptés/rendus compatibles configurables, disponibilité par agence récapitulative, checklist de publication, historique des tarifs par agence (détail §2) |
@@ -502,9 +511,25 @@ tant que les modules Retraits/Caisse/Articles ne sont pas tranchés.
 
 **03 Clients — Fiche client et formulaires** (captures Figma fournies le 2026-10-01,
 pas de node exact) — écarts additionnels à ceux déjà notés :
-- Fiche client : 4 KPI (valeur vie client, dépôts réalisés, panier moyen, solde à
-  payer) — `valeur vie client`/`panier moyen` demandent un agrégat somme/moyenne des
-  commandes du client (absent), `solde à payer` existe déjà (`balance_due` agrégé).
+- ~~Fiche client : 4 KPI (valeur vie client, dépôts réalisés, panier moyen, solde à
+  payer)~~ **fait** (2026-10-01) : `ClientDetailPage.tsx` (route `/clients/:id`,
+  remplace le panneau latéral de `ClientsList.tsx`). `ClientController::show()`
+  calcule désormais `lifetime_value` (somme des `payments.amount` à `status=complete`
+  du client — pas le cumul facturé, pour rester sur de l'argent réellement encaissé),
+  `deposits_count` (nombre de commandes), `average_basket` (moyenne de
+  `orders.total_amount`), `balance_due` (même formule que `OrderController::stats`,
+  sur les factures impayées du client). Chronologie « Dépôts et retraits » (fusion
+  client-side des commandes du client, via `GET /orders?client_id=`, et de ses
+  retraits, nouveau champ `recent_pickups` sur la réponse de `show()` — requête
+  `OrderPickup::whereHas('order', …)`, pas de relation directe client→pickup en
+  base), triée par date avec le composant `Timeline` déjà construit pour la fiche
+  dépôt. Table « Commandes récentes » (réutilise le même appel `/orders?client_id=`).
+  Actions (Modifier/Activer-Désactiver/Supprimer) migrées du panneau vers l'en-tête
+  de la page ; le bouton Supprimer reste cohérent avec l'ancien comportement (masqué
+  dès que `deposits_count > 0`, message d'aide affiché à la place). **Bug de
+  troncature mobile rencontré et corrigé ici aussi** (même piège que sur `OrdersList.tsx`
+  le même jour) : grille de StatCards `grid-cols-2` dès 390px tronquait les montants
+  (« 14 000 ... ») — passée en `grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-4`.
   **Historique des points de fidélité** (gains/consommations datés, motif) : même
   gap que noté en §2 Promotions/fidélité (`loyalty_point_movements` absent, seul le
   cumul `loyalty_points` est stocké). **Préférences** (canal préféré, créneau de

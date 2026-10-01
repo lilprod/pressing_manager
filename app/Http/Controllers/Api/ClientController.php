@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Requests\Client\StoreClientRequest;
 use App\Http\Requests\Client\UpdateClientRequest;
 use App\Models\Client;
+use App\Models\Invoice;
 use App\Models\LoyaltyTier;
+use App\Models\OrderPickup;
+use App\Models\Payment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -78,8 +81,31 @@ class ClientController extends ApiController
     public function show(Request $request, Client $client): JsonResponse
     {
         $this->authorizeAgency($request->user(), $client->agency_id);
+        $client->load('agency');
 
-        return response()->json($client->load('agency'));
+        $depositsCount = $client->orders()->count();
+        $averageBasket = $depositsCount > 0 ? (int) round($client->orders()->avg('total_amount')) : 0;
+        $lifetimeValue = (int) Payment::where('client_id', $client->id)->where('status', 'complete')->sum('amount');
+        $balanceDue = (int) Invoice::where('client_id', $client->id)
+            ->whereIn('status', ['emise', 'partiellement_payee'])
+            ->withSum(['payments as paid_amount' => fn ($query) => $query->where('status', 'complete')], 'amount')
+            ->get()
+            ->sum(fn (Invoice $invoice) => max(0, $invoice->total_amount - (int) ($invoice->paid_amount ?? 0)));
+
+        $recentPickups = OrderPickup::query()
+            ->whereHas('order', fn ($query) => $query->where('client_id', $client->id))
+            ->with('order:id,order_number')
+            ->latest('processed_at')
+            ->limit(10)
+            ->get();
+
+        $client->setAttribute('deposits_count', $depositsCount);
+        $client->setAttribute('average_basket', $averageBasket);
+        $client->setAttribute('lifetime_value', $lifetimeValue);
+        $client->setAttribute('balance_due', $balanceDue);
+        $client->setAttribute('recent_pickups', $recentPickups);
+
+        return response()->json($client);
     }
 
     public function update(UpdateClientRequest $request, Client $client): JsonResponse

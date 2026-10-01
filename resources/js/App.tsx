@@ -16,6 +16,7 @@ import PickupsList from './pages/pickups/PickupsList';
 import PickupProcessPage from './pages/pickups/PickupProcessPage';
 import Scan from './pages/Scan';
 import ClientsList from './pages/clients/ClientsList';
+import ClientDetailPage from './pages/clients/ClientDetailPage';
 import ClientFormPage from './pages/clients/ClientFormPage';
 import LicensePage from './pages/LicensePage';
 import SubscriptionsPage from './pages/SubscriptionsPage';
@@ -89,6 +90,7 @@ export default function App() {
                     <Route path="/clients" element={<ClientsList />} />
                     <Route path="/clients/new" element={<ClientFormPage />} />
                     <Route path="/clients/:id/edit" element={<ClientFormPage />} />
+                    <Route path="/clients/:id" element={<ClientDetailPage />} />
                     <Route path="/subscriptions" element={<SubscriptionsPage />} />
                     <Route path="/loyalty" element={<LoyaltyPage />} />
                     <Route path="/services" element={<ServicesPage />} />

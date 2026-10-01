@@ -81,6 +81,15 @@ export interface Client {
     loyalty_tier_name: string | null;
     notes: string | null;
     is_active: boolean;
+    agency?: { id: number; name: string };
+}
+
+export interface ClientDetail extends Client {
+    deposits_count: number;
+    average_basket: number;
+    lifetime_value: number;
+    balance_due: number;
+    recent_pickups: OrderPickup[];
 }
 
 export interface LoyaltyTier {
@@ -334,6 +343,7 @@ export interface OrderPickup {
     processed_at: string;
     processor?: { id: number; name: string } | null;
     items?: OrderPickupItem[];
+    order?: { id: number; order_number: number };
 }
 
 export interface PickupDueToday {

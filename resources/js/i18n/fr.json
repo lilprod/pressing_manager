@@ -1015,5 +1015,25 @@
     "auditLogs.table.date": "Date",
     "auditLogs.table.type": "Type",
     "auditLogs.table.action": "Action",
-    "auditLogs.table.user": "Auteur"
+    "auditLogs.table.user": "Auteur",
+
+    "order.documents": "Ticket et facture",
+    "documents.title": "Ticket et facture",
+    "documents.subtitle": "Prévisualisez, imprimez ou partagez les documents du dépôt.",
+    "documents.format": "Format du document",
+    "documents.format.ticket": "Ticket",
+    "documents.format.invoice": "Facture A4",
+    "documents.print": "Imprimer",
+    "documents.download": "Télécharger le PDF",
+    "documents.openInvoice": "Ouvrir le PDF",
+    "documents.send": "Envoyer par e-mail",
+    "documents.sendTo": "Envoi au client",
+    "documents.noEmail": "Ce client n'a pas d'adresse e-mail enregistrée — l'envoi par e-mail n'est pas disponible.",
+    "documents.sendSuccess": "Document envoyé par e-mail à {email}.",
+    "documents.sendError": "Échec de l'envoi du document.",
+    "documents.invoiceMissingTitle": "Aucune facture générée",
+    "documents.invoiceMissingHint": "Générez la facture depuis la fiche dépôt pour l'envoyer ou l'imprimer.",
+    "documents.backToOrder": "Retour à la fiche dépôt",
+    "documents.ticketPreview": "Ticket de dépôt",
+    "documents.invoicePreview": "Facture"
 }

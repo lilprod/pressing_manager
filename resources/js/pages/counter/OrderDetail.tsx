@@ -175,10 +175,16 @@ export default function OrderDetail() {
                             <p className="text-xs font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('common.total')}</p>
                             <p className="font-display text-3xl font-extrabold tabular-nums text-ink-900 dark:text-white">{money(order.total_amount)}</p>
                         </div>
-                        <button type="button" onClick={() => setPrintTarget({ kind: 'ticket' })} className={cx(button('secondary'), 'no-print')}>
-                            <Printer aria-hidden="true" className="h-4 w-4" />
-                            {t('common.print')} — {t('order.ticket')}
-                        </button>
+                        <div className="flex flex-wrap gap-2 no-print">
+                            <button type="button" onClick={() => setPrintTarget({ kind: 'ticket' })} className={button('secondary')}>
+                                <Printer aria-hidden="true" className="h-4 w-4" />
+                                {t('common.print')} — {t('order.ticket')}
+                            </button>
+                            <Link to={`/orders/${order.id}/documents`} className={button('secondary')}>
+                                <ScrollText aria-hidden="true" className="h-4 w-4" />
+                                {t('documents.title')}
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </header>

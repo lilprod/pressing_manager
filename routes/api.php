@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CashController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\CustomerSubscriptionController;
 use App\Http\Controllers\Api\DeliveryController;
+use App\Http\Controllers\Api\DocumentController;
 use App\Http\Controllers\Api\DeliveryZoneController;
 use App\Http\Controllers\Api\IntakeConditionController;
 use App\Http\Controllers\Api\InvoiceController;
@@ -95,6 +96,8 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::post('/orders/{order}/invoice', [InvoiceController::class, 'storeForOrder']);
     Route::get('/orders/{order}/audit-logs', [AuditLogController::class, 'forOrder']);
+    Route::get('/orders/{order}/ticket-pdf', [DocumentController::class, 'ticketPdf']);
+    Route::post('/orders/{order}/documents/{type}/send', [DocumentController::class, 'send']);
 
     Route::get('/audit-logs', [AuditLogController::class, 'index']);
 

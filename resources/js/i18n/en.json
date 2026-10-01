@@ -1015,5 +1015,25 @@
     "auditLogs.table.date": "Date",
     "auditLogs.table.type": "Type",
     "auditLogs.table.action": "Action",
-    "auditLogs.table.user": "Author"
+    "auditLogs.table.user": "Author",
+
+    "order.documents": "Ticket and invoice",
+    "documents.title": "Ticket and invoice",
+    "documents.subtitle": "Preview, print or share the order's documents.",
+    "documents.format": "Document format",
+    "documents.format.ticket": "Ticket",
+    "documents.format.invoice": "A4 invoice",
+    "documents.print": "Print",
+    "documents.download": "Download PDF",
+    "documents.openInvoice": "Open PDF",
+    "documents.send": "Send by email",
+    "documents.sendTo": "Send to client",
+    "documents.noEmail": "This client has no email address on file — sending by email is unavailable.",
+    "documents.sendSuccess": "Document sent by email to {email}.",
+    "documents.sendError": "Failed to send the document.",
+    "documents.invoiceMissingTitle": "No invoice generated yet",
+    "documents.invoiceMissingHint": "Generate the invoice from the order page to send or print it.",
+    "documents.backToOrder": "Back to the order",
+    "documents.ticketPreview": "Deposit ticket",
+    "documents.invoicePreview": "Invoice"
 }

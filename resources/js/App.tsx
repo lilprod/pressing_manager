@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import NewOrder from './pages/counter/NewOrder';
 import OrdersList from './pages/counter/OrdersList';
 import OrderDetail from './pages/counter/OrderDetail';
+import TicketFacturePage from './pages/counter/TicketFacturePage';
 import PickupsList from './pages/pickups/PickupsList';
 import PickupProcessPage from './pages/pickups/PickupProcessPage';
 import Scan from './pages/Scan';
@@ -81,6 +82,7 @@ export default function App() {
                     <Route path="/" element={<NewOrder />} />
                     <Route path="/orders" element={<OrdersList />} />
                     <Route path="/orders/:id" element={<OrderDetail />} />
+                    <Route path="/orders/:id/documents" element={<TicketFacturePage />} />
                     <Route path="/pickups" element={<PickupsList />} />
                     <Route path="/pickups/:orderId" element={<PickupProcessPage />} />
                     <Route path="/scan" element={<Scan />} />

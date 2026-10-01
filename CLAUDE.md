@@ -112,9 +112,9 @@ Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
   réel : `orders.status` n'était jamais mis à jour après la création (toujours `recu`),
   ce qui aurait empêché ce module de fonctionner — voir `OrderStatusSynchronizer`,
   détail en §« 05 Retraits en agence » ci-dessous. L'écran « Ticket et facture »
-  (prévisualisation/impression dédiée, envoi WhatsApp) et l'écran de supervision de la
-  synchronisation hors ligne, montrés sur les mêmes captures, restent **non construits**
-  (voir détail plus bas) — à reprendre si prioritaire.
+  (prévisualisation/impression dédiée) est **fait** (2026-10-01, voir détail plus bas) ;
+  l'envoi WhatsApp et l'écran de supervision de la synchronisation hors ligne, montrés
+  sur les mêmes captures, restent **non construits** — à reprendre si prioritaire.
 - ~~**Gestion des agences** (section 10, Multi-agences)~~ **fait** (2026-09-30) :
   CRUD complet (`AgencyController::manage/show/store/update`, permission
   `agencies.manage`), écrans `pages/agencies/AgenciesPage.tsx` (liste, avec
@@ -454,10 +454,25 @@ une table de réglages par agence (`agency_settings`) + endpoints `GET/PATCH
   (nécessite l'agrégat déjà noté en §2 Dashboard) et journal d'audit dédié affiché à
   l'écran (les événements existent bien — `order_item_status_histories`,
   `order_pickups` — mais ne sont pas présentés sous cette forme chronologique ici).
-- **Ticket et facture** (écran de prévisualisation/impression dédié) — **toujours non
-  construit** : le ticket et la facture PDF existent déjà (DomPDF,
-  `InvoiceController`) mais pas cet écran de choix de format/imprimante ni l'envoi
-  WhatsApp (seuls SMS/e-mail existent via `NotificationService`).
+- ~~**Ticket et facture** (écran de prévisualisation/impression dédié)~~ **fait**
+  (2026-10-01) : `pages/counter/TicketFacturePage.tsx` (route `/orders/:id/documents`,
+  lien « Ticket et facture » dans l'en-tête de `OrderDetail.tsx` à côté du bouton
+  d'impression rapide existant). Bascule Ticket/Facture A4, aperçu du ticket en HTML
+  (réutilise `TicketReceiptContent.tsx`, extrait de `PrintableTicket.tsx` pour être
+  partagé entre l'aperçu écran et l'impression), aperçu de la facture en PDF réel
+  (`<iframe>` sur le blob déjà généré par `InvoiceController::downloadPdf`), boutons
+  Télécharger/Imprimer par format, envoi par e-mail au client (nouveau
+  `TicketPdfService::render()` — génère le ticket à la volée en PDF, jamais stocké,
+  contrairement à la facture — + `DocumentSentNotification` + `DocumentController`,
+  `GET /orders/{id}/ticket-pdf` et `POST /orders/{id}/documents/{type}/send`),
+  état vide explicite si aucune facture n'a encore été générée pour ce dépôt (plutôt
+  que de fabriquer un aperçu). **Omis délibérément** (pas des oublis) : envoi
+  WhatsApp (aucune intégration n'existe dans l'application), envoi par SMS pour ces
+  documents (pas de passerelle SMS réelle, et un SMS ne peut de toute façon pas
+  porter de pièce jointe PDF même dans le mode « simulé » existant), historique
+  « dernier envoi » sur cet écran (aurait demandé la permission `notifications.manage`,
+  incohérente avec le gating `orders.manage` déjà utilisé ici pour voir/envoyer les
+  documents — le retour inline du résultat d'envoi suffit).
 - **Bug corrigé au passage, prérequis bloquant pour ce module** : `orders.status`
   n'était jamais réécrit après la création de la commande (`OrderController::store`
   le fixe une fois à `recu`) — seul `order_items.status` progressait. Le filtre

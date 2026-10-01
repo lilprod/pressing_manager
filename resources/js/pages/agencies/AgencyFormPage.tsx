@@ -23,6 +23,7 @@ export default function AgencyFormPage() {
     const [address, setAddress] = useState('');
     const [phone, setPhone] = useState('');
     const [unclaimedDays, setUnclaimedDays] = useState('30');
+    const [workshopCapacity, setWorkshopCapacity] = useState('');
     const [isActive, setIsActive] = useState(true);
 
     const [error, setError] = useState<string | null>(null);
@@ -39,6 +40,7 @@ export default function AgencyFormPage() {
                 setAddress(agency.address ?? '');
                 setPhone(agency.phone ?? '');
                 setUnclaimedDays(String(agency.unclaimed_item_threshold_days));
+                setWorkshopCapacity(agency.workshop_capacity != null ? String(agency.workshop_capacity) : '');
                 setIsActive(agency.is_active);
             })
             .catch((err) => {
@@ -58,6 +60,7 @@ export default function AgencyFormPage() {
                 address: address || null,
                 phone: phone || null,
                 unclaimed_item_threshold_days: Number(unclaimedDays),
+                workshop_capacity: workshopCapacity ? Number(workshopCapacity) : null,
                 is_active: isEdit ? isActive : undefined,
             };
 
@@ -149,6 +152,18 @@ export default function AgencyFormPage() {
                             onChange={(e) => setUnclaimedDays(e.target.value)}
                             className={cx(input, 'w-full')}
                         />
+                    </label>
+                    <label className="block">
+                        <span className={label}>{t('agency.workshopCapacity')}</span>
+                        <input
+                            type="number"
+                            min={1}
+                            placeholder={String(24)}
+                            value={workshopCapacity}
+                            onChange={(e) => setWorkshopCapacity(e.target.value)}
+                            className={cx(input, 'w-full')}
+                        />
+                        <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{t('agency.workshopCapacityHint')}</p>
                     </label>
                 </div>
 

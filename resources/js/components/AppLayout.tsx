@@ -26,6 +26,7 @@ import {
     Users,
     Wallet,
     WifiOff,
+    Workflow,
     LayoutDashboard,
     ChartNoAxesCombined,
     X,
@@ -83,6 +84,9 @@ function useSidebarSections(onNavigate?: () => void) {
                 <NavItem to="/" end icon={ShoppingBag} label={t('nav.newOrder')} onClick={onNavigate} />
                 <NavItem to="/orders" icon={ClipboardList} label={t('nav.deposits')} onClick={onNavigate} />
                 {hasPermission(user, 'clients.manage') && <NavItem to="/clients" icon={Users} label={t('nav.clients')} onClick={onNavigate} />}
+                {hasPermission(user, 'orders.update_status') && (
+                    <NavItem to="/atelier" icon={Workflow} label={t('atelier.title')} onClick={onNavigate} />
+                )}
                 {hasPermission(user, 'orders.manage') && <NavItem to="/pickups" icon={PackageCheck} label={t('nav.pickups')} onClick={onNavigate} />}
                 {hasPermission(user, 'payments.manage') && <NavItem to="/cash" icon={Wallet} label={t('nav.cash')} onClick={onNavigate} />}
                 <NavItem to="/scan" icon={ScanLine} label={t('nav.scan')} onClick={onNavigate} />

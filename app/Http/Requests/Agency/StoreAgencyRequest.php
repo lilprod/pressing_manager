@@ -21,6 +21,7 @@ class StoreAgencyRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:30'],
             'unclaimed_item_threshold_days' => ['nullable', 'integer', 'min:1'],
             'is_active' => ['boolean'],
+            'workshop_capacity' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

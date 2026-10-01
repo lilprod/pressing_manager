@@ -48,6 +48,7 @@ export interface Agency {
     address: string | null;
     phone: string | null;
     unclaimed_item_threshold_days: number;
+    workshop_capacity: number | null;
     is_active: boolean;
     users_count?: number;
     clients_count?: number;
@@ -304,6 +305,32 @@ export interface Order {
     balance_due?: number;
     pieces_remaining?: number;
     notification_status?: 'sent' | 'simulated' | 'failed' | null;
+    priority?: OrderPriority;
+    washer_id?: number | null;
+    sorter_id?: number | null;
+    washer?: { id: number; name: string } | null;
+    sorter?: { id: number; name: string } | null;
+}
+
+export type OrderPriority = 'urgent' | 'haute' | 'normale';
+export type AtelierColumn = 'attente' | 'cours' | 'traites' | 'classes';
+
+export interface AtelierStaffMember {
+    id: number;
+    name: string;
+}
+
+export interface AtelierCard extends Order {
+    column: AtelierColumn;
+    last_change_at: string;
+    is_late: boolean;
+    items_summary: { unit: 'kg' | 'articles'; value: number };
+}
+
+export interface AtelierBoardResponse {
+    capacity: number;
+    active_count: number;
+    orders: AtelierCard[];
 }
 
 export interface AuditLog {

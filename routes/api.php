@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AgencyController;
+use App\Http\Controllers\Api\AtelierController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
@@ -102,6 +103,12 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::post('/orders/{order}/documents/{type}/send', [DocumentController::class, 'send']);
 
     Route::get('/audit-logs', [AuditLogController::class, 'index']);
+
+    Route::get('/atelier/staff', [AtelierController::class, 'staff']);
+    Route::get('/atelier/board', [AtelierController::class, 'board']);
+    Route::post('/atelier/orders/{order}/advance', [AtelierController::class, 'advance']);
+    Route::patch('/atelier/orders/{order}/priority', [AtelierController::class, 'updatePriority']);
+    Route::patch('/atelier/orders/{order}/responsables', [AtelierController::class, 'updateResponsables']);
 
     Route::get('/pickups', [PickupController::class, 'index']);
     Route::get('/pickups/summary', [PickupController::class, 'summary']);

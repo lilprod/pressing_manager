@@ -16,7 +16,7 @@ class Order extends Model
     protected $fillable = [
         'agency_id', 'client_id', 'created_by', 'order_number', 'client_local_uuid',
         'status', 'is_express', 'source', 'sync_status', 'promised_at', 'delivered_at',
-        'total_amount', 'discount_amount', 'notes',
+        'total_amount', 'discount_amount', 'notes', 'priority', 'washer_id', 'sorter_id',
     ];
 
     protected function casts(): array
@@ -61,5 +61,17 @@ class Order extends Model
     public function pickups(): HasMany
     {
         return $this->hasMany(OrderPickup::class);
+    }
+
+    /** Responsable de l'étape Laveur (vue Kanban atelier, section 04 Figma). */
+    public function washer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'washer_id');
+    }
+
+    /** Responsable de l'étape Classeur (vue Kanban atelier, section 04 Figma). */
+    public function sorter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sorter_id');
     }
 }

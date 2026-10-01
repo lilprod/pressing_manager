@@ -87,6 +87,7 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`), KPI en-tête ajoutés le 2026-10-01 (voir détail en §2) |
 | 03 Clients & fidélité | Nouveau/Modifier client | `pages/clients/ClientFormPage.tsx` (routes `/clients/new`, `/clients/:id/edit`) | **fait** (commit `11de473`, écrans séparés depuis commit `eaf68bf`) — a aussi exposé le champ `notes` (backend déjà prêt, jamais affiché côté front) |
 | 03 Clients & fidélité | Fiche client (consultation) | `pages/clients/ClientDetailPage.tsx` (route `/clients/:id`) | **fait** (2026-10-01) — remplace l'ancien panneau latéral par un écran dédié, suite à la capture Figma fournie le 2026-10-01 montrant 4 KPI (détail en §2) |
+| 04 Atelier | Atelier en vue Kanban | `pages/atelier/AtelierBoard.tsx` (route `/atelier`, permission `orders.update_status`) | **fait** (2026-10-01) — 4 colonnes Kanban sur les statuts réels, capacité atelier, priorité, responsables Laveur/Classeur, panneau de dépôt avec chronologie et action « Passer à l'étape suivante » (détail complet en §2) |
 | 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait, renforcement livré** (2026-10-01) — rapprochement par moyen de paiement (espèces/mobile money/carte), checklist de clôture obligatoire, double contrôle sur mouvement sensible (seuil configurable), pièces justificatives, rapport PDF de clôture. Restent différés : distinction dépôt/solde sur `Payment`, vue « opérateurs de la journée », notification au contrôleur (aucun canal interne staff n'existe) — détail en §2 |
 | 07 Articles & tarifs | Catalogue (liste) | `pages/ServicesPage.tsx` | **fait, renforcement livré** (2026-10-01) — tableau de bord (4 `StatCard` via `/services/stats`), badge mode de facturation + « Dès X FCFA/kg ». Restent différés : import Excel, onglets Catégories/Tarifs au kilo/Indisponibles/Historique, filtres avancés (détail §2) |
 | 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait, renforcement livré** (2026-10-01) — sélecteur Pièce/Kilo/Mixte, grilles de prix dégressives au kilo (`ServicePriceTier`), options `allow_discount`/`round_to_hundred`/`price_editable_at_counter`, historique des changements de prix (`ServicePriceHistory`). Intégré jusqu'au comptoir : `NewOrder.tsx` facture réellement au poids (résolution de palier + arrondi). Restent différés : états acceptés/rendus compatibles configurables, disponibilité par agence récapitulative, checklist de publication, historique des tarifs par agence (détail §2) |
@@ -135,9 +136,17 @@ Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
   Figma direct (rate-limit MCP toujours actif) — à comparer visuellement si
   l'accès est rétabli. Toujours **pas de vue consolidée multi-agences** (dashboard
   cross-agences avec devise) — dépend du chantier multi-devise (§2 ci-dessus).
-- **Atelier en vue Kanban** (section 04) : `OrdersList.tsx` est une liste filtrable
-  par statut, pas un tableau Kanban par étape. Amélioration UX, pas un gap de
-  données (le modèle `OrderItemStatus` le permet déjà).
+- ~~**Atelier en vue Kanban** (section 04)~~ **fait** (2026-10-01, détail complet en
+  §2 « 04 Atelier » ci-dessous) : `pages/atelier/AtelierBoard.tsx` (route `/atelier`).
+  4 colonnes qui **regroupent les vrais statuts existants** de `order.status`
+  (`recu`/`trie`→En attente, `en_traitement`→En cours, `controle_qualite`→Traités,
+  `pret`→Classés) plutôt que d'inventer un statut parallèle. Deux champs réellement
+  nouveaux : `orders.priority` (urgent/haute/normale, défaut dérivé de `is_express` à
+  la création, modifiable ensuite) et `orders.washer_id`/`sorter_id` (responsable
+  Laveur/Classeur, par dépôt). `agencies.workshop_capacity` (nullable, repli sur
+  `config('atelier.default_capacity')` = 24) pour la barre de capacité — compte réel
+  des dépôts actifs de l'agence (statuts recu→pret), pas une valeur fabriquée par
+  agence tant qu'elle n'est pas configurée.
 - **Superadmin multi-tenant** (section 13) : la maquette suppose une plateforme SaaS
   où un superadmin gère plusieurs pressings indépendants. **Notre architecture est
   explicitement mono-tenant** (voir `docs/ARCHITECTURE.md`). Ne pas coder cette
@@ -582,6 +591,89 @@ disponibles / fonctionnalité non prioritaire).
   visuel principal) ; pas de colonne « Synchro » ni de statut « Archivé » (aucun flag
   réel).
 
+**04 Atelier en vue Kanban** (capture Figma `Atelier.PNG` fournie le 2026-09-30,
+chantier validé par l'utilisateur le 2026-10-01 avec décisions métier laissées à
+l'agent) — `pages/atelier/AtelierBoard.tsx` (route `/atelier`) :
+- **Modélisation (décision clé)** : les 4 colonnes du tableau (En attente/En cours/
+  Traités/Classés) sont un **regroupement d'affichage** des statuts réels déjà
+  existants de `order.status` (lui-même déjà agrégé par `OrderStatusSynchronizer` à
+  partir des articles) — `recu`/`trie`→attente, `en_traitement`→cours,
+  `controle_qualite`→traites, `pret`→classes. Aucun statut parallèle inventé.
+  Nouveau service `AtelierBoardService` (`columnFor()`/`nextColumnFor()`, backend
+  seul source de vérité, dupliqué en petit côté front pour l'affichage immédiat).
+- **Priorité** (`orders.priority`, enum urgent/haute/normale, réel nouveau champ) :
+  calculée par défaut à la création (`is_express` → urgent, sinon normale,
+  `OrderController::store`), modifiable ensuite par l'atelier via un `<select>` dans
+  le panneau de dépôt (`PATCH /atelier/orders/{id}/priority`, permission
+  `orders.update_status`) — un dépôt standard peut être escaladé en Haute sans être
+  express (cas réel : client VIP, délai serré).
+- **Responsables Laveur/Classeur** (`orders.washer_id`/`sorter_id`, FK `users`
+  nullable, par dépôt — pas par article) : affichés sur chaque carte (avatar + nom,
+  « Non affecté » sinon), éditables dans le panneau (`PATCH
+  /atelier/orders/{id}/responsables`, vérifie que le responsable appartient à la
+  même agence que le dépôt). Nouveau `GET /atelier/staff` pour peupler les
+  sélecteurs — **volontairement pas** une extension de la liste légère déjà
+  exposée par `UserController::index()` (celle-ci est aussi accessible via
+  `orders.update_status` au rôle `livreur`, qui ne doit explicitement **pas**
+  pouvoir lister le personnel — voir `DeliveryTest::test_listing_livreurs_requires_the_deliveries_manage_permission`,
+  cassé puis corrigé en isolant l'endpoint plutôt qu'en élargissant la permission
+  partagée).
+- **Capacité atelier** (barre « 18/24 ») : `agencies.workshop_capacity` (nullable,
+  réel, éditable via `AgencyFormPage.tsx`/`PATCH /agencies/{id}`), repli sur
+  `config('atelier.default_capacity')` = 24 si non configuré — jamais une valeur
+  fabriquée par agence. Numérateur = compte réel des dépôts actifs de l'agence
+  (statuts `recu`→`pret`), **non affecté par les filtres** de recherche/priorité/
+  responsable (sinon la barre varierait avec la recherche, trompeur) — calculé par
+  une requête séparée dans `AtelierController::board()`.
+- **Action « Passer à l'étape suivante »** (bouton dans le panneau, pas de
+  drag-and-drop — voir omissions ci-dessous) : `POST /atelier/orders/{id}/advance`,
+  fait progresser chaque article du dépôt à travers **chaque statut réel
+  intermédiaire** jusqu'à l'entrée de la colonne suivante (ex. un article « reçu »
+  traverse réellement « trié » PUIS « en_traitement », deux transitions distinctes
+  journalisées séparément — rien n'est sauté). Réutilise
+  `OrderItemStatusTransitioner` tel quel (mêmes règles, mêmes notifications, même
+  journal d'audit) ; passage Traités→Classés fournit automatiquement
+  `quality_check_result: 'ok'` (le bouton signifie que le contrôle est déjà validé,
+  cohérent avec le badge « Contrôle qualité OK » déjà affiché sur les cartes Traités).
+- **Panneau « Aperçu du dépôt »** (clic sur une carte) : récupère la fiche complète
+  via `GET /orders/{id}` déjà existant (évite de dupliquer la logique métier) —
+  articles, remarques (`order.notes`), alerte de retard, chronologie atelier
+  (réutilise exactement la construction de `workshopTimeline` déjà faite pour
+  `OrderDetail.tsx`). Lien retour « Suivre l'atelier » ajouté sur `OrderDetail.tsx`
+  (`/atelier?order={id}`, affiché seulement si le dépôt est encore actif), la page
+  Atelier lit `?order=` pour présélectionner la carte au chargement.
+- **Bug corrigé pendant la validation Playwright** : `OrderController::show()` ne
+  chargeait pas les relations `washer`/`sorter` — le panneau affichait « Non affecté »
+  même pour un dépôt avec un laveur assigné. Capturé par la capture d'écran, pas par
+  les tests (les tests backend vérifiaient `PATCH .../responsables` en base, pas la
+  sérialisation de `GET /orders/{id}`) — test de régression ajouté
+  (`test_showing_an_order_includes_its_atelier_responsables`).
+- **Explicitement omis** (décisions documentées, pas des oublis) :
+  - **Glisser-déposer entre colonnes** : remplacé par le bouton « Passer à » (dans le
+    panneau) pour rester accessible/clavier/mobile et éviter la classe de bugs du
+    drag-and-drop HTML5 — le panneau de la capture montre de toute façon ce même
+    bouton comme action principale.
+  - **« 2 tâches signalées »** (badge sur une carte) : aucun modèle de signalement
+    d'anomalie en cours de traitement n'existe (différent de `condition_status` au
+    retrait, qui est postérieur) — aurait demandé une table dédiée, non construite.
+  - **Durée estimée par colonne** (« 1h 45 estimé », « 38 min de classement ») :
+    demanderait une durée standard par service/catégorie, qui n'existe pas (recoupe
+    le gap déjà noté « délais standard/express » dans `agency_settings`, non
+    construit). Seul le compte réel de dépôts par colonne est affiché.
+  - **Notes d'emplacement/programme** (« Rayon B · casier 08 », « Lavage programme
+    P3 », « Housse scellée ») : aucune colonne réelle pour ces informations
+    (localisation de stockage, programme machine, instructions de manutention) —
+    la seule information de suivi réellement disponible est la chronologie
+    (transitions de statut horodatées), affichée dans le panneau, pas sur la carte.
+  - **« Configurer les étapes »** (bouton d'en-tête, bascule Laveur/Classeur par
+    agence) : dépend de la table `agency_settings` toujours non construite (même
+    gap que « Paramètres opérationnels », §2 ci-dessus) — non câblé.
+  - **« Vue compacte »** (bascule de densité) : non construite, polish différé.
+  - Filtre de période (Jour/Semaine/Mois) : le tableau représente l'état courant du
+    pipeline, pas une plage de dates — filtrer par `created_at` aurait été ambigu
+    (un dépôt d'il y a 3 jours toujours en cours doit rester visible) ; omis plutôt
+    que de fabriquer une sémantique de filtre peu claire.
+
 **Fiche dépôt — renforcement livré (2026-10-01)**, `OrderDetail.tsx` :
 - ~~**4 cartes (statut commercial/état atelier/synchronisation/reste à payer)**~~
   **fait, 3 cartes** : Statut commercial (dérivé de `invoice.status` — Non facturé/
@@ -773,3 +865,15 @@ dans une version précédente de cette liste, sont **déjà faits** (commits `7d
   client sans `loyalty_points` explicite. Toujours `->refresh()` après un
   `Model::create()` dont la réponse JSON dépend d'un accesseur qui lit une colonne
   à défaut DB (pas fournie explicitement à `create()`).
+- **Ne jamais élargir la condition de gating d'un endpoint partagé sans relire ses
+  tests existants** : en construisant le module Atelier, `UserController::index()`
+  (liste légère du personnel) a été élargi pour accepter `orders.update_status` en
+  plus de `deliveries.manage`/`hr.manage`, pour que les techniciens puissent peupler
+  les sélecteurs Laveur/Classeur. Casse immédiatement
+  `DeliveryTest::test_listing_livreurs_requires_the_deliveries_manage_permission` :
+  le rôle `livreur` a aussi `orders.update_status`, et ce test vérifie explicitement
+  qu'un livreur ne doit PAS pouvoir lister le personnel. Corrigé en isolant un
+  nouvel endpoint dédié (`AtelierController::staff()`, `GET /atelier/staff`) plutôt
+  qu'en élargissant la permission partagée. Toujours lancer la suite complète après
+  avoir touché un contrôleur déjà utilisé par un autre module, pas seulement les
+  tests du module en cours.

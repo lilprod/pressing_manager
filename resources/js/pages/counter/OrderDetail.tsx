@@ -184,6 +184,12 @@ export default function OrderDetail() {
                                 <ScrollText aria-hidden="true" className="h-4 w-4" />
                                 {t('documents.title')}
                             </Link>
+                            {['recu', 'trie', 'en_traitement', 'controle_qualite', 'pret'].includes(order.status) && (
+                                <Link to={`/atelier?order=${order.id}`} className={button('secondary')}>
+                                    <Workflow aria-hidden="true" className="h-4 w-4" />
+                                    {t('order.followWorkshop')}
+                                </Link>
+                            )}
                         </div>
                     </div>
                 </div>

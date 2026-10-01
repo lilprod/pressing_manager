@@ -223,4 +223,18 @@ class OrderCreationTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('balance_due', $invoice['total_amount']);
     }
+
+    public function test_showing_an_order_includes_its_atelier_responsables(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $washer = $this->makeUser('technicien', $agency);
+        $order = Order::factory()->create(['agency_id' => $agency->id, 'washer_id' => $washer->id]);
+
+        $response = $this->actingAs($accueil)->getJson("/api/orders/{$order->id}");
+
+        $response->assertOk();
+        $response->assertJsonPath('washer.name', $washer->name);
+    }
 }

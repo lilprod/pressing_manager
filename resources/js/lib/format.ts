@@ -1,6 +1,15 @@
 import { useCallback } from 'react';
 import { useI18n } from '../contexts/I18nContext';
 
+/** Durée écoulée façon "42 min" / "2h 06" / "1h" — utilisé par le tableau Atelier (Kanban). */
+export function elapsedLabel(from: string, now: Date = new Date()): string {
+    const totalMinutes = Math.max(0, Math.floor((now.getTime() - new Date(from).getTime()) / 60000));
+    if (totalMinutes < 60) return `${totalMinutes} min`;
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return minutes === 0 ? `${hours}h` : `${hours}h ${String(minutes).padStart(2, '0')}`;
+}
+
 /**
  * Formatage d'affichage uniquement (séparateurs de milliers, dates localisées).
  * Les montants envoyés à l'API restent des nombres bruts.

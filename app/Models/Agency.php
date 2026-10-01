@@ -14,7 +14,7 @@ class Agency extends Model
 
     protected $fillable = [
         'code', 'name', 'city', 'address', 'phone',
-        'unclaimed_item_threshold_days', 'is_active',
+        'unclaimed_item_threshold_days', 'is_active', 'workshop_capacity',
     ];
 
     protected function casts(): array

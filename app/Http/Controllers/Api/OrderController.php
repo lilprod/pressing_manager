@@ -123,6 +123,10 @@ class OrderController extends ApiController
                 'client_local_uuid' => $data['client_local_uuid'] ?? null,
                 'status' => 'recu',
                 'is_express' => $data['is_express'] ?? false,
+                // Priorité Kanban atelier par défaut : les dépôts express sont urgents à
+                // la création, les autres démarrent normale. Ajustable ensuite par l'atelier
+                // (client VIP, retard imminent) via AtelierController::updatePriority().
+                'priority' => ($data['is_express'] ?? false) ? 'urgent' : 'normale',
                 'source' => ! empty($data['client_local_uuid']) ? 'offline_sync' : 'comptoir',
                 'sync_status' => 'synced',
                 'promised_at' => $data['promised_at'] ?? null,
@@ -214,6 +218,7 @@ class OrderController extends ApiController
         $order->load(
             'items.service', 'items.intakeConditions', 'items.statusHistories.actor',
             'client', 'invoice.payments', 'agency', 'pickups.items.orderItem', 'pickups.processor', 'creator',
+            'washer', 'sorter',
         );
         $order->setAttribute('balance_due', $this->balanceDue($order));
 

@@ -378,6 +378,115 @@ une table de réglages par agence (`agency_settings`) + endpoints `GET/PATCH
   Pour afficher appareil/IP, stocker IP + user-agent à la création du jeton.
 - **Appareils autorisés** : notion absente.
 
+**05 Retraits en agence — Centre de retrait, Traiter le retrait, Ticket et facture**
+(captures Figma fournies par l'utilisateur le 2026-10-01, pas de node Figma exact) —
+**module entièrement absent** (confirmé en code : aucune route, contrôleur, migration
+ni écran contenant « retrait/pickup/withdraw » autre que le libellé `promisedAt`).
+C'est la première maquette complète reçue pour le gap déjà noté en §2
+(« Retraits en agence (section 05) : pas de flux dédié comptoir »). Détail du besoin
+tel que montré :
+- **Centre de retrait** (liste) : KPI (prêts aujourd'hui, en attente de notification,
+  retraits effectués vs période précédente, soldes impayés), recherche instantanée
+  (code/téléphone/nom + scan), filtres (période, agence, mode de paiement, état —
+  « Prêt & contrôlé »), tableau des dépôts prêts avec code/client/téléphone/articles/
+  retrait prévu/état atelier/total/reste/état notification (SMS lu, envoyé, à
+  notifier, relance requise)/sync/action « Traiter ». Rien de tout ceci n'existe :
+  il faudrait un agrégat `GET /orders?status=pret` enrichi (reste à payer via
+  `invoice.balance_due`, dernier `NotificationLog` par commande) + des compteurs
+  dédiés (`GET /pickups/stats` ou équivalent).
+- **Traiter le retrait** (écran de traitement, le cœur du module) : chronologie
+  atelier (réception → lavage → repassage → contrôle → prêt → remise, avec horaires),
+  vérification article par article avec quantité confirmée vs attendue et **retrait
+  partiel** (choix explicite « retrait total » vs « retrait partiel » avec sélection
+  des pièces), état des pièces à la remise (conforme / réserve client / anomalie
+  constatée) avec remarques, **blocage du retrait si solde impayé** avec bouton
+  « Encaisser » ou « Demander une dérogation » (recoupe EF-RET-05, déjà noté en §2
+  comme non implémenté — ici on voit l'UI exacte : montant à régler affiché en
+  rouge, mode de paiement espèces/mobile money/carte, montant reçu), identification
+  du **réceptionnaire** (client lui-même vs tiers autorisé, nom + confirmation de
+  signature/identité), actions après confirmation (imprimer bon de retrait,
+  notifier le client par SMS), et un **journal d'audit dédié à l'opération**
+  (horodatage de chaque étape : dépôt ouvert pour retrait, retrait partiel
+  sélectionné, identité confirmée…). Rien n'existe côté backend : il faudrait au
+  minimum un champ de retrait partiel sur `order_items` (quantité remise vs
+  quantité totale), une notion de réceptionnaire (`pickup_recipient_name`,
+  `pickup_recipient_type` : client/tiers, éventuellement une signature comme pour
+  `Delivery`), le blocage si impayé (dépend du même réglage par agence que
+  EF-RET-05, pas encore en base), et l'écriture d'événements d'audit par étape
+  (le `AuditLog` générique existe mais rien ne l'alimente pour ce flux).
+- **Ticket et facture** (écran de prévisualisation/impression dédié) : aperçu côte à
+  côte ticket thermique + facture A4, choix du format, imprimante, copies,
+  actions « Imprimer maintenant » / « Télécharger le PDF » / « Envoyer au client »
+  (WhatsApp), bandeau « impression hors connexion » avec numéro de document local
+  temporaire avant synchronisation. Le ticket et la facture PDF existent déjà
+  (DomPDF, voir `InvoiceController`) mais pas cet écran de prévisualisation/choix de
+  format dédié, ni l'envoi direct par WhatsApp (seul SMS/e-mail existent via
+  `NotificationService`).
+- Conclusion : contrairement aux autres « écarts de fidélité » déjà documentés
+  (Caisse, Articles), ici il n'y a **aucune base existante à enrichir** — c'est un
+  module neuf de bout en bout (migrations, contrôleur, policy d'agence, 2-3 écrans
+  React), avec des décisions produit à trancher avant de coder : seuil/portée exacte
+  du blocage si impayé et qui peut accorder une dérogation (déjà signalé comme
+  question ouverte pour EF-RET-05), ce que couvre exactement un « retrait partiel »
+  pour la facturation (le reste des articles reste-t-il « prêt » pour un retrait
+  ultérieur ?), et si la signature du réceptionnaire doit être capturée comme pour
+  `Delivery` (`signature_path`) ou simplement un nom saisi.
+
+**Synchronisation hors ligne — écran dédié « Retour en ligne et synchronisation »**
+(capture Figma fournie le 2026-10-01, pas de node exact) : la file hors ligne existe
+déjà côté comptoir (IndexedDB, mentionnée dans le Dashboard) mais sans écran de
+supervision. La maquette montre une progression globale (opérations terminées/
+restantes), le détail de chaque opération locale (dépôt, encaissement, ticket) avec
+son UUID et son état (synchronisé, rapproché, en cours, en attente), des contrôles
+d'intégrité listés (déduplication UUID, renumérotation locale→serveur, encaissements
+rapprochés), et surtout une **résolution de conflit interactive** (ex. un code
+promotionnel désactivé entre-temps côté serveur : choisir conserver la remise,
+la retirer en régularisation, ou mettre en attente). Rien de ceci n'existe côté
+backend au-delà de la file elle-même : il faudrait exposer l'état de synchronisation
+par opération locale (actuellement la logique de sync vit côté client dans
+IndexedDB sans API de supervision dédiée) et un vrai mécanisme de détection/
+résolution de conflit (aujourd'hui une resynchronisation écrase ou échoue
+silencieusement selon le cas, à vérifier). Chantier à part entière, pas prioritaire
+tant que les modules Retraits/Caisse/Articles ne sont pas tranchés.
+
+**03 Clients — Fiche client et formulaires** (captures Figma fournies le 2026-10-01,
+pas de node exact) — écarts additionnels à ceux déjà notés :
+- Fiche client : 4 KPI (valeur vie client, dépôts réalisés, panier moyen, solde à
+  payer) — `valeur vie client`/`panier moyen` demandent un agrégat somme/moyenne des
+  commandes du client (absent), `solde à payer` existe déjà (`balance_due` agrégé).
+  **Historique des points de fidélité** (gains/consommations datés, motif) : même
+  gap que noté en §2 Promotions/fidélité (`loyalty_point_movements` absent, seul le
+  cumul `loyalty_points` est stocké). **Préférences** (canal préféré, créneau de
+  retrait préféré, traitement favori, instructions) : aucune de ces colonnes
+  n'existe sur `Client` (notes libres uniquement). Bouton « Convertir en remise » :
+  pas d'endpoint pour convertir des points en remise à la demande (aujourd'hui la
+  remise de palier s'applique automatiquement, pas de conversion manuelle).
+- Formulaire client (nouveau/modifier) : **contrôle de doublon par téléphone** en
+  temps réel avec lien direct vers la fiche existante — pas de vérification
+  d'unicité ni de recherche de doublon côté `ClientController::store`. **Consentements
+  séparés SMS / e-mail** (deux cases) — `Client` n'a pas de colonnes de consentement
+  marketing. **Code de parrainage** — absent (recoupe le moteur de règles marketing
+  déjà noté en §2, parrainage y est un type de règle prévu). Indicateur de
+  « brouillon local » / sync en attente sur la création hors ligne : déjà couvert
+  par la file hors ligne des dépôts, mais pas pour la création de client — à
+  vérifier si `ClientsList.tsx`/`ClientFormPage.tsx` gèrent la création de client
+  hors connexion (probablement non, à confirmer avant de documenter comme gap).
+
+**02 Dépôts — Gestion des dépôts (vue globale) et Fiche dépôt enrichie** (captures
+Figma fournies le 2026-10-01) : la vue « Gestion des dépôts » multi-agences (KPI CA/
+dépôts du jour/reste à encaisser, colonnes État atelier + Synchro séparées, export,
+colonnes configurables) correspond à `OrdersList.tsx` déjà jugé conforme — à
+revérifier visuellement avec ces captures précises (colonnes « Synchro » par ligne et
+bouton « Colonnes » configurables probablement absents). La **fiche dépôt** (détail
+d'une commande) montrée est nettement plus riche que `OrderDetail.tsx` actuel :
+statut commercial + état atelier + synchronisation + reste à payer en 4 cartes
+distinctes, **chronologie atelier horodatée par étape** (recoupe le gap déjà noté en
+§2 Dashboard : `GET /order-items/counts-by-status` et étape finition), **journal
+d'audit par dépôt** (recoupe le même besoin que pour les Retraits ci-dessus), et un
+bouton « Suivre l'atelier » séparé. À comparer précisément à `OrderDetail.tsx` avant
+de documenter des gaps définitifs (non fait ici faute de temps — capture reçue en
+fin de session).
+
 **06 Caisse — Clôture et rapprochement journalier, Nouveau mouvement** (captures
 Figma fournies par l'utilisateur le 2026-09-30, pas de node Figma exact) — la
 maquette réelle est nettement plus riche que `CashService`/`CashClosure` actuels :

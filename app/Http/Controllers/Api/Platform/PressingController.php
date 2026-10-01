@@ -2,18 +2,26 @@
 
 namespace App\Http\Controllers\Api\Platform;
 
-use App\Http\Controllers\Controller;
 use App\Http\Requests\Platform\StorePressingRequest;
 use App\Http\Requests\Platform\UpdatePressingRequest;
 use App\Models\Pressing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-class PressingController extends Controller
+class PressingController extends PlatformApiController
 {
+    private const LICENSE_FIELDS = ['platform_plan_id', 'license_starts_at', 'license_expires_at'];
+
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
+
         $query = Pressing::query()->with('platformPlan')->latest();
+
+        $pressingIds = $this->resolvePressingFilter($user);
+        if ($pressingIds !== null) {
+            $query->whereIn('id', $pressingIds);
+        }
 
         if ($search = $request->string('search')->trim()->toString()) {
             $query->where(fn ($q) => $q->where('name', 'ilike', "%{$search}%")->orWhere('code', 'ilike', "%{$search}%"));
@@ -35,11 +43,15 @@ class PressingController extends Controller
             $query->where('status', $request->string('status'));
         }
 
-        return response()->json($query->paginate(15));
+        return response()->json($query->paginate($request->integer('per_page', 15)));
     }
 
     public function store(StorePressingRequest $request): JsonResponse
     {
+        // Pas de vérification d'affectation ici : un pressing n'existe pas encore,
+        // donc rien à affecter — la permission pressings.manage suffit.
+        $this->authorizePermission($request->user(), 'pressings.manage');
+
         $pressing = Pressing::create($request->validated());
         $reportToken = $pressing->generateReportToken();
 
@@ -49,34 +61,62 @@ class PressingController extends Controller
         );
     }
 
-    public function show(Pressing $pressing): JsonResponse
+    public function show(Request $request, Pressing $pressing): JsonResponse
     {
+        $this->authorizePressing($request->user(), $pressing->id);
+
         return response()->json($pressing->load('platformPlan'));
     }
 
     public function update(UpdatePressingRequest $request, Pressing $pressing): JsonResponse
     {
-        $pressing->update($request->validated());
+        $user = $request->user();
+        $this->authorizePressing($user, $pressing->id);
+
+        $data = $request->validated();
+        $touchesOnlyLicenseFields = array_diff(array_keys($data), self::LICENSE_FIELDS) === [];
+
+        // Les champs de licence sont accessibles à qui a licenses.manage OU pressings.manage ;
+        // tout autre champ (nom, code, contact...) exige pressings.manage — rend la 4e
+        // permission de la maquette réellement signifiante plutôt que cosmétique.
+        if ($touchesOnlyLicenseFields && $data !== []) {
+            if (! $user->hasPermission('licenses.manage') && ! $user->hasPermission('pressings.manage')) {
+                $this->authorizePermission($user, 'licenses.manage');
+            }
+        } else {
+            $this->authorizePermission($user, 'pressings.manage');
+        }
+
+        $pressing->update($data);
 
         return response()->json($pressing->fresh('platformPlan'));
     }
 
-    public function suspend(Pressing $pressing): JsonResponse
+    public function suspend(Request $request, Pressing $pressing): JsonResponse
     {
+        $this->authorizePermission($request->user(), 'pressings.manage');
+        $this->authorizePressing($request->user(), $pressing->id);
+
         $pressing->update(['status' => 'suspended']);
 
         return response()->json($pressing->fresh('platformPlan'));
     }
 
-    public function reactivate(Pressing $pressing): JsonResponse
+    public function reactivate(Request $request, Pressing $pressing): JsonResponse
     {
+        $this->authorizePermission($request->user(), 'pressings.manage');
+        $this->authorizePressing($request->user(), $pressing->id);
+
         $pressing->update(['status' => 'active']);
 
         return response()->json($pressing->fresh('platformPlan'));
     }
 
-    public function rotateReportToken(Pressing $pressing): JsonResponse
+    public function rotateReportToken(Request $request, Pressing $pressing): JsonResponse
     {
+        $this->authorizePermission($request->user(), 'pressings.manage');
+        $this->authorizePressing($request->user(), $pressing->id);
+
         return response()->json(['report_token' => $pressing->generateReportToken()]);
     }
 }

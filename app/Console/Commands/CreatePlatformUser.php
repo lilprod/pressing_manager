@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\PlatformRole;
 use App\Models\PlatformUser;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
@@ -9,9 +10,10 @@ use Illuminate\Support\Str;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
- * Bootstrap du tout premier utilisateur de la console superadmin — équivalent CLI d'un
- * seeder. Volontairement pas d'écran : l'écran « Utilisateurs transverses » (gestion
- * complète) reste différé en Phase 1 sans bloquer l'accès au reste de la plateforme.
+ * Bootstrap du tout premier utilisateur de la console superadmin (rôle Superadmin,
+ * accès illimité) — équivalent CLI d'un seeder. Reste nécessaire même après
+ * l'écran « Utilisateurs transverses » (Phase 2) : il faut bien un premier compte
+ * pour se connecter et en créer d'autres via cet écran.
  */
 class CreatePlatformUser extends Command
 {
@@ -30,16 +32,18 @@ class CreatePlatformUser extends Command
             return self::FAILURE;
         }
 
+        $superadminRole = PlatformRole::where('slug', 'superadmin')->firstOrFail();
         $password = Str::password(16);
 
         PlatformUser::create([
             'name' => $name,
             'email' => $email,
             'password' => Hash::make($password),
+            'platform_role_id' => $superadminRole->id,
             'is_active' => true,
         ]);
 
-        $this->info("Utilisateur plateforme créé : {$email}");
+        $this->info("Utilisateur plateforme créé (rôle Superadmin) : {$email}");
         $this->line('Mot de passe temporaire (affiché une seule fois, ci-dessous entre crochets) :');
         // Écriture brute (OUTPUT_RAW) : un mot de passe aléatoire peut contenir '<'/'>' que le
         // formateur Symfony Console interprèterait à tort comme une balise de style, tronquant

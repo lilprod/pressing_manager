@@ -822,12 +822,43 @@ export interface Pressing {
     report_token?: string;
 }
 
+export interface PlatformPermission {
+    id: number;
+    slug: string;
+    name: string;
+    group: string;
+}
+
+export interface PlatformRole {
+    id: number;
+    slug: string;
+    name: string;
+    is_system: boolean;
+    permissions?: PlatformPermission[];
+}
+
 export interface PlatformUser {
     id: number;
     name: string;
     email: string;
+    platform_role_id: number;
+    platform_role?: PlatformRole;
+    pressings?: Pressing[];
     is_active: boolean;
+    totp_enabled_at: string | null;
     last_login_at: string | null;
+}
+
+export interface PlatformAuditLog {
+    id: number;
+    platform_user_id: number | null;
+    platform_user?: PlatformUser | null;
+    action: string;
+    auditable_type: string;
+    auditable_id: number;
+    old_values: Record<string, unknown> | null;
+    new_values: Record<string, unknown> | null;
+    created_at: string;
 }
 
 export interface PlatformLicenseHealth {

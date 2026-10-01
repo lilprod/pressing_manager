@@ -1107,6 +1107,105 @@ l'utilisateur avant tout code) :
   plutôt que via les méthodes de style — à vérifier sur toute future commande
   affichant un secret généré aléatoirement.
 
+**Plateforme superadmin — Phase 2 (Utilisateurs transverses)** — fait le 2026-10-01,
+sur demande explicite de l'utilisateur après avoir demandé une capture de cet écran
+(différé en Phase 1 faute de modèle de permissions) : choix tranché via
+`AskUserQuestion` entre « construire pour de vrai » et « juste revoir la maquette »
+→ construire pour de vrai, avec un plan détaillé approuvé en mode plan avant tout
+code :
+- **Premier vrai modèle de permissions pour le personnel Spark** : avant cette
+  passe, tout `platform_users` authentifié avait un accès illimité à toutes les
+  routes `/api/platform/*` — le damier de permissions de la maquette aurait été
+  cosmétique, contraire à la discipline « ne pas fabriquer » du projet. Nouveau
+  RBAC **mirrors exactement** le patron tenant (`Role`/`Permission`/
+  `role_permission`) plutôt que d'inventer un mécanisme différent :
+  `platform_roles` (3 rôles système seedés en migration, même précédent que
+  `platform_plans` en Phase 1 : `superadmin` toutes permissions, `admin_transverse`
+  gère pressings/utilisateurs/rapports mais pas les licences, `auditeur_transverse`
+  lecture seule sur les rapports), `platform_permissions` (4 permissions :
+  `pressings.manage`, `platform_users.manage`, `reports.view`, `licenses.manage`),
+  `platform_role_permission` (pivot), `pressing_platform_user` (pivot des
+  « affectations » par pressing — sans effet pour un superadmin, qui a accès à
+  tous les pressings indépendamment de ce pivot).
+- **Permissions dérivées du rôle, pas de surcharge par utilisateur** : le damier
+  affiché dans le panneau de création/édition est **en lecture seule**, il reflète
+  ce que le rôle sélectionné accorde — pas un second mécanisme d'autorisation
+  indépendant du premier. Catalogue de rôles fixe en Phase 2 (pas d'écran de
+  gestion de rôles, juste un `<select>`, cohérent avec la maquette qui ne montre
+  pas un tel écran ici).
+- **`PlatformApiController` abstrait** (`authorizePermission`/`authorizePressing`/
+  `resolvePressingFilter`, mirrors `ApiController` tenant) dont héritent désormais
+  tous les contrôleurs `Api/Platform/*` : `PressingController` (liste/détail scopés
+  par affectation pour un non-superadmin ; `update` distingue les champs licence
+  — accessibles via `licenses.manage` OU `pressings.manage` — des autres champs —
+  qui exigent `pressings.manage` — rendant la 4e permission de la maquette
+  réellement signifiante plutôt que cosmétique) et `PlatformDashboardController`
+  (agrégats restreints aux pressings affectés pour un non-superadmin, comme un
+  manager d'agence tenant ne voit jamais les agrégats réseau complets).
+- **Bug de sécurité auto-détecté et corrigé avant tout test** : `PressingController::index`
+  utilisait `if ($pressingIds = $this->resolvePressingFilter($user))` (test de
+  vérité) — un tableau vide (utilisateur transverse sans aucun pressing affecté)
+  est falsy en PHP, donc le filtre de scoping ne se serait silencieusement jamais
+  appliqué, exposant tous les pressings à un utilisateur qui ne devrait en voir
+  aucun. Repéré en relisant mon propre code avant d'écrire le moindre test,
+  corrigé en `$pressingIds = $this->resolvePressingFilter($user); if ($pressingIds
+  !== null) { ... }`.
+- **`PlatformUserController`** (`GET /users/stats`, `GET/POST /users`, `PATCH
+  /users/{id}`, `GET /users/{id}/activity`) : mot de passe temporaire généré et
+  affiché **une seule fois** (mirrors `UserController::store` tenant — pas de vrai
+  envoi d'invitation par e-mail, même gap déjà documenté côté tenant). Chaque
+  changement d'affectation (`sync()` du pivot, qui ne déclenche pas le hook
+  `updated` d'Eloquent) écrit une entrée `platform_user.assignment_changed`
+  explicite ; les changements de nom/e-mail/rôle/statut sont déjà journalisés
+  automatiquement par `PlatformAuditable` (ajouté à `PlatformUser` dans cette
+  passe, différé en Phase 1).
+- **`PlatformAuthController` étendu** : chaque tentative de connexion journalise
+  désormais `login.success`/`login.failed`/`login.locked` — couvre le « Journal
+  d'activité » de la maquette sans nouveau mécanisme (réutilise `PlatformAuditLog`/
+  `PlatformAuditable` de la Phase 1).
+- **Frontend** : `pages/superadmin/UsersPage.tsx` (route `/superadmin/users`)
+  mirrors `pages/UsersPage.tsx` tenant — annuaire + panneau latéral sticky (la
+  maquette montre un panneau à côté de la liste, pas un écran dédié). KPI (total,
+  % MFA activée, invitations en attente = jamais connecté, comptes suspendus) via
+  `GET /platform/users/stats`. Filtres pressing/rôle/statut/sécurité MFA. Panneau :
+  chips d'affectations retirables + liste à cocher (pressings chargés via
+  `GET /pressings?per_page=100` — `per_page` ajouté au contrôleur existant, même
+  convention que `OrderController`/`ClientController` côté tenant), `<select>` de
+  rôle, damier de permissions en lecture seule (dérivé de l'union des permissions
+  de tous les rôles chargés, pas un nouvel endpoint catalogue), badge MFA,
+  suspendre/réactiver. Section « Journal d'activité » sous le panneau — formatage
+  inline des actions (`describeActivity()`), pas de portage de `lib/auditLog.ts`
+  (trop peu de types d'évènements ici pour le justifier, décision actée dans le
+  plan). Nav « Utilisateurs transverses » ajoutée à `SuperadminLayout.tsx` (n'est
+  plus omise, maintenant réellement construite). Toujours pas d'i18n sur cette
+  console (décision Phase 1 inchangée, chaînes françaises codées en dur).
+- Tests : `tests/Feature/Platform/PlatformScopingTest.php` (7, le plus important —
+  un `admin_transverse` affecté à 2 pressings ne voit/modifie que ceux-là,
+  `PlatformDashboardController` n'agrège que ses pressings affectés),
+  `PlatformUserManagementTest.php` (7, CRUD + affectations + gating),
+  `PlatformActivityLogTest.php` (4, connexion réussie/échouée/verrouillée +
+  création journalisées). Suite complète 341/341 après ajout (aucune régression
+  sur les 323 tests Phase 1 + tenant). Vérifié aussi par un smoke test Playwright
+  bout en bout (navigateur réel, pas juste les tests HTTP) : connexion superadmin
+  → création d'un `admin_transverse` affecté à un seul pressing → déconnexion →
+  connexion avec ce compte → confirmation qu'il ne voit que son pressing affecté
+  dans `/superadmin/pressings` (pas l'autre pressing du registre) et que le nav
+  « Utilisateurs transverses » lui reste accessible (il a `platform_users.manage`).
+  Captures à 1440px et 390px (aucune troncature, grille KPI en `grid-cols-1
+  min-[480px]:grid-cols-2 sm:grid-cols-4`, même convention que partout ailleurs
+  dans l'app).
+- **Question connexe posée par l'utilisateur pendant cette passe, tranchée** : un
+  Pressing créé dans ce registre n'est **pas** automatiquement relié à un véritable
+  espace applicatif accessible (aucun provisionnement de base/déploiement — reste
+  un simple enregistrement de suivi, cohérent avec la décision d'architecture de
+  Phase 1). L'utilisateur a choisi explicitement de ne pas traiter le
+  provisionnement maintenant et de continuer sur la Phase 2 — chantier distinct à
+  reprendre si prioritaire un jour.
+- **Hors scope de cette Phase 2** (inchangé depuis Phase 1, toujours non traité) :
+  écran de gestion des rôles eux-mêmes (catalogue fixe), invitation par e-mail
+  (mot de passe temporaire affiché à l'admin, comme côté tenant), provisionnement
+  réel d'un espace tenant à la création d'un pressing (voir point ci-dessus).
+
 ## Conventions établies dans ce projet (à respecter)
 
 - **Sidebar toujours sombre** (`AppLayout.tsx`, commit du 2026-10-01) : les deux

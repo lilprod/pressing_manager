@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Platform;
 
 use App\Http\Controllers\Controller;
+use App\Models\PlatformAuditLog;
 use App\Models\PlatformUser;
 use App\Models\PlatformUserRecoveryCode;
 use App\Services\TotpService;
@@ -35,11 +36,15 @@ class PlatformAuthController extends Controller
         $user = PlatformUser::where('email', $data['email'])->where('is_active', true)->first();
 
         if ($user !== null && $user->isLocked()) {
+            $this->logLoginEvent($user, 'login.locked');
             throw new HttpException(423, 'Compte temporairement verrouillé après trop de tentatives. Réessayez plus tard.');
         }
 
         if ($user === null || ! Hash::check($data['password'], $user->password)) {
-            $user?->registerFailedLogin();
+            if ($user !== null) {
+                $user->registerFailedLogin();
+                $this->logLoginEvent($user, $user->isLocked() ? 'login.locked' : 'login.failed');
+            }
 
             throw ValidationException::withMessages(['email' => ['Identifiants invalides.']]);
         }
@@ -118,6 +123,17 @@ class PlatformAuthController extends Controller
         return response()->json($request->user());
     }
 
+    /** Journal d'activité (écran Utilisateurs transverses) : connexion réussie/échouée/verrouillée. */
+    private function logLoginEvent(PlatformUser $user, string $action): void
+    {
+        PlatformAuditLog::create([
+            'platform_user_id' => $user->id,
+            'action' => $action,
+            'auditable_type' => PlatformUser::class,
+            'auditable_id' => $user->id,
+        ]);
+    }
+
     private function resolveChallenge(string $challenge): PlatformUser
     {
         $userId = Cache::get("platform.login.challenge.{$challenge}");
@@ -133,6 +149,7 @@ class PlatformAuthController extends Controller
     {
         Cache::forget("platform.login.challenge.{$challenge}");
         $user->registerSuccessfulLogin();
+        $this->logLoginEvent($user, 'login.success');
         $token = $user->createToken('platform-console');
 
         return response()->json([

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\PlatformAuditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
@@ -39,6 +40,11 @@ class Pressing extends Model
     public function reportLogs(): HasMany
     {
         return $this->hasMany(PressingReportLog::class);
+    }
+
+    public function platformUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(PlatformUser::class, 'pressing_platform_user');
     }
 
     /** Un abonnement est « à renouveler » dans les 30 jours — même fenêtre que le reste de l'app. */

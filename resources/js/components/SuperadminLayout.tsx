@@ -1,15 +1,15 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Building2, LayoutDashboard, LogOut } from 'lucide-react';
+import { Building2, LayoutDashboard, LogOut, UsersRound } from 'lucide-react';
 import { useSuperadminAuth } from '../contexts/SuperadminAuthContext';
 import { Avatar } from './ui/PageHeader';
 import { cx, iconButton } from './ui/styles';
 
 /* Sidebar dédiée à la console superadmin — pas une variante d'AppLayout (auth,
  * branding et navigation totalement distincts du staff pressing). Nav limitée aux
- * écrans réellement construits en Phase 1 (Vue plateforme, Pressings) : les items
- * non construits (Utilisateurs transverses, Agences, Audit global, Synchronisation,
- * Configuration) sont omis plutôt que grisés — un lien grisé reste une promesse
- * d'UI non tenue, voir CLAUDE.md « ne pas fabriquer de données ». */
+ * écrans réellement construits (Vue plateforme, Pressings, Utilisateurs transverses
+ * depuis la Phase 2) : les items non construits (Agences cross-tenant, Audit global,
+ * Synchronisation, Configuration) restent omis plutôt que grisés — un lien grisé
+ * reste une promesse d'UI non tenue, voir CLAUDE.md « ne pas fabriquer de données ». */
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     cx(
@@ -38,6 +38,10 @@ export default function SuperadminLayout() {
                     <NavLink to="/superadmin/pressings" className={navLinkClass}>
                         <Building2 aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
                         <span className="truncate">Pressings</span>
+                    </NavLink>
+                    <NavLink to="/superadmin/users" className={navLinkClass}>
+                        <UsersRound aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
+                        <span className="truncate">Utilisateurs transverses</span>
                     </NavLink>
                 </nav>
                 <div className="flex items-center gap-3 border-t border-white/10 px-2 pt-4">

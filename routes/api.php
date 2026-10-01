@@ -31,6 +31,8 @@ use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\Platform\PlatformAuthController;
 use App\Http\Controllers\Api\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\Platform\PlatformPlanController;
+use App\Http\Controllers\Api\Platform\PlatformRoleController;
+use App\Http\Controllers\Api\Platform\PlatformUserController;
 use App\Http\Controllers\Api\Platform\PressingController as PlatformPressingController;
 use App\Http\Controllers\Api\Platform\PressingReportController;
 use App\Http\Controllers\Api\RoleController;
@@ -75,6 +77,13 @@ Route::prefix('platform')->group(function () {
         Route::get('/dashboard', [PlatformDashboardController::class, 'show']);
 
         Route::get('/plans', [PlatformPlanController::class, 'index']);
+        Route::get('/roles', [PlatformRoleController::class, 'index']);
+
+        Route::get('/users/stats', [PlatformUserController::class, 'stats']);
+        Route::get('/users', [PlatformUserController::class, 'index']);
+        Route::post('/users', [PlatformUserController::class, 'store']);
+        Route::patch('/users/{platformUser}', [PlatformUserController::class, 'update']);
+        Route::get('/users/{platformUser}/activity', [PlatformUserController::class, 'activity']);
 
         Route::get('/pressings', [PlatformPressingController::class, 'index']);
         Route::post('/pressings', [PlatformPressingController::class, 'store']);

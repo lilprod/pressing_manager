@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\PlatformAuditable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -15,13 +18,13 @@ use Laravel\Sanctum\HasApiTokens;
  */
 class PlatformUser extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, PlatformAuditable;
 
     private const MAX_FAILED_ATTEMPTS = 5;
 
     private const LOCKOUT_MINUTES = 15;
 
-    protected $fillable = ['name', 'email', 'password', 'is_active', 'totp_secret', 'totp_enabled_at'];
+    protected $fillable = ['name', 'email', 'password', 'is_active', 'totp_secret', 'totp_enabled_at', 'platform_role_id'];
 
     protected $hidden = ['password', 'totp_secret', 'remember_token'];
 
@@ -40,6 +43,32 @@ class PlatformUser extends Authenticatable
     public function recoveryCodes(): HasMany
     {
         return $this->hasMany(PlatformUserRecoveryCode::class);
+    }
+
+    public function platformRole(): BelongsTo
+    {
+        return $this->belongsTo(PlatformRole::class);
+    }
+
+    public function pressings(): BelongsToMany
+    {
+        return $this->belongsToMany(Pressing::class, 'pressing_platform_user');
+    }
+
+    public function hasPermission(string $slug): bool
+    {
+        return $this->platformRole !== null && $this->platformRole->permissions->contains('slug', $slug);
+    }
+
+    public function isSuperadmin(): bool
+    {
+        return $this->platformRole?->isSuperadmin() ?? false;
+    }
+
+    /** Un superadmin accède à tous les pressings, indépendamment des affectations. */
+    public function canAccessPressing(int $pressingId): bool
+    {
+        return $this->isSuperadmin() || $this->pressings()->where('pressings.id', $pressingId)->exists();
     }
 
     public function hasMfaEnabled(): bool

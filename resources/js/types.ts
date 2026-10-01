@@ -693,3 +693,88 @@ export interface NotificationLog {
     status: NotificationStatus;
     sent_at: string;
 }
+
+/* Vue consolidée multi-agences ---------------------------------------------- */
+
+export interface MultiAgencyRow {
+    id: number;
+    name: string;
+    code: string;
+    is_active: boolean;
+    revenue: number;
+    deposits: number;
+    average_basket: number;
+    pickups: number;
+    cash_flow_net: number;
+    outstanding: number;
+    unpaid_clients: number;
+    late_orders: number;
+    loyalty_members: number;
+    loyalty_points: number;
+    workshop_active_count: number;
+    workshop_capacity: number;
+}
+
+export interface RevenueSeriesPoint {
+    date: string;
+    revenue: number;
+}
+
+export interface MultiAgencyAlert {
+    agency_id: number;
+    agency_name: string;
+    kind: 'late' | 'unpaid' | 'workshop_over_capacity';
+    count?: number;
+    amount?: number;
+    active_count?: number;
+    capacity?: number;
+}
+
+export interface MultiAgencyOverview {
+    from: string;
+    to: string;
+    network: {
+        revenue: number;
+        deposits: number;
+        pickups: number;
+        cash_flow_net: number;
+        outstanding: number;
+        loyalty_members: number;
+    };
+    agencies: MultiAgencyRow[];
+    revenue_series: RevenueSeriesPoint[];
+    alerts: MultiAgencyAlert[];
+}
+
+export interface MultiAgencyNetworkComparison {
+    rank: number | null;
+    agency_count: number;
+    avg_revenue: number;
+    avg_outstanding: number;
+    avg_late_orders: number;
+    avg_basket: number;
+}
+
+export interface MultiAgencyWorkshop {
+    columns: { attente: number; cours: number; traites: number; classes: number };
+    capacity: number;
+    active_count: number;
+}
+
+export interface MultiAgencyTeamMember {
+    user: { id: number; name: string } | null;
+    clock_in: string;
+}
+
+export interface MultiAgencyDetail {
+    agency: { id: number; code: string; name: string; city: string | null; address: string | null; phone: string | null; is_active: boolean };
+    from: string;
+    to: string;
+    kpis: MultiAgencyRow;
+    network_comparison: MultiAgencyNetworkComparison | null;
+    revenue_series: RevenueSeriesPoint[];
+    workshop: MultiAgencyWorkshop;
+    clients: { active: number; new_this_period: number };
+    team_present: MultiAgencyTeamMember[];
+    recent_activity: AuditLog[];
+}

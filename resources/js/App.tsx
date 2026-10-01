@@ -37,6 +37,8 @@ import UsersPage from './pages/UsersPage';
 import RolesPermissionsPage from './pages/RolesPermissionsPage';
 import AgenciesPage from './pages/agencies/AgenciesPage';
 import AgencyFormPage from './pages/agencies/AgencyFormPage';
+import MultiAgencyOverviewPage from './pages/multiagency/MultiAgencyOverviewPage';
+import MultiAgencyDetailPage from './pages/multiagency/MultiAgencyDetailPage';
 import StockPage from './pages/StockPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import RhPage from './pages/RhPage';
@@ -120,6 +122,8 @@ export default function App() {
                     <Route path="/agencies" element={<AgenciesPage />} />
                     <Route path="/agencies/new" element={<AgencyFormPage />} />
                     <Route path="/agencies/:id/edit" element={<AgencyFormPage />} />
+                    <Route path="/multi-agences" element={<MultiAgencyOverviewPage />} />
+                    <Route path="/multi-agences/:id" element={<MultiAgencyDetailPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

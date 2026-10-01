@@ -29,6 +29,7 @@ import {
     Workflow,
     LayoutDashboard,
     ChartNoAxesCombined,
+    Network,
     X,
     type LucideIcon,
 } from 'lucide-react';
@@ -137,6 +138,7 @@ function useSidebarSections(onNavigate?: () => void) {
                         <NavItem to="/invoices/outstanding" icon={CircleDollarSign} label={t('invoice.outstandingTitle')} onClick={onNavigate} />
                     )}
                     {hasPermission(user, 'reports.view') && <NavItem to="/kpi" icon={ChartNoAxesCombined} label={t('nav.kpi')} onClick={onNavigate} />}
+                    {hasPermission(user, 'reports.view') && <NavItem to="/multi-agences" icon={Network} label={t('nav.multiAgency')} onClick={onNavigate} />}
                     {hasPermission(user, 'notifications.manage') && (
                         <NavItem to="/notifications" icon={Bell} label={t('nav.notifications')} onClick={onNavigate} />
                     )}

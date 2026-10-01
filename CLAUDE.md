@@ -93,6 +93,7 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait, renforcement livré** (2026-10-01) — sélecteur Pièce/Kilo/Mixte, grilles de prix dégressives au kilo (`ServicePriceTier`), options `allow_discount`/`round_to_hundred`/`price_editable_at_counter`, historique des changements de prix (`ServicePriceHistory`). Intégré jusqu'au comptoir : `NewOrder.tsx` facture réellement au poids (résolution de palier + arrondi). Restent différés : états acceptés/rendus compatibles configurables, disponibilité par agence récapitulative, checklist de publication, historique des tarifs par agence (détail §2) |
 | 08 Rapports & bilans | Rapports et bilans | `pages/KpiPage.tsx` (route `/kpi`, libellé nav « Rapports & bilans ») | **fait** (2026-09-30) — filtres période + raccourcis, 4 KPI avec variation vs période précédente, tableau « Performance des agences », indicateurs opérationnels existants conservés (hors maquette mais déjà exposés par l'API), raccourcis vers les écrans détaillés. Histogramme CA / répartition paiements / synthèse fidélité / planification omis (§2) |
 | 08 Rapports & bilans | Bilan journalier et performance caissiers | — | **non construit** : quasi intégralement dépendant d'agrégats absents (recettes par mode de paiement et par heure, performance par caissier, remises du jour). Les données existantes (clôture de caisse théorique/compté/écart) sont déjà sur `/cash/closures/:id` ; lien depuis « Rapports détaillés ». Voir §2 |
+| 10 Multi-agences | Vue consolidée multi-agences, détail par agence | `pages/multiagency/MultiAgencyOverviewPage.tsx` (route `/multi-agences`), `MultiAgencyDetailPage.tsx` (`/multi-agences/:id`), permission `reports.view` | **fait** (2026-10-01) — KPI réseau, évolution du CA, classement et comparaison inter-agences, alertes opérationnelles, détail par agence (atelier, comparaison au réseau, clients/fidélité, retards/impayés, équipe présente, historique récent) — tout dérivé de données réelles, aucun objectif/cible ni statut « en ligne » fabriqué (détail complet en §2) |
 | 09 Paramètres | Paramètres (hub) | `pages/SettingsPage.tsx` (route `/settings`) | **fait** (2026-09-30) — l'ancien formulaire unique devient un hub : recherche + filtres par groupe, « État de configuration » (checklist d'identité réelle, `lib/brandingChecklist.ts`), cartes vers les écrans existants uniquement (gating par permission, y compris « Agences » vers le CRUD livré en parallèle), « Mis à jour le » via `updated_at` (colonne existante, désormais exposée par `GET /settings`) |
 | 09 Paramètres | Branding du pressing | `pages/settings/BrandingSettingsPage.tsx` (route `/settings/branding`) | **fait** (2026-09-30) — nom, logo, favicon, coordonnées + NIF, aperçu en direct (en-tête app + documents), checklist, barre « non enregistré » ; enregistrement partiel de `/settings` (testé) |
 | 09 Paramètres | Sécurité (politique de mots de passe) | `pages/settings/SecuritySettingsPage.tsx` (route `/settings/security`) | **fait** (2026-09-30) — pas d'écran dédié dans la maquette : mise en page calquée sur « Paramètres opérationnels » (node `25:12525`, champs suffixés + bascules). Les réglages opérationnels eux-mêmes (codes agence, délais, workflow, tarification) n'existent pas (§2) |
@@ -134,8 +135,11 @@ Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
   uniquement, utilisé par le sélecteur d'en-tête) reste inchangé et distinct de
   `GET /agencies/manage` (toutes, paginé, pour cet écran). Construit sans accès
   Figma direct (rate-limit MCP toujours actif) — à comparer visuellement si
-  l'accès est rétabli. Toujours **pas de vue consolidée multi-agences** (dashboard
-  cross-agences avec devise) — dépend du chantier multi-devise (§2 ci-dessus).
+  l'accès est rétabli. ~~Toujours pas de vue consolidée multi-agences~~ **fait**
+  (2026-10-01, voir détail complet en §2 « Vue consolidée multi-agences » ci-dessous) :
+  `pages/multiagency/MultiAgencyOverviewPage.tsx` (route `/multi-agences`) et
+  `MultiAgencyDetailPage.tsx` (`/multi-agences/:id`) — sans la dimension multi-devise
+  (toujours FCFA uniquement, le chantier multi-devise §2 reste entier).
 - ~~**Atelier en vue Kanban** (section 04)~~ **fait** (2026-10-01, détail complet en
   §2 « 04 Atelier » ci-dessous) : `pages/atelier/AtelierBoard.tsx` (route `/atelier`).
   4 colonnes qui **regroupent les vrais statuts existants** de `order.status`
@@ -597,6 +601,61 @@ colonne à 6 champs à une mise en page à deux colonnes conforme à la capture 
   étendus à la création, défauts sans consentement implicite, rejet d'une
   préférence de contact invalide, mise à jour des champs étendus). Suite complète
   269/269 après ajout (aucune régression sur les tests existants).
+
+**Vue consolidée multi-agences** (captures `Vue_consolidee_Agence.PNG` + `Multi_Agences.PNG`,
+dossier Drive `Pressing/New`, audit du 2026-10-01) — écran entièrement nouveau,
+`App\Services\MultiAgencyService` + `AtelierController`-like `MultiAgencyController`
+(`GET /multi-agencies`, `GET /multi-agencies/{agency}`, permission `reports.view`,
+même gating qu'`/kpi`/`/audit-logs` → admin + manager) :
+- **Aucune nouvelle colonne/migration** : tout vient d'agrégats sur des tables déjà
+  dotées d'un `agency_id` direct (`payments`, `orders`, `order_pickups`, `invoices`,
+  `cash_movements`, `clients`, `audit_logs`) — confirmé explicitement avant d'écrire
+  le service plutôt que supposé.
+- **Explicitement omis, faute de donnée réelle** (la maquette les montre, aucune ne
+  l'est) : **« Objectif réseau »/« Objectif mensuel »** (aucune table de quota/cible
+  n'existe) et **statut « En ligne »** par agence (aucune télémétrie de connexion) —
+  remplacé par le champ réel `is_active`. Idem « Satisfaction » (4,8/5, aucun système
+  d'enquête) et horaires d'ouverture (`Agency` n'a pas ce champ).
+- **Cash-flow net** : calculé honnêtement comme `paiements complets (période) +
+  entrées de caisse validées − sorties de caisse validées` — les mouvements
+  `en_attente` (double contrôle, voir module Caisse) sont exclus, testé
+  explicitement (`test_cash_flow_net_excludes_pending_cash_movements`).
+- **Alertes opérationnelles** : dérivées des mêmes agrégats (dépôts en retard —
+  même définition que `AtelierController::board()`, impayés au-delà d'un seuil
+  configuré en dur dans le service, atelier dont le nombre de dépôts actifs dépasse
+  `workshop_capacity`) — aucune alerte n'est une donnée inventée.
+- **Activité atelier (détail agence)** : réutilise `AtelierBoardService::columnFor()`
+  (même regroupement que le tableau Kanban) via une requête `groupBy('status')`
+  légère plutôt que de dupliquer la logique métier ou d'hydrater des commandes
+  complètes (`AtelierController::board()` fait ça mais exige une seule agence et
+  charge trop pour un simple résumé réseau).
+- **Équipe présente** : personnel dont `attendances.clock_in` est posé et
+  `clock_out` encore `null` aujourd'hui (table `Attendance` du module RH, jusque-là
+  jamais exposée sous cet angle).
+- **Historique récent** : 5 dernières entrées `AuditLog` de l'agence (même système
+  générique que l'écran Audit & logs, même forme JSON que `AuditLogController::decorate()`
+  pour réutiliser directement `lib/auditLog.ts` côté front) — pas de nouveau
+  mécanisme de journalisation.
+- **Comparaison au réseau (détail agence)** : rang, moyenne réseau du CA/panier
+  moyen/impayés/retards — calculée **uniquement pour un utilisateur global**
+  (`user.agency_id === null`). Un manager d'agence ne reçoit jamais `network_comparison`
+  (reste `null`), même pour sa propre fiche détail : il n'a pas accès aux agrégats
+  des autres agences, cohérent avec le reste du RBAC de l'app (testé explicitement :
+  `test_the_agency_detail_endpoint_omits_network_comparison_for_an_agency_scoped_manager`).
+- **Bug corrigé pendant la validation Playwright** : grille de 6 `StatCard` avec
+  montants FCFA en `xl:grid-cols-6` tronquait les valeurs à 1440px (même piège déjà
+  documenté sur `OrdersList.tsx`/`ClientDetailPage.tsx`) — passée en
+  `grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6`. Un second bug
+  du même type, nouveau celui-ci : sur la carte « Comparaison au réseau », une valeur
+  + son `DeltaBadge` se chevauchaient avec la colonne voisine à 390px (`dl
+  grid-cols-2` trop étroit pour « 84 159 FCFA ↗+632,8% ») — corrigé en passant la
+  grille en `grid-cols-1 min-[480px]:grid-cols-2` et en ajoutant `flex-wrap`/`truncate`
+  sur le composant `ComparisonMetric`.
+- Tests : `tests/Feature/MultiAgency/MultiAgencyTest.php` (13 tests — permission,
+  scoping réseau vs agence unique, calculs outstanding/pickups/retards/fidélité,
+  alertes, série de CA sans trou, confidentialité de la comparaison réseau,
+  répartition atelier, équipe présente, activité récente, cash-flow net). Suite
+  complète 282/282 après ajout.
 
 **02 Dépôts — Gestion des dépôts (vue globale) et Fiche dépôt enrichie** (captures
 Figma fournies le 2026-10-01) : la vue « Gestion des dépôts » multi-agences

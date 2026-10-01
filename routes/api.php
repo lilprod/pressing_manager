@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\LicenseController;
 use App\Http\Controllers\Api\LicensePlanController;
 use App\Http\Controllers\Api\LoyaltyTierController;
+use App\Http\Controllers\Api\MultiAgencyController;
 use App\Http\Controllers\Api\NotificationLogController;
 use App\Http\Controllers\Api\NotificationSettingController;
 use App\Http\Controllers\Api\OrderController;
@@ -62,6 +63,9 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/agencies/{agency}', [AgencyController::class, 'show']);
     Route::post('/agencies', [AgencyController::class, 'store']);
     Route::patch('/agencies/{agency}', [AgencyController::class, 'update']);
+
+    Route::get('/multi-agencies', [MultiAgencyController::class, 'overview']);
+    Route::get('/multi-agencies/{agency}', [MultiAgencyController::class, 'show']);
 
     Route::post('/settings', [SettingsController::class, 'update']);
 

@@ -45,5 +45,12 @@ export function useFormat() {
         [locale],
     );
 
-    return { money, date, dateTime, time };
+    /** Jour + mois sans année (ex. « 28 sept. ») — légende d'histogramme. */
+    const dayMonth = useCallback(
+        (value: string | null | undefined) =>
+            value ? new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short' }).format(new Date(value)) : '—',
+        [locale],
+    );
+
+    return { money, date, dateTime, time, dayMonth };
 }

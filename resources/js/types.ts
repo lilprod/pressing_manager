@@ -256,12 +256,22 @@ export interface IntakeCondition {
     is_active: boolean;
 }
 
+export interface TreatmentType {
+    id: number;
+    code: string;
+    name: string;
+    price_ratio: number;
+    is_active: boolean;
+}
+
 export interface OrderItem {
     id: number;
     order_id: number;
     agency_id: number;
     service_id: number;
     service?: Service;
+    treatment_type_id: number | null;
+    treatment_type?: TreatmentType | null;
     qr_code: string;
     description: string | null;
     intake_notes: string | null;

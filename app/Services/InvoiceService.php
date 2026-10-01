@@ -13,7 +13,7 @@ class InvoiceService
     public function createFromOrder(Order $order): Invoice
     {
         return DB::transaction(function () use ($order) {
-            $order->loadMissing('items.service', 'client', 'agency');
+            $order->loadMissing('items.service', 'items.treatmentType', 'client', 'agency');
 
             $subtotal = $order->items->sum(fn ($item) => $item->quantity * $item->unit_price);
             $discount = $order->discount_amount;
@@ -38,7 +38,7 @@ class InvoiceService
                 'issued_at' => now(),
             ]);
 
-            $invoice->pdf_path = $this->renderPdf($invoice->load('order.items.service', 'client', 'agency'));
+            $invoice->pdf_path = $this->renderPdf($invoice->load('order.items.service', 'order.items.treatmentType', 'client', 'agency'));
             $invoice->save();
 
             return $invoice;

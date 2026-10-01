@@ -43,7 +43,8 @@ export default function TicketReceiptContent({ order }: { order: Order }) {
             <ul className="mt-2 list-disc pl-4">
                 {order.items.map((item) => (
                     <li key={item.id}>
-                        {item.service?.name} × {item.quantity} — {item.qr_code}
+                        {item.service?.name}
+                        {item.treatment_type ? ` (${item.treatment_type.name})` : ''} × {item.quantity} — {item.qr_code}
                     </li>
                 ))}
             </ul>

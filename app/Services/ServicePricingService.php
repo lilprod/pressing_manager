@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Service;
 use App\Models\ServicePriceHistory;
 use App\Models\ServicePriceTier;
+use App\Models\TreatmentType;
 use App\Models\User;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -62,6 +63,15 @@ class ServicePricingService
         }
 
         return (int) (round($amount / 100) * 100);
+    }
+
+    /**
+     * Applique le ratio de prix d'un traitement (CDC §11.1-11.3, ex. Express = Classique × 1,5)
+     * au montant déjà calculé pour l'article (prix pièce ou grille au kilo).
+     */
+    public function applyTreatmentRatio(int $amount, TreatmentType $treatmentType): int
+    {
+        return (int) round($amount * $treatmentType->price_ratio);
     }
 
     /** @param  array<int, array{weight_min: float, weight_max: float|null, price_per_kg: int}>  $tiers */

@@ -9,7 +9,7 @@ import { EmptyState, LoadingState, Spinner } from '../components/ui/Feedback';
 import Pagination from '../components/ui/Pagination';
 import { Pill, TONES } from '../components/ui/StatusBadge';
 import { button, card, cx, inputLg, inputSm } from '../components/ui/styles';
-import { Layers, Pencil, Plus, Search, Shirt, TrendingUp, TriangleAlert } from 'lucide-react';
+import { Layers, Pencil, Plus, Search, Shirt, Sparkles, TrendingUp, TriangleAlert } from 'lucide-react';
 import { StatCard } from '../components/ui/Metrics';
 import { categoryMeta } from '../lib/serviceCategory';
 import type { Paginated, Service, ServiceCategory, ServiceStats } from '../types';
@@ -66,10 +66,16 @@ export default function ServicesPage() {
         <div className="space-y-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <PageHeader title={t('service.title')} subtitle={t('service.subtitle')} icon={Shirt} />
-                <Link to="/services/new" className={button('primary', 'md')}>
-                    <Plus aria-hidden="true" className="h-4 w-4" />
-                    {t('service.new')}
-                </Link>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Link to="/services/treatment-types" className={button('ghost', 'md')}>
+                        <Sparkles aria-hidden="true" className="h-4 w-4" />
+                        {t('treatmentType.navLink')}
+                    </Link>
+                    <Link to="/services/new" className={button('primary', 'md')}>
+                        <Plus aria-hidden="true" className="h-4 w-4" />
+                        {t('service.new')}
+                    </Link>
+                </div>
             </div>
 
             {stats && (

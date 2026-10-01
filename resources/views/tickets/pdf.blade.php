@@ -33,7 +33,7 @@
     <table>
         @foreach ($order->items as $item)
             <tr>
-                <td>{{ $item->service->name }} × {{ $item->quantity }}<br><span class="muted">{{ $item->qr_code }}</span></td>
+                <td>{{ $item->service->name }}{{ $item->treatmentType ? ' ('.$item->treatmentType->name.')' : '' }} × {{ $item->quantity }}<br><span class="muted">{{ $item->qr_code }}</span></td>
                 <td class="right">{{ number_format($item->quantity * $item->unit_price, 0, ',', ' ') }}</td>
             </tr>
         @endforeach

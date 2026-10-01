@@ -7,10 +7,11 @@ import { api, ApiError } from '../../lib/api';
 import { queuePendingOrder } from '../../lib/offlineDb';
 import { readCachedServices, writeCachedServices } from '../../lib/servicesCache';
 import { readCachedIntakeConditions, writeCachedIntakeConditions } from '../../lib/intakeConditionsCache';
+import { readCachedTreatmentTypes, writeCachedTreatmentTypes } from '../../lib/treatmentTypesCache';
 import { readRecentClients, rememberClients } from '../../lib/recentClientsCache';
 import { syncEvents } from '../../lib/sync';
 import { categoryMeta } from '../../lib/serviceCategory';
-import type { Client, IntakeCondition, Order, Service, ServiceCategory } from '../../types';
+import type { Client, IntakeCondition, Order, Service, ServiceCategory, TreatmentType } from '../../types';
 import {
     Award,
     Building2,
@@ -48,6 +49,7 @@ interface CartLine {
     description: string;
     intake_condition_ids: number[];
     intake_notes: string;
+    treatment_type_id: number | null;
 }
 
 /** Aperçu client du prix au kilo — le serveur recalcule et fait foi à la création du dépôt. */
@@ -58,11 +60,19 @@ function resolveTierPrice(service: Service | undefined, weightKg: number): numbe
     return service?.round_to_hundred ? Math.round(raw / 100) * 100 : Math.round(raw);
 }
 
-function lineTotal(service: Service | undefined, line: CartLine): number {
+/** Aperçu client du ratio de traitement — le serveur recalcule et fait foi à la création du dépôt. */
+function applyTreatmentRatio(amount: number, treatmentType: TreatmentType | undefined): number {
+    if (!treatmentType) return amount;
+    return Math.round(amount * treatmentType.price_ratio);
+}
+
+function lineTotal(service: Service | undefined, treatmentType: TreatmentType | undefined, line: CartLine): number {
     if (service?.billing_mode === 'kg' && line.weight_kg) {
-        return resolveTierPrice(service, line.weight_kg) ?? 0;
+        const tierPrice = resolveTierPrice(service, line.weight_kg) ?? 0;
+        return applyTreatmentRatio(tierPrice, treatmentType);
     }
-    return (service?.effective_price ?? 0) * line.quantity;
+    const unitPrice = applyTreatmentRatio(service?.effective_price ?? 0, treatmentType);
+    return unitPrice * line.quantity;
 }
 
 export default function NewOrder() {
@@ -78,6 +88,7 @@ export default function NewOrder() {
 
     const [services, setServices] = useState<(Service & { effective_price: number })[]>([]);
     const [intakeConditions, setIntakeConditions] = useState<IntakeCondition[]>(readCachedIntakeConditions());
+    const [treatmentTypes, setTreatmentTypes] = useState<TreatmentType[]>(readCachedTreatmentTypes());
     const [expandedLine, setExpandedLine] = useState<number | null>(null);
     const [serviceQuery, setServiceQuery] = useState('');
     const [clientQuery, setClientQuery] = useState('');
@@ -117,6 +128,19 @@ export default function NewOrder() {
             })
             .catch(() => {
                 // Hors-ligne : on garde le catalogue mis en cache lors du dernier chargement réussi.
+            });
+    }, []);
+
+    useEffect(() => {
+        api
+            .get<TreatmentType[]>('/treatment-types')
+            .then((list) => {
+                const active = list.filter((t) => t.is_active);
+                setTreatmentTypes(active);
+                writeCachedTreatmentTypes(active);
+            })
+            .catch(() => {
+                // Hors-ligne : on garde le référentiel mis en cache lors du dernier chargement réussi.
             });
     }, []);
 
@@ -169,9 +193,10 @@ export default function NewOrder() {
         () =>
             cart.reduce((sum, line) => {
                 const service = services.find((s) => s.id === line.service_id);
-                return sum + lineTotal(service, line);
+                const treatmentType = treatmentTypes.find((t) => t.id === line.treatment_type_id);
+                return sum + lineTotal(service, treatmentType, line);
             }, 0),
-        [cart, services],
+        [cart, services, treatmentTypes],
     );
 
     // Pré-remplit la remise à partir du palier de fidélité du client tant que le personnel
@@ -208,9 +233,20 @@ export default function NewOrder() {
                     description: '',
                     intake_condition_ids: [],
                     intake_notes: '',
+                    treatment_type_id: null,
                 },
             ];
         });
+    }
+
+    function setLineTreatmentType(serviceId: number, treatmentTypeId: number | null) {
+        setCart((current) =>
+            current.map((l) =>
+                l.service_id === serviceId
+                    ? { ...l, treatment_type_id: l.treatment_type_id === treatmentTypeId ? null : treatmentTypeId }
+                    : l,
+            ),
+        );
     }
 
     function toggleWeightBilling(serviceId: number) {
@@ -250,6 +286,7 @@ export default function NewOrder() {
                 description: l.description || null,
                 intake_condition_ids: l.intake_condition_ids.length > 0 ? l.intake_condition_ids : undefined,
                 intake_notes: l.intake_notes || null,
+                treatment_type_id: l.treatment_type_id ?? undefined,
             })),
         };
 
@@ -513,6 +550,7 @@ export default function NewOrder() {
                             <ul className="divide-y divide-ink-100 dark:divide-ink-800">
                                 {cart.map((line) => {
                                     const service = services.find((s) => s.id === line.service_id);
+                                    const treatmentType = treatmentTypes.find((t) => t.id === line.treatment_type_id);
                                     return (
                                         <li key={line.service_id} className="animate-fade-in space-y-2.5 px-5 py-4">
                                             <div className="flex items-start justify-between gap-3">
@@ -522,10 +560,11 @@ export default function NewOrder() {
                                                         {line.weight_kg !== null
                                                             ? t('order.weightKg', { weight: line.weight_kg })
                                                             : `${money(service?.effective_price ?? 0)} × ${line.quantity}`}
+                                                        {treatmentType && ` · ${treatmentType.name}`}
                                                     </p>
                                                 </div>
                                                 <p className="shrink-0 font-display font-bold tabular-nums text-ink-900 dark:text-white">
-                                                    {money(lineTotal(service, line))}
+                                                    {money(lineTotal(service, treatmentType, line))}
                                                 </p>
                                             </div>
                                             <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
@@ -650,6 +689,32 @@ export default function NewOrder() {
                                                             className={cx(inputSm, 'w-full')}
                                                         />
                                                     </label>
+                                                    {treatmentTypes.length > 0 && (
+                                                        <div>
+                                                            <span className={cx(label, 'mb-1 block')}>{t('order.treatmentType')}</span>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {treatmentTypes.map((treatment) => {
+                                                                    const checked = line.treatment_type_id === treatment.id;
+                                                                    return (
+                                                                        <button
+                                                                            key={treatment.id}
+                                                                            type="button"
+                                                                            aria-pressed={checked}
+                                                                            onClick={() => setLineTreatmentType(line.service_id, treatment.id)}
+                                                                            className={cx(
+                                                                                'inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold transition duration-150',
+                                                                                checked
+                                                                                    ? 'bg-brand-700 text-white dark:bg-brand-400 dark:text-ink-950'
+                                                                                    : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-100 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
+                                                                            )}
+                                                                        >
+                                                                            {treatment.name}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </li>

@@ -14,7 +14,7 @@ class TicketPdfService
      */
     public function render(Order $order): string
     {
-        $order->loadMissing('items.service', 'client', 'agency');
+        $order->loadMissing('items.service', 'items.treatmentType', 'client', 'agency');
 
         return Pdf::loadView('tickets.pdf', ['order' => $order])->output();
     }

@@ -6,6 +6,7 @@ use App\Models\Agency;
 use App\Models\Client;
 use App\Models\Order;
 use App\Models\Service;
+use App\Models\TreatmentType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\SeedsRbac;
 use Tests\TestCase;
@@ -222,6 +223,89 @@ class OrderCreationTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('balance_due', $invoice['total_amount']);
+    }
+
+    public function test_a_treatment_type_applies_its_price_ratio_to_the_item(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+        $express = TreatmentType::factory()->create(['price_ratio' => 1.5]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [
+                ['service_id' => $service->id, 'quantity' => 2, 'treatment_type_id' => $express->id],
+            ],
+        ]);
+
+        $response->assertCreated();
+        // 1000 * 1.5 = 1500 par pièce, * 2 pièces = 3000
+        $this->assertSame(3000, $response->json('total_amount'));
+        $this->assertSame($express->id, $response->json('items.0.treatment_type_id'));
+    }
+
+    public function test_an_item_without_a_treatment_type_is_priced_as_before(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [
+                ['service_id' => $service->id, 'quantity' => 2],
+            ],
+        ]);
+
+        $response->assertCreated();
+        $this->assertSame(2000, $response->json('total_amount'));
+        $this->assertNull($response->json('items.0.treatment_type_id'));
+    }
+
+    public function test_an_inactive_treatment_type_is_rejected(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+        $retired = TreatmentType::factory()->create(['is_active' => false]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [
+                ['service_id' => $service->id, 'quantity' => 1, 'treatment_type_id' => $retired->id],
+            ],
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_a_non_existent_treatment_type_is_rejected_by_validation(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [
+                ['service_id' => $service->id, 'quantity' => 1, 'treatment_type_id' => 999999],
+            ],
+        ]);
+
+        $response->assertStatus(422);
     }
 
     public function test_showing_an_order_includes_its_atelier_responsables(): void

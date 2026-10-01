@@ -66,7 +66,7 @@ class InvoiceController extends ApiController
     {
         $this->authorizeAgency($request->user(), $invoice->agency_id);
 
-        return response()->json($invoice->load('payments', 'order.items.service', 'client'));
+        return response()->json($invoice->load('payments', 'order.items.service', 'order.items.treatmentType', 'client'));
     }
 
     public function downloadPdf(Request $request, Invoice $invoice): StreamedResponse

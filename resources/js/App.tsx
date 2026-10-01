@@ -24,6 +24,7 @@ import SubscriptionsPage from './pages/SubscriptionsPage';
 import LoyaltyPage from './pages/LoyaltyPage';
 import ServicesPage from './pages/ServicesPage';
 import ServiceFormPage from './pages/services/ServiceFormPage';
+import TreatmentTypesPage from './pages/services/TreatmentTypesPage';
 import CashRegisterPage from './pages/cash/CashRegisterPage';
 import CashMovementFormPage from './pages/cash/CashMovementFormPage';
 import CashClosureFormPage from './pages/cash/CashClosureFormPage';
@@ -99,6 +100,7 @@ export default function App() {
                     <Route path="/loyalty" element={<LoyaltyPage />} />
                     <Route path="/services" element={<ServicesPage />} />
                     <Route path="/services/new" element={<ServiceFormPage />} />
+                    <Route path="/services/treatment-types" element={<TreatmentTypesPage />} />
                     <Route path="/services/:id/edit" element={<ServiceFormPage />} />
                     <Route path="/cash" element={<CashRegisterPage />} />
                     <Route path="/cash/movements/new" element={<CashMovementFormPage />} />

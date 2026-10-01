@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\CustomerSubscription;
 use App\Models\OrderSyncLog;
 use App\Models\Payment;
+use App\Models\TreatmentType;
 use App\Services\OrderNumberGenerator;
 use App\Services\QrCodeGenerator;
 use App\Services\ServicePricingService;
@@ -140,6 +141,14 @@ class OrderController extends ApiController
                 $service = $agency->services()->findOrFail($itemData['service_id']);
                 $maxDurationHours = max($maxDurationHours, $service->estimated_duration_hours);
 
+                $treatmentType = null;
+                if (! empty($itemData['treatment_type_id'])) {
+                    $treatmentType = TreatmentType::findOrFail($itemData['treatment_type_id']);
+                    if (! $treatmentType->is_active) {
+                        throw new HttpException(422, "Le traitement « {$treatmentType->name} » n'est plus disponible.");
+                    }
+                }
+
                 $weightKg = $itemData['weight_kg'] ?? null;
                 if ($weightKg !== null) {
                     if (! in_array($service->billing_mode, ['kg', 'mixte'], true)) {
@@ -160,9 +169,17 @@ class OrderController extends ApiController
                     $unitPrice = $service->pivot->price_override ?? $service->base_price;
                 }
 
+                // CDC §11.1-11.3 : un traitement (Classique/Express/Repassage…) applique un
+                // ratio automatique au prix de l'article — additif, une ligne sans traitement
+                // choisi garde exactement le comportement d'avant (prix pièce ou grille kilo).
+                if ($treatmentType !== null) {
+                    $unitPrice = $this->pricing->roundAmount($service, $this->pricing->applyTreatmentRatio($unitPrice, $treatmentType));
+                }
+
                 $item = $order->items()->create([
                     'agency_id' => $agencyId,
                     'service_id' => $service->id,
+                    'treatment_type_id' => $treatmentType?->id,
                     'qr_code' => $this->qrCodes->generateCode($agency->code),
                     'description' => $itemData['description'] ?? null,
                     'intake_notes' => $itemData['intake_notes'] ?? null,
@@ -216,7 +233,7 @@ class OrderController extends ApiController
         $this->authorizeAgency($request->user(), $order->agency_id);
 
         $order->load(
-            'items.service', 'items.intakeConditions', 'items.statusHistories.actor',
+            'items.service', 'items.treatmentType', 'items.intakeConditions', 'items.statusHistories.actor',
             'client', 'invoice.payments', 'agency', 'pickups.items.orderItem', 'pickups.processor', 'creator',
             'washer', 'sorter',
         );

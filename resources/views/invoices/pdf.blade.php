@@ -38,7 +38,7 @@
             @foreach ($invoice->order->items as $item)
                 <tr>
                     <td>{{ $item->description ?? $item->qr_code }}</td>
-                    <td>{{ $item->service->name }}</td>
+                    <td>{{ $item->service->name }}{{ $item->treatmentType ? ' ('.$item->treatmentType->name.')' : '' }}</td>
                     <td>{{ $item->quantity }}</td>
                     <td>{{ number_format($item->unit_price, 0, ',', ' ') }}</td>
                     <td>{{ number_format($item->quantity * $item->unit_price, 0, ',', ' ') }}</td>

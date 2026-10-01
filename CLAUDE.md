@@ -182,12 +182,16 @@ proposer de migration vers la stack du CDC.
    historique — changer un tarif ne doit jamais modifier le montant d'une facture déjà
    émise (non négociable, §8.2). Condition préalable au reporting consolidé
    multi-agences.
-2. **Séparation Article × Service avec règles de ratio de prix automatiques** (CDC
-   §11.1-11.3) — le CDC distingue le catalogue d'Articles (vêtements, global) du
-   Service (type de prestation : classique/express/repassage…, avec des règles du
-   type express = classique × 1,5). L'existant conflate les deux dans un seul modèle
-   `Service` (nom, code, catégorie, prix) ; pas de règle de calcul automatique, pas
-   d'import Excel du catalogue/prix (EF-ART-03, §11.5).
+2. ~~**Séparation Article × Service avec règles de ratio de prix automatiques**~~
+   **fait, scope additif** (2026-10-01, détail complet ci-dessous en §« Types de
+   traitement ») : CDC §11.1-11.3 — le CDC distingue le catalogue d'Articles
+   (vêtements, global) du Service (type de prestation : classique/express/
+   repassage…, avec des règles du type express = classique × 1,5). Plutôt que de
+   scinder le modèle `Service` existant (risqué : renommage/migration de données
+   sur un modèle référencé partout dans le pipeline commande/prix/ticket/facture),
+   nouveau référentiel parallèle `treatment_types` (ratio de prix appliqué
+   automatiquement, optionnel par ligne de commande). Import Excel du catalogue/prix
+   (EF-ART-03, §11.5) reste **différé**, non traité par cette passe.
 3. **Tournées de livraison et encaissement mobile** (CDC §10.15, EF-LIV-01 et 03) —
    `Delivery` existe (photo, signature, statuts, `livreur_id`) mais sans regroupement
    en tournée (`delivery_round`) et sans collecte du solde restant à la livraison
@@ -922,6 +926,69 @@ d'abord :
 Le catalogue articles/tarifs (CRUD) et la sidebar de navigation groupée, qui étaient
 dans une version précédente de cette liste, sont **déjà faits** (commits `7dd2fae`,
 `0e2ffdb`).
+
+**Types de traitement (ratio de prix automatique)** — CDC §11.1-11.3, gap #2
+ci-dessus, fait le 2026-10-01 (demande utilisateur laconique « Change service par
+article », clarifiée via `AskUserQuestion` ; réponse utilisateur sans préférence
+explicite → scope choisi par l'agent, cohérent avec le reste de la liste CDC déjà
+traitée en autonomie cette session) :
+- **Décision de modélisation (clé)** : ne **pas** scinder le modèle `Service`
+  existant en Article + Service séparés — ce dernier est référencé dans tout le
+  pipeline (commande, tarification, ticket, facture, historique de prix) et une
+  séparation littérale aurait exigé un parsing fragile des libellés existants
+  (« Nettoyage - Chemise MC ») pour en extraire un « article » implicite, sans
+  bénéfice fonctionnel supplémentaire. À la place, nouveau référentiel global
+  `treatment_types` (table dédiée, indépendante des agences — même portée que le
+  catalogue `services`) : `code` (unique), `name`, `price_ratio` (decimal 4,2),
+  `is_active`. Seedé avec 3 valeurs par défaut (Classique ×1,00, Express ×1,50,
+  Repassage seul ×0,50 — `TreatmentTypeSeeder`).
+- **Application du ratio** : `order_items.treatment_type_id` (FK nullable,
+  `nullOnDelete`) — un traitement est **optionnel par ligne de commande**, pas
+  obligatoire et pas porté par l'article lui-même (un même article « Chemise »
+  peut être déposé en classique ou en express selon le dépôt). Calcul dans
+  `OrderController::store()` : le prix de la ligne (pièce ou grille au kilo,
+  logique de pricing existante inchangée) est multiplié par `price_ratio` via
+  `ServicePricingService::applyTreatmentRatio()`, puis ré-arrondi par
+  `roundAmount()` si l'article a `round_to_hundred` — même pipeline que le prix de
+  base, pas de code dupliqué. Un traitement inactif est rejeté (422) ; un
+  `treatment_type_id` inexistant est rejeté par la validation HTTP
+  (`StoreOrderRequest`). **Additif et rétro-compatible** : une ligne sans
+  traitement choisi suit exactement le chemin de code existant (comportement
+  identique à avant cette passe, vérifié par un test dédié).
+- **Fiche technique (CRUD)** : `TreatmentTypeController` (`GET/POST
+  /treatment-types`, `PATCH /treatment-types/{id}`), gardé par la permission
+  `services.manage` (même gating que le catalogue d'articles) — pas de `destroy`,
+  même convention que `LoyaltyTierController` (désactivation via `is_active`
+  plutôt que suppression, pour ne jamais casser l'historique des dépôts déjà
+  facturés avec ce traitement).
+- **Frontend** : `NewOrder.tsx` — sélecteur de traitement en pastilles (même
+  pattern que l'état à la réception) dans le panneau déplié de chaque ligne de
+  panier, aperçu de prix recalculé côté client (même formule que le serveur, qui
+  reste seul à faire foi), badge du traitement choisi affiché sur la ligne
+  (`· Express`). Nouvel écran de gestion `pages/services/TreatmentTypesPage.tsx`
+  (route `/services/treatment-types`, lien depuis l'en-tête de `ServicesPage.tsx`)
+  — mirrors exactement le patron d'édition en ligne de `LoyaltyPage.tsx`
+  (liste + formulaire de création côte à côte, édition inline, activer/désactiver
+  par pastille cliquable) plutôt que d'inventer un nouveau patron UI. Ticket/
+  facture (`TicketReceiptContent.tsx`, les deux vues Blade PDF) affichent le nom
+  du traitement entre parenthèses à côté du service quand il y en a un.
+  Vérifié par capture Playwright à 390px (écran de gestion) et par un dépôt réel
+  avec traitement Express sélectionné (500 FCFA × 1,5 = 750 FCFA, TVA et total
+  recalculés correctement dans le panier).
+- **Omis/différé** (décisions documentées) : pas de règle automatique reliant un
+  traitement à une règle de ratio *par article* (ex. interdiction d'appliquer
+  Express à un article déjà premium) — le ratio s'applique uniformément, cohérent
+  avec le CDC qui ne spécifie pas de telles exceptions. Pas de traitement par
+  défaut suggéré selon `is_express` de la commande (volontaire : le traitement est
+  une propriété de la ligne, pas de la commande, contrairement à `orders.priority`
+  qui reste dérivé de `is_express` — même distinction déjà actée pour
+  `services.priority` dans le chantier Articles & tarifs ci-dessus). Import Excel
+  des traitements : hors scope, recoupe le gap EF-ART-03 déjà différé.
+- Tests : `tests/Feature/TreatmentTypes/TreatmentTypeTest.php` (3 tests — CRUD,
+  gating `services.manage`, unicité du code) et 4 tests ajoutés à
+  `tests/Feature/Orders/OrderCreationTest.php` (ratio appliqué, ligne sans
+  traitement inchangée, traitement inactif rejeté, id inexistant rejeté). Suite
+  complète 292/292 après ajout (aucune régression).
 
 ## Conventions établies dans ce projet (à respecter)
 

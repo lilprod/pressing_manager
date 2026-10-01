@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\LicenseController;
 use App\Http\Controllers\Api\LicensePlanController;
 use App\Http\Controllers\Api\LoyaltyTierController;
+use App\Http\Controllers\Api\TreatmentTypeController;
 use App\Http\Controllers\Api\MultiAgencyController;
 use App\Http\Controllers\Api\NotificationLogController;
 use App\Http\Controllers\Api\NotificationSettingController;
@@ -96,6 +97,10 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::get('/loyalty-tiers', [LoyaltyTierController::class, 'index']);
     Route::post('/loyalty-tiers', [LoyaltyTierController::class, 'store']);
     Route::patch('/loyalty-tiers/{loyaltyTier}', [LoyaltyTierController::class, 'update']);
+
+    Route::get('/treatment-types', [TreatmentTypeController::class, 'index']);
+    Route::post('/treatment-types', [TreatmentTypeController::class, 'store']);
+    Route::patch('/treatment-types/{treatmentType}', [TreatmentTypeController::class, 'update']);
 
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/stats', [OrderController::class, 'stats']);

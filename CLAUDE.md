@@ -85,7 +85,7 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 02 Dépôts & POS | Gestion des dépôts (liste) | `pages/counter/OrdersList.tsx` | **fait** (commit `408e94e`), KPI en-tête ajoutés le 2026-10-01 (voir détail en §2) |
 | 02 Dépôts & POS | Nouveau dépôt (formulaire) | `pages/counter/NewOrder.tsx` | jugé déjà conforme le 2026-09-30 — hérite des tokens, structure (client→catalogue groupé par catégorie→panier sticky) déjà proche de Figma et plus riche (recherche live, remise fidélité auto, conditions de réception, file offline). Ne pas réécrire sans raison concrète. |
 | 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`), KPI en-tête ajoutés le 2026-10-01 (voir détail en §2) |
-| 03 Clients & fidélité | Nouveau/Modifier client | `pages/clients/ClientFormPage.tsx` (routes `/clients/new`, `/clients/:id/edit`) | **fait** (commit `11de473`, écrans séparés depuis commit `eaf68bf`) — a aussi exposé le champ `notes` (backend déjà prêt, jamais affiché côté front) |
+| 03 Clients & fidélité | Nouveau/Modifier client | `pages/clients/ClientFormPage.tsx` (routes `/clients/new`, `/clients/:id/edit`) | **fait, renforcement livré** (2026-10-01) — mise en page à deux colonnes conforme aux nouvelles captures (contrôle de doublon temps réel, consentements SMS/e-mail, préférence de contact, ville/quartier, téléphone secondaire, code de parrainage, groupe de fidélité en lecture seule, agence de référence, « Enregistrer et créer un dépôt »), détail en §2 « Formulaire client enrichi » |
 | 03 Clients & fidélité | Fiche client (consultation) | `pages/clients/ClientDetailPage.tsx` (route `/clients/:id`) | **fait** (2026-10-01) — remplace l'ancien panneau latéral par un écran dédié, suite à la capture Figma fournie le 2026-10-01 montrant 4 KPI (détail en §2) |
 | 04 Atelier | Atelier en vue Kanban | `pages/atelier/AtelierBoard.tsx` (route `/atelier`, permission `orders.update_status`) | **fait** (2026-10-01) — 4 colonnes Kanban sur les statuts réels, capacité atelier, priorité, responsables Laveur/Classeur, panneau de dépôt avec chronologie et action « Passer à l'étape suivante » (détail complet en §2) |
 | 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait, renforcement livré** (2026-10-01) — rapprochement par moyen de paiement (espèces/mobile money/carte), checklist de clôture obligatoire, double contrôle sur mouvement sensible (seuil configurable), pièces justificatives, rapport PDF de clôture. Restent différés : distinction dépôt/solde sur `Payment`, vue « opérateurs de la journée », notification au contrôleur (aucun canal interne staff n'existe) — détail en §2 |
@@ -546,16 +546,57 @@ pas de node exact) — écarts additionnels à ceux déjà notés :
   n'existe sur `Client` (notes libres uniquement). Bouton « Convertir en remise » :
   pas d'endpoint pour convertir des points en remise à la demande (aujourd'hui la
   remise de palier s'applique automatiquement, pas de conversion manuelle).
-- Formulaire client (nouveau/modifier) : **contrôle de doublon par téléphone** en
-  temps réel avec lien direct vers la fiche existante — pas de vérification
-  d'unicité ni de recherche de doublon côté `ClientController::store`. **Consentements
-  séparés SMS / e-mail** (deux cases) — `Client` n'a pas de colonnes de consentement
-  marketing. **Code de parrainage** — absent (recoupe le moteur de règles marketing
-  déjà noté en §2, parrainage y est un type de règle prévu). Indicateur de
-  « brouillon local » / sync en attente sur la création hors ligne : déjà couvert
-  par la file hors ligne des dépôts, mais pas pour la création de client — à
-  vérifier si `ClientsList.tsx`/`ClientFormPage.tsx` gèrent la création de client
-  hors connexion (probablement non, à confirmer avant de documenter comme gap).
+- ~~Formulaire client (nouveau/modifier)~~ **fait** (2026-10-01, voir détail
+  complet en §2 « Formulaire client enrichi » ci-dessous) : contrôle de doublon en
+  temps réel, consentements SMS/e-mail, code de parrainage, préférence de contact,
+  ville/quartier, téléphone secondaire, statut actif, groupe de fidélité en lecture
+  seule, agence de référence, « Enregistrer et créer un dépôt ». La création de
+  client hors connexion reste **non construite** (confirmé : aucune file IndexedDB
+  pour les clients, contrairement aux dépôts) — omise plutôt que simulée.
+
+**Formulaire client enrichi** (captures `Modif_Client.PNG`/`Nv_Client1.PNG`, dossier
+Drive `Pressing/New`, audit du 2026-10-01) — `ClientForm.tsx` est passé d'une seule
+colonne à 6 champs à une mise en page à deux colonnes conforme à la capture :
+- **Nouvelles colonnes réelles sur `clients`** (migration
+  `2026_10_01_090000_add_profile_fields_to_clients_table`) : `phone_secondary`,
+  `city` (« Ville/quartier »), `contact_preference` (enum applicatif
+  whatsapp/call/sms/email), `referral_code`, `sms_consent`, `email_consent`
+  (défaut `false` — un consentement n'est jamais présumé, y compris pour un champ
+  pré-coché dans la capture Figma). Validées dans `StoreClientRequest`/
+  `UpdateClientRequest`.
+- **Contrôle des doublons en temps réel** : pas de nouvel endpoint — réutilise
+  `GET /clients?search=` déjà utilisé par `NewOrder.tsx`, débounce 400 ms, compare
+  le téléphone saisi aux résultats exacts (en excluant le client en cours d'édition)
+  et affiche soit « Aucun doublon détecté » soit une carte avec lien « Ouvrir la
+  fiche ».
+- **Groupe de fidélité** : affiché en lecture seule (pas un sélecteur éditable,
+  contrairement à l'apparence de la capture) — c'est un palier **calculé** depuis
+  `loyalty_points`/`LoyaltyTier`, pas une donnée qu'on peut fabriquer en la rendant
+  modifiable. En édition : `client.loyalty_tier_name` (déjà exposé). En création
+  (pas encore de client donc pas de points) : plus petit palier actif via
+  `GET /loyalty-tiers`.
+- **Agence de référence** : sélecteur `<select>` uniquement pour un utilisateur
+  global à la création (même règle qu'avant, `agency_id` reste `prohibited` pour un
+  utilisateur d'agence et non modifiable après coup côté `UpdateClientRequest`) —
+  affichée en lecture seule dans tous les autres cas plutôt que de suggérer une
+  réaffectation d'agence qui n'existe pas côté API.
+- **Code de parrainage** : simple champ texte stocké, **sans** moteur de bonus
+  parrain (ce moteur reste un chantier à part, §2 « Moteur de règles marketing »)
+  — honnête sur ce qui est réellement fait (stocké) vs pas fait (bonus appliqué).
+  **Archivage et historique** : carte informative statique (texte vrai sur le
+  comportement de désactivation, aucune donnée à charger). **Synchronisation** :
+  affichée seulement en édition, avec la vraie date `updated_at` du client — omise
+  à la création (pas de file hors ligne client, donc pas de « brouillon local » à
+  simuler).
+- **« Enregistrer et créer un dépôt »** : `NewOrder.tsx` accepte désormais un
+  paramètre `?client=<id>` (nouveau, `useSearchParams`), charge le client via
+  `GET /clients/{id}` et le présélectionne — testé en Playwright (création
+  « Fatou Diallo » → redirection vers `/?client=86` → carte client déjà remplie
+  sur le nouveau dépôt).
+- Tests : `tests/Feature/Clients/ClientLifecycleTest.php` (+4 tests : champs
+  étendus à la création, défauts sans consentement implicite, rejet d'une
+  préférence de contact invalide, mise à jour des champs étendus). Suite complète
+  269/269 après ajout (aucune régression sur les tests existants).
 
 **02 Dépôts — Gestion des dépôts (vue globale) et Fiche dépôt enrichie** (captures
 Figma fournies le 2026-10-01) : la vue « Gestion des dépôts » multi-agences

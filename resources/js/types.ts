@@ -69,19 +69,28 @@ export interface User {
     password_expires_at: string | null;
 }
 
+export type ClientContactPreference = 'whatsapp' | 'call' | 'sms' | 'email';
+
 export interface Client {
     id: number;
     agency_id: number;
     first_name: string;
     last_name: string;
     phone: string;
+    phone_secondary: string | null;
     email: string | null;
     address: string | null;
+    city: string | null;
+    contact_preference: ClientContactPreference | null;
+    referral_code: string | null;
     loyalty_points: number;
     loyalty_discount_rate: number;
     loyalty_tier_name: string | null;
     notes: string | null;
     is_active: boolean;
+    sms_consent: boolean;
+    email_consent: boolean;
+    updated_at: string;
     agency?: { id: number; name: string };
 }
 

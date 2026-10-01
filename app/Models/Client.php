@@ -15,7 +15,8 @@ class Client extends Model
     use Auditable, HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'agency_id', 'first_name', 'last_name', 'phone', 'email', 'address', 'loyalty_points', 'notes', 'is_active',
+        'agency_id', 'first_name', 'last_name', 'phone', 'phone_secondary', 'email', 'address', 'city',
+        'contact_preference', 'referral_code', 'loyalty_points', 'notes', 'is_active', 'sms_consent', 'email_consent',
     ];
 
     protected $appends = ['loyalty_discount_rate', 'loyalty_tier_name'];
@@ -24,6 +25,8 @@ class Client extends Model
     {
         return [
             'is_active' => 'boolean',
+            'sms_consent' => 'boolean',
+            'email_consent' => 'boolean',
         ];
     }
 

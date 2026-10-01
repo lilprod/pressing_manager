@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
 import { useSettings } from '../../contexts/SettingsContext';
@@ -71,6 +71,7 @@ export default function NewOrder() {
     const { money } = useFormat();
     const { settings } = useSettings();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const taxRate = settings?.tax_rate ?? 0;
 
     const agencyId = user?.agency_id ?? activeAgencyId;
@@ -147,6 +148,22 @@ export default function NewOrder() {
             controller.abort();
         };
     }, [clientQuery, agencyId]);
+
+    // Préselection depuis la fiche client (« Enregistrer et créer un dépôt »).
+    useEffect(() => {
+        const clientId = searchParams.get('client');
+        if (!clientId) return;
+        api
+            .get<Client>(`/clients/${clientId}`)
+            .then((found) => {
+                setSelectedClient(found);
+                rememberClients([found]);
+            })
+            .catch(() => {
+                // Client introuvable ou hors de portée : l'utilisateur garde la recherche manuelle.
+            });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const total = useMemo(
         () =>

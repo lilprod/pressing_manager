@@ -23,10 +23,16 @@ class UpdateClientRequest extends FormRequest
                 'sometimes', 'string', 'max:30',
                 Rule::unique('clients', 'phone')->where('agency_id', $client->agency_id)->ignore($client->id),
             ],
+            'phone_secondary' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'contact_preference' => ['nullable', 'string', Rule::in(['whatsapp', 'call', 'sms', 'email'])],
+            'referral_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
-            'is_active' => ['boolean'],
+            'is_active' => ['sometimes', 'boolean'],
+            'sms_consent' => ['sometimes', 'boolean'],
+            'email_consent' => ['sometimes', 'boolean'],
         ];
     }
 }

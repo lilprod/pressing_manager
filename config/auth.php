@@ -40,6 +40,24 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Épingle explicitement le provider du guard tenant existant : sans cette entrée,
+        // SanctumServiceProvider l'enregistre avec provider => null, ce qui fait accepter
+        // n'importe quel modèle "tokenable" (inoffensif tant que platform_users n'existait
+        // pas, devenu un vrai trou d'isolation dès que le guard `platform` ci-dessous existe).
+        'sanctum' => [
+            'driver' => 'sanctum',
+            'provider' => 'users',
+        ],
+
+        // Royaume d'authentification totalement séparé pour la console superadmin
+        // (voir app/Models/PlatformUser.php) — même table personal_access_tokens
+        // (polymorphe), mais Sanctum\Guard::hasValidProvider() refuse tout jeton dont le
+        // tokenable n'est pas une instance de PlatformUser pour ce guard, et réciproquement.
+        'platform' => [
+            'driver' => 'sanctum',
+            'provider' => 'platform_users',
+        ],
     ],
 
     /*
@@ -63,6 +81,11 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', App\Models\User::class),
+        ],
+
+        'platform_users' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\PlatformUser::class,
         ],
 
         // 'users' => [

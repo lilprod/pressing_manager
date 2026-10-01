@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
             'license' => \App\Http\Middleware\CheckLicenseStatus::class,
+            'platform.report' => \App\Http\Middleware\VerifyPressingReportToken::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

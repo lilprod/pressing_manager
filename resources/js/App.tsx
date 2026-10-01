@@ -2,12 +2,18 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { useLicense } from './contexts/LicenseContext';
 import { useSettings } from './contexts/SettingsContext';
+import { SuperadminAuthProvider, useSuperadminAuth } from './contexts/SuperadminAuthContext';
 import { useIdleLogout } from './lib/useIdleLogout';
 import AppLayout from './components/AppLayout';
+import SuperadminLayout from './components/SuperadminLayout';
 import ForcedPasswordChangeScreen from './components/ForcedPasswordChangeScreen';
 import LicenseBlockedScreen from './components/LicenseBlockedScreen';
 import SplashScreen from './components/SplashScreen';
 import Login from './pages/Login';
+import PlatformLoginPage from './pages/superadmin/PlatformLoginPage';
+import PlatformDashboardPage from './pages/superadmin/DashboardPage';
+import PressingsPage from './pages/superadmin/PressingsPage';
+import PressingFormPage from './pages/superadmin/PressingFormPage';
 import NewOrder from './pages/counter/NewOrder';
 import OrdersList from './pages/counter/OrdersList';
 import OrderDetail from './pages/counter/OrderDetail';
@@ -78,12 +84,36 @@ function ProtectedLayout() {
     return <AppLayout />;
 }
 
+function SuperadminProtectedLayout() {
+    const { user, loading } = useSuperadminAuth();
+
+    if (loading) {
+        return <SplashScreen />;
+    }
+
+    if (!user) {
+        return <Navigate to="/superadmin/login" replace />;
+    }
+
+    return <SuperadminLayout />;
+}
+
 export default function App() {
     return (
         <BrowserRouter>
-            <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route element={<ProtectedLayout />}>
+            <SuperadminAuthProvider>
+                <Routes>
+                    <Route path="/superadmin/login" element={<PlatformLoginPage />} />
+                    <Route path="/superadmin" element={<SuperadminProtectedLayout />}>
+                        <Route index element={<Navigate to="dashboard" replace />} />
+                        <Route path="dashboard" element={<PlatformDashboardPage />} />
+                        <Route path="pressings" element={<PressingsPage />} />
+                        <Route path="pressings/new" element={<PressingFormPage />} />
+                        <Route path="pressings/:id/edit" element={<PressingFormPage />} />
+                    </Route>
+
+                    <Route path="/login" element={<Login />} />
+                    <Route element={<ProtectedLayout />}>
                     <Route path="/" element={<NewOrder />} />
                     <Route path="/orders" element={<OrdersList />} />
                     <Route path="/orders/:id" element={<OrderDetail />} />
@@ -126,9 +156,10 @@ export default function App() {
                     <Route path="/agencies/:id/edit" element={<AgencyFormPage />} />
                     <Route path="/multi-agences" element={<MultiAgencyOverviewPage />} />
                     <Route path="/multi-agences/:id" element={<MultiAgencyDetailPage />} />
-                </Route>
-                <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                    </Route>
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+            </SuperadminAuthProvider>
         </BrowserRouter>
     );
 }

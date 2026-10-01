@@ -151,16 +151,16 @@ Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
   `config('atelier.default_capacity')` = 24) pour la barre de capacité — compte réel
   des dépôts actifs de l'agence (statuts recu→pret), pas une valeur fabriquée par
   agence tant qu'elle n'est pas configurée.
-- **Superadmin multi-tenant** (section 13) : la maquette suppose une plateforme SaaS
-  où un superadmin gère plusieurs pressings indépendants. **Notre architecture est
-  explicitement mono-tenant** (voir `docs/ARCHITECTURE.md`). Ne pas coder cette
-  section sans clarifier au préalable si c'est une réinterprétation (l'admin global
-  actuel = ce superadmin) ou un vrai chantier multi-tenant — décision produit à
-  prendre avec l'utilisateur avant tout code. **Confirmé par le CDC v3.0** (EF-SUP-01
-  à 04) : Spark (l'éditeur) y est bien un superadmin plateforme avec CRUD `pressings`
-  — cette question (mono-tenant vs multi-tenant) reste ouverte, **distincte** du choix
-  de stack technique tranché ci-dessous (on peut garder React/Vite + PostgreSQL tout
-  en devenant multi-tenant, ou rester mono-tenant — les deux sont orthogonaux).
+- ~~**Superadmin multi-tenant** (section 13)~~ **Phase 1 faite** (2026-10-02, détail
+  complet ci-dessous en §« Plateforme superadmin »). La maquette suppose une
+  plateforme SaaS où un superadmin Spark gère plusieurs pressings indépendants —
+  question tranchée avec l'utilisateur via `AskUserQuestion` (« vrai multi-tenant »,
+  pas une réinterprétation de l'admin global existant ni une maquette statique) :
+  **confirmé par le CDC v3.0** (EF-SUP-01 à 04), orthogonal au choix de stack
+  technique tranché ci-dessus (React/Vite + PostgreSQL conservés). Fondations
+  (authentification plateforme + MFA, registre des pressings, tableau de bord)
+  livrées ; écrans Utilisateurs transverses et Agences cross-tenant différés
+  (dépendent d'un canal de configuration plateforme→tenant qui n'existe pas encore).
 
 ### Écarts identifiés par le Cahier des charges v3.0 (analyse du 2026-09-30)
 
@@ -989,6 +989,123 @@ traitée en autonomie cette session) :
   `tests/Feature/Orders/OrderCreationTest.php` (ratio appliqué, ligne sans
   traitement inchangée, traitement inactif rejeté, id inexistant rejeté). Suite
   complète 292/292 après ajout (aucune régression).
+
+**Plateforme superadmin — Phase 1 (fondations)** — section 13 de la maquette /
+CDC EF-SUP-01 à 04, gap ci-dessus, fait le 2026-10-02 (5 captures fournies par
+l'utilisateur : Vue plateforme, Login superadmin, Pressings, Utilisateurs
+transverses, Agences ; clarifié via `AskUserQuestion` → « vrai multi-tenant, pas
+une réinterprétation » ; plan détaillé produit en mode plan, approuvé par
+l'utilisateur avant tout code) :
+- **Décision d'architecture (clé)** : chaque pressing client tourne en réalité sur
+  son propre VPS/base PostgreSQL séparée (`docs/ARCHITECTURE.md`, hypothèse H1 déjà
+  actée) — la plateforme centrale ne peut donc pas faire de requêtes live vers N
+  bases distantes. Modèle retenu : **chaque déploiement tenant pousse
+  périodiquement un rapport** (compteurs agences/utilisateurs/opérations) vers la
+  plateforme via un jeton dédié (`pressing_report_logs`, `POST /api/platform/reports`,
+  authentifié par `VerifyPressingReportToken` — pas Sanctum, un pressing n'est pas
+  un « utilisateur »). Les horodatages « il y a 2 min/35 sec » de la maquette
+  correspondent exactement à ce modèle (dernier rapport reçu, pas une latence de
+  requête). `pressings.agencies_count`/`users_count`/`last_report_at` sont donc
+  **dénormalisés** depuis le dernier rapport, jamais recalculés en live.
+- **Authentification superadmin, royaume totalement séparé** : nouveau guard
+  Sanctum `platform` (provider `platform_users` → `App\Models\PlatformUser`),
+  isolé du guard tenant via `Sanctum\Guard::hasValidProvider()` (vérifié en lisant
+  directement le code vendor, pas supposé). **Correctif de sécurité découvert en marge**
+  et corrigé dans le même commit : `config/auth.php` n'avait *aucune* entrée
+  `guards.sanctum` explicite avant cette passe — `SanctumServiceProvider` l'injectait
+  alors avec `provider => null`, ce qui faisait accepter au guard tenant existant
+  n'importe quel modèle « tokenable », pas seulement `User` (inoffensif tant
+  qu'aucun autre modèle `HasApiTokens` n'existait, devenu un vrai trou d'isolation
+  dès l'ajout de `PlatformUser`). Épinglé explicitement (`provider: users`) dans le
+  même commit qui ajoute le guard `platform`. Testé par
+  `tests/Feature/Platform/Auth/GuardIsolationTest.php` (6 tests, avec de vrais
+  jetons HTTP bruts — **pas** `actingAs()`, qui positionne l'utilisateur sur le
+  guard `web` par défaut et court-circuiterait le pré-contrôle de Sanctum avant même
+  de parser le jeton, donnant un faux sentiment de couverture).
+- **MFA obligatoire, TOTP maison** (`app/Services/TotpService.php`, RFC 6238/4226,
+  HMAC-SHA1) : aucun package 2FA composer n'existait, cohérent avec le RBAC maison
+  du reste du projet — pas de nouvelle dépendance. QR d'enrôlement **non généré** :
+  secret affiché en clair pour saisie manuelle dans l'application d'authentification
+  (évite d'ajouter une dépendance de rendu QR juste pour cet écran ; `endroid/qr-code`
+  existe déjà pour les étiquettes articles mais n'a pas été réutilisé ici — rendu
+  d'image inutile face à une simple chaîne de texte à copier). Connexion en 2 étapes
+  (`/login` → `mfa_required` ou `mfa_setup_required` selon que le compte a déjà
+  configuré sa MFA, puis `/login/verify`/`/login/setup`), verrouillage 15 min après
+  5 échecs (texte exact de la maquette), 8 codes de récupération à usage unique
+  générés à la confirmation de l'enrôlement.
+- **Registre des pressings** (`pressings`, `platform_plans`) : CRUD
+  (`PressingController` sous `Api/Platform/`, nouveau sous-dossier dédié — déviation
+  volontaire de la convention `Api/*` plate, un royaume appelé à grandir sur les
+  phases suivantes), suspendre/réactiver, rotation du jeton de rapport. « Nouveau
+  pressing » génère immédiatement un jeton de rapport affiché **une seule fois**
+  (même UX que tout autre secret à usage unique dans l'app) — à transmettre à
+  l'équipe du pressing pour configurer leur déploiement ; **ne provisionne aucune
+  infrastructure réelle** (pas de VPS/base créés automatiquement, hors de portée de
+  cette app).
+- **Journal d'audit plateforme** (`platform_audit_logs` + trait
+  `PlatformAuditable`) : **copie** du mécanisme `audit_logs`/`Auditable` existant,
+  **pas une réutilisation de la même table** — `platform_users.id` et `users.id`
+  sont des séquences indépendantes qui entrent en collision de valeur ; écrire un id
+  `platform_users` dans `audit_logs.user_id` (FK réelle vers `users`) attribuerait
+  silencieusement une action à un mauvais utilisateur tenant. Appliqué à `Pressing`
+  uniquement pour l'instant.
+- **Frontend** : sous-arbre `/superadmin/*` monté en parallèle du tenant dans le
+  même `<BrowserRouter>` (pas de second point d'entrée HTML — un seul build Vite,
+  vérifié que `LicenseProvider`/`SettingsProvider` ne gênent pas sous une session
+  plateforme), propre client API (`lib/platformApi.ts`, clé de jeton
+  `pm.platform.token` distincte de `pm.token`) et propre contexte d'auth
+  (`SuperadminAuthContext.tsx`) — fichiers séparés plutôt qu'un client paramétré,
+  pour rendre l'isolation des guards visible aussi côté front. `SuperadminLayout.tsx`
+  est une sidebar dédiée (pas une variante d'`AppLayout.tsx` : auth, branding et
+  navigation totalement distincts) avec uniquement les écrans réellement construits
+  (Vue plateforme, Pressings) — **les items non construits sont omis, pas grisés**
+  (un lien grisé reste une promesse d'UI non tenue). `PressingsPage.tsx`/
+  `PressingFormPage.tsx` suivent le patron liste + écran dédié `/new`/`/:id/edit`
+  (mirror de `AgenciesPage.tsx`/`AgencyFormPage.tsx`, même taille de registre admin)
+  plutôt que liste + panneau latéral. Pas d'i18n sur cette console (français
+  uniquement, chaînes codées en dur) : écran interne à l'équipe Spark, distinct du
+  personnel pressing auquel s'applique la parité fr/en de l'app principale —
+  décision délibérée pour contenir le scope de cette passe, à reprendre si un besoin
+  bilingue réel apparaît (les fichiers `i18n/fr.json`/`en.json` restent inchangés et
+  en parité stricte).
+- **Tableau de bord — réel vs omis** (vérifié poste par poste, pas supposé) :
+  tenants actifs/agences/utilisateurs et activité 14 jours (`SUM(operations_count)`
+  de `pressing_report_logs`, jours sans rapport à 0 plutôt qu'interpolés) sont réels.
+  **Omis entièrement**, faute de toute télémétrie réelle : « Santé technique »
+  (API/SYNC/PRINT), disponibilité/latence, incidents (KPI, onglet, alertes
+  récentes) — et la même lacune existe **aussi sur la pastille de santé par ligne**
+  du tableau Pressings de la maquette (piège répété à ne pas rater, pas seulement la
+  carte agrégée). État des licences (barres Actives/À renouveler/Suspendues) est
+  réel et ne somme pas forcément à 100 % par construction (conditions
+  indépendantes, pas une partition — cohérent avec la maquette elle-même).
+- Tests : 31 nouveaux (`tests/Feature/Platform/**`) — connexion/verrouillage MFA,
+  isolation des guards (le test le plus important du chantier), CRUD pressings,
+  ingestion de rapport, agrégats du tableau de bord. Suite complète 323/323 après
+  ajout (aucune régression).
+- **Hors scope de cette Phase 1** (décisions documentées, pas des oublis) :
+  - **Écran « Utilisateurs transverses »** — dépend d'un vrai modèle de permissions
+    par pressing pour le personnel Spark, pas encore défini ; `platform_users` n'a
+    volontairement pas de colonne rôle/permission (éviter de deviner ce schéma à
+    l'avance). Bootstrap du tout premier utilisateur via une commande Artisan
+    (`platform:users:create`), pas un écran — équivalent CLI d'un seeder.
+  - **Écran « Agences » cross-tenant éditable** — exige un canal de configuration
+    plateforme→tenant (bidirectionnel : pousser des réglages dans un déploiement,
+    pas seulement en recevoir des rapports), chantier distinct et plus lourd.
+  - **Nav « Audit global »/« Synchronisation »/« Configuration »** — dépendent
+    respectivement de l'écran Utilisateurs transverses, d'un écran de supervision
+    dédié au-dessus du mécanisme d'ingestion déjà construit, et de réglages
+    plateforme qui n'existent pas encore (catalogue de plans, durée de verrouillage,
+    fenêtre TOTP : codés en dur/seedés pour l'instant).
+  - **Facturation des plans plateforme** — `platform_plans` reste un simple
+    catalogue (même précédent que `license_plans` à ses débuts).
+- **Bug corrigé pendant la validation manuelle, pas par les tests** :
+  `Str::password()` peut générer un mot de passe temporaire contenant `<`/`>` —
+  Symfony Console interprète ces caractères comme des balises de style et peut
+  tronquer/altérer l'affichage dans `$this->warn()`/`$this->info()` (le hash stocké
+  en base reste correct, seul l'affichage terminal est corrompu). `platform:users:create`
+  corrigé pour écrire le mot de passe en sortie brute (`OutputInterface::OUTPUT_RAW`)
+  plutôt que via les méthodes de style — à vérifier sur toute future commande
+  affichant un secret généré aléatoirement.
 
 ## Conventions établies dans ce projet (à respecter)
 

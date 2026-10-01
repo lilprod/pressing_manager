@@ -28,6 +28,11 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentWebhookController;
 use App\Http\Controllers\Api\PerformanceController;
 use App\Http\Controllers\Api\PermissionController;
+use App\Http\Controllers\Api\Platform\PlatformAuthController;
+use App\Http\Controllers\Api\Platform\PlatformDashboardController;
+use App\Http\Controllers\Api\Platform\PlatformPlanController;
+use App\Http\Controllers\Api\Platform\PressingController as PlatformPressingController;
+use App\Http\Controllers\Api\Platform\PressingReportController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ServiceController;
@@ -51,6 +56,35 @@ Route::post('/webhooks/payments/{method}', [PaymentWebhookController::class, 'ha
 Route::get('/settings', [SettingsController::class, 'show']);
 Route::get('/settings/logo', [SettingsController::class, 'logo']);
 Route::get('/settings/favicon', [SettingsController::class, 'favicon']);
+
+// Console superadmin plateforme (Spark) : royaume d'authentification séparé du tenant
+// (guard `platform`, voir config/auth.php) — voir docs/ARCHITECTURE.md pour le pourquoi
+// de la séparation (chaque pressing tourne sur son propre déploiement isolé).
+Route::prefix('platform')->group(function () {
+    Route::post('/login', [PlatformAuthController::class, 'login'])->middleware('throttle:6,1');
+    Route::post('/login/verify', [PlatformAuthController::class, 'verify'])->middleware('throttle:10,1');
+    Route::post('/login/setup', [PlatformAuthController::class, 'confirmSetup'])->middleware('throttle:10,1');
+
+    // Jeton de rapport dédié, pas Sanctum — un déploiement tenant n'est pas un "utilisateur".
+    Route::post('/reports', [PressingReportController::class, 'store'])->middleware('platform.report');
+
+    Route::middleware('auth:platform')->group(function () {
+        Route::post('/logout', [PlatformAuthController::class, 'logout']);
+        Route::get('/me', [PlatformAuthController::class, 'me']);
+
+        Route::get('/dashboard', [PlatformDashboardController::class, 'show']);
+
+        Route::get('/plans', [PlatformPlanController::class, 'index']);
+
+        Route::get('/pressings', [PlatformPressingController::class, 'index']);
+        Route::post('/pressings', [PlatformPressingController::class, 'store']);
+        Route::get('/pressings/{pressing}', [PlatformPressingController::class, 'show']);
+        Route::patch('/pressings/{pressing}', [PlatformPressingController::class, 'update']);
+        Route::post('/pressings/{pressing}/suspend', [PlatformPressingController::class, 'suspend']);
+        Route::post('/pressings/{pressing}/reactivate', [PlatformPressingController::class, 'reactivate']);
+        Route::post('/pressings/{pressing}/rotate-report-token', [PlatformPressingController::class, 'rotateReportToken']);
+    });
+});
 
 Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);

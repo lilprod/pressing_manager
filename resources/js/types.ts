@@ -791,3 +791,61 @@ export interface MultiAgencyDetail {
     team_present: MultiAgencyTeamMember[];
     recent_activity: AuditLog[];
 }
+
+/* Console superadmin plateforme (Spark) — royaume d'authentification et de données
+ * séparé du tenant (voir SuperadminAuthContext, lib/platformApi.ts). */
+
+export interface PlatformPlan {
+    id: number;
+    slug: string;
+    name: string;
+    is_active: boolean;
+}
+
+export interface Pressing {
+    id: number;
+    name: string;
+    code: string;
+    country_code: string | null;
+    platform_plan_id: number;
+    platform_plan?: PlatformPlan;
+    status: 'active' | 'suspended';
+    contact_name: string | null;
+    contact_email: string | null;
+    contact_phone: string | null;
+    license_starts_at: string | null;
+    license_expires_at: string | null;
+    agencies_count: number;
+    users_count: number;
+    last_report_at: string | null;
+    created_at: string;
+    report_token?: string;
+}
+
+export interface PlatformUser {
+    id: number;
+    name: string;
+    email: string;
+    is_active: boolean;
+    last_login_at: string | null;
+}
+
+export interface PlatformLicenseHealth {
+    total: number;
+    active_pct: number;
+    renewal_due_pct: number;
+    suspended_pct: number;
+}
+
+export interface PlatformActivityPoint {
+    date: string;
+    operations_count: number;
+}
+
+export interface PlatformDashboard {
+    tenants_actifs: number;
+    agences_total: number;
+    utilisateurs_total: number;
+    license_health: PlatformLicenseHealth;
+    activity_series: PlatformActivityPoint[];
+}

@@ -39,7 +39,7 @@ class AuditLogController extends ApiController
 
         $logs = AuditLog::query()
             ->with('user')
-            ->when($agencyId, fn ($q) => $q->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->when($request->filled('type'), fn ($q) => $q->where('auditable_type', self::TYPES[$request->string('type')->value()] ?? '__none__'))
             ->when($request->filled('user_id'), fn ($q) => $q->where('user_id', $request->integer('user_id')))
             ->when($request->filled('from'), fn ($q) => $q->whereDate('created_at', '>=', $request->date('from')))

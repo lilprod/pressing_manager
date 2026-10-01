@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class AppSetting extends Model
 {
     protected $fillable = [
-        'pressing_name', 'address', 'phone', 'email', 'tax_id', 'logo_path', 'favicon_path',
+        'pressing_id', 'pressing_name', 'address', 'phone', 'email', 'tax_id', 'logo_path', 'favicon_path',
         'password_expiry_days', 'password_expiry_warning_days', 'session_timeout_minutes',
         'password_min_length', 'password_require_uppercase', 'password_require_number', 'password_require_symbol',
     ];
@@ -25,12 +25,17 @@ class AppSetting extends Model
         ];
     }
 
-    /** Toujours la même ligne (une seule ligne en base) : identité globale du pressing. */
-    public static function current(): self
+    /**
+     * Une ligne par pressing (pivot multi-tenant, voir CLAUDE.md) — avant cette
+     * passe, une seule ligne existait pour tout le déploiement ; chaque pressing a
+     * désormais sa propre identité/branding/politique de sécurité.
+     */
+    public static function current(int $pressingId): self
     {
         // ->refresh() : sur Postgres, l'INSERT ne renvoie que l'id, pas les valeurs
         // par défaut des colonnes (session_timeout_minutes, password_min_length...) ;
         // sans ce rechargement, l'instance en mémoire les aurait à null.
-        return static::query()->first() ?? static::create(['pressing_name' => 'Pressing Manager'])->refresh();
+        return static::query()->where('pressing_id', $pressingId)->first()
+            ?? static::create(['pressing_id' => $pressingId, 'pressing_name' => 'Pressing Manager'])->refresh();
     }
 }

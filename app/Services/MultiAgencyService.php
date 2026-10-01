@@ -30,13 +30,15 @@ class MultiAgencyService
     private const UNPAID_ALERT_THRESHOLD = 50_000;
 
     /**
-     * Vue réseau : une ligne par agence (toutes si $agencyId est null, sinon la seule agence
-     * résolue pour un utilisateur local) + les totaux réseau, le classement, la série
-     * quotidienne de CA et les alertes opérationnelles dérivées des mêmes données.
+     * Vue réseau : une ligne par agence (toutes celles du pressing si $agencyId est
+     * null, sinon la seule agence résolue pour un utilisateur local) + les totaux
+     * réseau, le classement, la série quotidienne de CA et les alertes
+     * opérationnelles dérivées des mêmes données. Toujours bornée à `pressingId`
+     * (voir CLAUDE.md « Pivot multi-tenant ») — jamais tout le déploiement.
      */
-    public function overview(Carbon $from, Carbon $to, ?int $agencyId): array
+    public function overview(Carbon $from, Carbon $to, ?int $agencyId, int $pressingId): array
     {
-        $agencies = Agency::query()
+        $agencies = Agency::where('pressing_id', $pressingId)
             ->when($agencyId, fn ($q) => $q->where('id', $agencyId))
             ->orderBy('name')
             ->get();
@@ -56,7 +58,7 @@ class MultiAgencyService
                 'loyalty_members' => (int) $rows->sum('loyalty_members'),
             ],
             'agencies' => $ranked->values()->all(),
-            'revenue_series' => $this->revenueSeries($from, $to, $agencyId),
+            'revenue_series' => $this->revenueSeries($from, $to, $agencies->pluck('id')->all()),
             'alerts' => $this->buildAlerts($rows),
         ];
     }
@@ -68,7 +70,9 @@ class MultiAgencyService
      */
     public function agencyDetail(Agency $agency, Carbon $from, Carbon $to, bool $includeNetworkComparison): array
     {
-        $allAgencies = $includeNetworkComparison ? Agency::query()->orderBy('name')->get() : collect([$agency]);
+        $allAgencies = $includeNetworkComparison
+            ? Agency::where('pressing_id', $agency->pressing_id)->orderBy('name')->get()
+            : collect([$agency]);
         $rows = $this->agencyRows($allAgencies, $from, $to);
         $mine = $rows->firstWhere('id', $agency->id);
 
@@ -100,7 +104,7 @@ class MultiAgencyService
             'to' => $to->toDateString(),
             'kpis' => $mine,
             'network_comparison' => $networkComparison,
-            'revenue_series' => $this->revenueSeries($from, $to, $agency->id),
+            'revenue_series' => $this->revenueSeries($from, $to, [$agency->id]),
             'workshop' => $this->workshopBreakdown($agency),
             'clients' => $this->clientSummary($agency, $from, $to),
             'team_present' => $this->teamPresent($agency),
@@ -223,12 +227,17 @@ class MultiAgencyService
         });
     }
 
-    /** Série quotidienne du CA (somme des paiements complets par jour), jours sans paiement inclus à 0. */
-    private function revenueSeries(Carbon $from, Carbon $to, ?int $agencyId): array
+    /**
+     * Série quotidienne du CA (somme des paiements complets par jour), jours sans
+     * paiement inclus à 0.
+     *
+     * @param  array<int>  $agencyIds
+     */
+    private function revenueSeries(Carbon $from, Carbon $to, array $agencyIds): array
     {
         $rows = Payment::query()
             ->where('status', 'complete')
-            ->when($agencyId, fn ($q) => $q->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyIds)
             ->whereBetween('paid_at', [$from, $to])
             ->selectRaw('DATE(paid_at) as day, sum(amount) as total')
             ->groupBy('day')

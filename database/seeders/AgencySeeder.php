@@ -3,13 +3,16 @@
 namespace Database\Seeders;
 
 use App\Models\Agency;
+use App\Models\Pressing;
 use Illuminate\Database\Seeder;
 
 class AgencySeeder extends Seeder
 {
     public function run(): void
     {
-        Agency::query()->updateOrCreate(['code' => 'LOME-01'], [
+        $pressingId = Pressing::where('code', 'DEMO')->value('id');
+
+        Agency::query()->updateOrCreate(['pressing_id' => $pressingId, 'code' => 'LOME-01'], [
             'name' => 'Pressing Lomé Centre',
             'city' => 'Lomé',
             'address' => 'Boulevard du 13 Janvier',
@@ -18,7 +21,7 @@ class AgencySeeder extends Seeder
             'is_active' => true,
         ]);
 
-        Agency::query()->updateOrCreate(['code' => 'LOME-02'], [
+        Agency::query()->updateOrCreate(['pressing_id' => $pressingId, 'code' => 'LOME-02'], [
             'name' => 'Pressing Agoè',
             'city' => 'Lomé',
             'address' => 'Route d\'Agoè',
@@ -27,7 +30,7 @@ class AgencySeeder extends Seeder
             'is_active' => true,
         ]);
 
-        Agency::query()->updateOrCreate(['code' => 'KARA-01'], [
+        Agency::query()->updateOrCreate(['pressing_id' => $pressingId, 'code' => 'KARA-01'], [
             'name' => 'Pressing Kara',
             'city' => 'Kara',
             'address' => 'Avenue de la Kozah',

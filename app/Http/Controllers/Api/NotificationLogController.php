@@ -13,7 +13,7 @@ class NotificationLogController extends ApiController
     {
         $this->authorizePermission($request->user(), 'notifications.manage');
 
-        $agencyId = $this->resolveAgencyFilter($request, $request->user());
+        $agencyId = $request->user()->agency_id ?? ($request->filled('agency_id') ? $request->integer('agency_id') : null);
         if (! $agencyId) {
             throw new HttpException(422, "Paramètre 'agency_id' requis pour un rôle global.");
         }

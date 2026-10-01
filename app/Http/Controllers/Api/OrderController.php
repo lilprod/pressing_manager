@@ -36,7 +36,7 @@ class OrderController extends ApiController
 
         $orders = Order::query()
             ->with('client', 'items')
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
             ->when($request->filled('client_id'), fn ($query) => $query->where('client_id', $request->integer('client_id')))
             ->when($request->boolean('ready_today'), fn ($query) => $query->whereDate('promised_at', now()->toDateString()))
@@ -53,25 +53,25 @@ class OrderController extends ApiController
         $today = now()->toDateString();
 
         $todayCount = Order::query()
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->whereDate('created_at', $today)
             ->count();
 
         $todayRevenue = (int) Payment::query()
             ->where('status', 'complete')
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->whereDate('paid_at', $today)
             ->sum('amount');
 
         $dueToday = Order::query()
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->whereDate('promised_at', $today)
             ->whereNotIn('status', ['livre', 'annule'])
             ->count();
 
         $outstandingBalance = (int) Invoice::query()
             ->whereIn('status', ['emise', 'partiellement_payee'])
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->withSum(['payments as paid_amount' => fn ($query) => $query->where('status', 'complete')], 'amount')
             ->get()
             ->sum(fn (Invoice $invoice) => max(0, $invoice->total_amount - (int) ($invoice->paid_amount ?? 0)));
@@ -99,6 +99,7 @@ class OrderController extends ApiController
     {
         $data = $request->validated();
         $agencyId = $request->user()->agency_id ?? $data['agency_id'];
+        $this->authorizeAgency($request->user(), $agencyId);
 
         // Idempotence : une commande créée hors-ligne déjà synchronisée n'est jamais dupliquée.
         if (! empty($data['client_local_uuid'])) {
@@ -143,7 +144,7 @@ class OrderController extends ApiController
 
                 $treatmentType = null;
                 if (! empty($itemData['treatment_type_id'])) {
-                    $treatmentType = TreatmentType::findOrFail($itemData['treatment_type_id']);
+                    $treatmentType = TreatmentType::where('pressing_id', $agency->pressing_id)->findOrFail($itemData['treatment_type_id']);
                     if (! $treatmentType->is_active) {
                         throw new HttpException(422, "Le traitement « {$treatmentType->name} » n'est plus disponible.");
                     }

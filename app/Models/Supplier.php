@@ -11,7 +11,7 @@ class Supplier extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['agency_id', 'name', 'phone', 'email', 'address', 'notes', 'is_active'];
+    protected $fillable = ['pressing_id', 'agency_id', 'name', 'phone', 'email', 'address', 'notes', 'is_active'];
 
     protected function casts(): array
     {

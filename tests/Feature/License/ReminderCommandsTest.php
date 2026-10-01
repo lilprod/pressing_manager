@@ -49,6 +49,7 @@ class ReminderCommandsTest extends TestCase
         $agency = Agency::factory()->create();
         $client = Client::factory()->for($agency, 'agency')->create(['email' => 'client@example.com']);
         $plan = SubscriptionPlan::create([
+            'pressing_id' => $agency->pressing_id,
             'name' => 'Forfait test',
             'quota_type' => 'articles',
             'quota_amount' => 5,

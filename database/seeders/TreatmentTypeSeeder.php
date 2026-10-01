@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\Pressing;
 use App\Models\TreatmentType;
 use Illuminate\Database\Seeder;
 
@@ -15,8 +16,10 @@ class TreatmentTypeSeeder extends Seeder
 
     public function run(): void
     {
+        $pressingId = Pressing::where('code', 'DEMO')->value('id');
+
         foreach (self::TYPES as $type) {
-            TreatmentType::query()->updateOrCreate(['code' => $type['code']], $type + ['is_active' => true]);
+            TreatmentType::query()->updateOrCreate(['pressing_id' => $pressingId, 'code' => $type['code']], $type + ['is_active' => true]);
         }
     }
 }

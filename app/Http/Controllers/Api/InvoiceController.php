@@ -23,7 +23,7 @@ class InvoiceController extends ApiController
 
         $baseQuery = Invoice::query()
             ->whereIn('status', ['emise', 'partiellement_payee'])
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->withSum(['payments as paid_amount' => fn ($query) => $query->where('status', 'complete')], 'amount');
 
         // Calculé sur l'ensemble des factures impayées correspondant aux filtres, pas

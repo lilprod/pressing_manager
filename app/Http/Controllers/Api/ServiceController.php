@@ -7,6 +7,7 @@ use App\Http\Requests\Service\UpdateAgencyServicePricingRequest;
 use App\Http\Requests\Service\UpdateServiceRequest;
 use App\Models\Agency;
 use App\Models\Service;
+use App\Models\User;
 use App\Services\ServicePricingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -57,7 +58,7 @@ class ServiceController extends ApiController
 
         $agencyId = $request->integer('agency_id') ?: null;
 
-        $paginated = Service::query()
+        $paginated = Service::where('pressing_id', $request->user()->pressing_id)
             ->when($request->filled('category'), fn ($query) => $query->where('category', $request->string('category')->value()))
             ->when($request->filled('search'), function ($query) use ($request) {
                 $term = '%'.$request->string('search')->value().'%';
@@ -95,6 +96,7 @@ class ServiceController extends ApiController
     public function show(Request $request, Service $service): JsonResponse
     {
         $this->authorizePermission($request->user(), 'services.manage');
+        $this->authorizeService($request->user(), $service);
 
         $agencyId = $request->integer('agency_id') ?: null;
 
@@ -117,6 +119,8 @@ class ServiceController extends ApiController
 
     public function update(UpdateServiceRequest $request, Service $service): JsonResponse
     {
+        $this->authorizeService($request->user(), $service);
+
         $service = $this->pricing->updateService($service, $request->validated(), $request->user());
 
         return response()->json($service);
@@ -127,12 +131,22 @@ class ServiceController extends ApiController
     {
         $this->authorizePermission($request->user(), 'services.manage');
 
+        $pressingId = $request->user()->pressing_id;
+
         return response()->json([
-            'active_count' => Service::where('is_active', true)->count(),
-            'category_count' => Service::distinct('category')->count('category'),
-            'average_base_price' => (int) round(Service::where('billing_mode', '!=', 'kg')->avg('base_price') ?? 0),
-            'stale_count' => Service::where('updated_at', '<', now()->subMonths(12))->count(),
+            'active_count' => Service::where('pressing_id', $pressingId)->where('is_active', true)->count(),
+            'category_count' => Service::where('pressing_id', $pressingId)->distinct('category')->count('category'),
+            'average_base_price' => (int) round(Service::where('pressing_id', $pressingId)->where('billing_mode', '!=', 'kg')->avg('base_price') ?? 0),
+            'stale_count' => Service::where('pressing_id', $pressingId)->where('updated_at', '<', now()->subMonths(12))->count(),
         ]);
+    }
+
+    /** `Service` n'a pas d'`agency_id` (catalogue par pressing, voir CLAUDE.md) — vérification directe. */
+    private function authorizeService(User $user, Service $service): void
+    {
+        if ($service->pressing_id !== $user->pressing_id) {
+            throw new HttpException(403, "Vous n'avez pas accès à cet article.");
+        }
     }
 
     /**
@@ -142,6 +156,7 @@ class ServiceController extends ApiController
     public function updatePricing(UpdateAgencyServicePricingRequest $request, Agency $agency, Service $service): JsonResponse
     {
         $this->authorizeAgency($request->user(), $agency->id);
+        $this->authorizeService($request->user(), $service);
 
         $agency->services()->syncWithoutDetaching([
             $service->id => $request->validated(),

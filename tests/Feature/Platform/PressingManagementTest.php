@@ -3,16 +3,19 @@
 namespace Tests\Feature\Platform;
 
 use App\Models\Pressing;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\SeedsPlatform;
+use Tests\Concerns\SeedsRbac;
 use Tests\TestCase;
 
 class PressingManagementTest extends TestCase
 {
-    use RefreshDatabase, SeedsPlatform;
+    use RefreshDatabase, SeedsPlatform, SeedsRbac;
 
     public function test_a_platform_user_can_create_list_and_update_a_pressing(): void
     {
+        $this->seedRbac();
         $platformUser = $this->makePlatformUser();
         $plan = $this->makePlatformPlan('business');
 
@@ -22,10 +25,20 @@ class PressingManagementTest extends TestCase
             'country_code' => 'CI',
             'platform_plan_id' => $plan->id,
             'contact_email' => 'contact@eclat-royal.ci',
+            'agency_code' => 'ECL-01',
+            'agency_name' => 'Éclat Royal — Agence principale',
+            'manager_name' => 'Nadine Essomba',
+            'manager_email' => 'nadine@eclat-royal.ci',
         ]);
         $created->assertCreated();
-        $created->assertJsonStructure(['id', 'name', 'report_token']);
+        $created->assertJsonStructure(['id', 'name', 'report_token', 'manager_email', 'manager_temporary_password']);
         $this->assertNotEmpty($created->json('report_token'));
+        $this->assertNotEmpty($created->json('manager_temporary_password'));
+
+        $manager = User::where('email', 'nadine@eclat-royal.ci')->firstOrFail();
+        $this->assertSame($created->json('id'), $manager->pressing_id);
+        $this->assertNull($manager->agency_id);
+        $this->assertTrue($manager->must_change_password);
 
         $index = $this->actingAs($platformUser, 'platform')->getJson('/api/platform/pressings');
         $index->assertOk();

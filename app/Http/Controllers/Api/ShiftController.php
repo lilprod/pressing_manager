@@ -17,7 +17,7 @@ class ShiftController extends ApiController
 
         $shifts = Shift::query()
             ->with('user')
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->when(! $manage, fn ($query) => $query->where('user_id', $request->user()->id))
             ->when($request->filled('from'), fn ($query) => $query->whereDate('starts_at', '>=', $request->date('from')))
             ->when($request->filled('to'), fn ($query) => $query->whereDate('starts_at', '<=', $request->date('to')))

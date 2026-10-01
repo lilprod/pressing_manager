@@ -15,7 +15,7 @@ class UpdateServiceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code' => ['sometimes', 'string', 'max:30', Rule::unique('services', 'code')->ignore($this->route('service'))],
+            'code' => ['sometimes', 'string', 'max:30', Rule::unique('services', 'code')->where('pressing_id', $this->user()->pressing_id)->ignore($this->route('service'))],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'category' => ['sometimes', 'required', 'in:nettoyage,lavage,repassage,retouche,teinture,autre'],
             'billing_mode' => ['sometimes', 'required', 'in:piece,kg,mixte'],

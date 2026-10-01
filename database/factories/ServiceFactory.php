@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Pressing;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -12,6 +13,8 @@ class ServiceFactory extends Factory
     public function definition(): array
     {
         return [
+            // Voir AgencyFactory : même réutilisation du premier pressing du test.
+            'pressing_id' => fn () => Pressing::query()->value('id') ?? Pressing::factory()->create()->id,
             'code' => strtoupper(fake()->unique()->bothify('SVC-###')),
             'name' => 'Nettoyage '.fake()->word(),
             'category' => fake()->randomElement(['nettoyage', 'repassage', 'retouche', 'teinture', 'autre']),

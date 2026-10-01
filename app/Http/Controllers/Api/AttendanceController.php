@@ -21,7 +21,7 @@ class AttendanceController extends ApiController
 
         $attendances = Attendance::query()
             ->with('user', 'shift')
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->when(! $manage, fn ($query) => $query->where('user_id', $request->user()->id))
             ->when($request->filled('date'), fn ($query) => $query->whereDate('created_at', $request->date('date')))
             ->latest('created_at')
@@ -34,6 +34,7 @@ class AttendanceController extends ApiController
     {
         $data = $request->validated();
         $agencyId = $request->user()->agency_id ?? $data['agency_id'];
+        $this->authorizeAgency($request->user(), $agencyId);
 
         try {
             $attendance = $this->attendances->clockIn($request->user(), $agencyId);

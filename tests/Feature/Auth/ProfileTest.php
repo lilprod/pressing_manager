@@ -7,11 +7,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
 use Tests\Concerns\SeedsRbac;
+use Tests\Concerns\SeedsTenant;
 use Tests\TestCase;
 
 class ProfileTest extends TestCase
 {
-    use RefreshDatabase, SeedsRbac;
+    use RefreshDatabase, SeedsRbac, SeedsTenant;
 
     public function test_a_user_can_update_their_name_and_phone(): void
     {
@@ -103,7 +104,7 @@ class ProfileTest extends TestCase
     public function test_a_new_password_must_satisfy_the_configured_policy(): void
     {
         $this->seedRbac();
-        AppSetting::current()->update(['password_min_length' => 12]);
+        AppSetting::current($this->pressingId())->update(['password_min_length' => 12]);
         $user = $this->makeUser('accueil');
 
         $response = $this->actingAs($user)->postJson('/api/profile/password', [
@@ -118,7 +119,7 @@ class ProfileTest extends TestCase
     public function test_me_exposes_must_change_password_and_password_expired(): void
     {
         $this->seedRbac();
-        AppSetting::current()->update(['password_expiry_days' => 90]);
+        AppSetting::current($this->pressingId())->update(['password_expiry_days' => 90]);
         $user = $this->makeUser('accueil');
         $user->update(['password_changed_at' => now()->subDays(100)]);
 
@@ -131,7 +132,7 @@ class ProfileTest extends TestCase
     public function test_a_recently_changed_password_is_not_reported_as_expired(): void
     {
         $this->seedRbac();
-        AppSetting::current()->update(['password_expiry_days' => 90]);
+        AppSetting::current($this->pressingId())->update(['password_expiry_days' => 90]);
         $user = $this->makeUser('accueil');
         $user->update(['password_changed_at' => now()->subDays(5)]);
 
@@ -144,7 +145,7 @@ class ProfileTest extends TestCase
     public function test_password_expiry_is_disabled_when_not_configured(): void
     {
         $this->seedRbac();
-        AppSetting::current()->update(['password_expiry_days' => null]);
+        AppSetting::current($this->pressingId())->update(['password_expiry_days' => null]);
         $user = $this->makeUser('accueil');
         $user->update(['password_changed_at' => now()->subYears(2)]);
 
@@ -157,7 +158,7 @@ class ProfileTest extends TestCase
     public function test_me_exposes_the_computed_password_expiry_date(): void
     {
         $this->seedRbac();
-        AppSetting::current()->update(['password_expiry_days' => 90]);
+        AppSetting::current($this->pressingId())->update(['password_expiry_days' => 90]);
         $user = $this->makeUser('accueil');
         $changedAt = now()->subDays(80)->startOfSecond();
         $user->update(['password_changed_at' => $changedAt]);
@@ -171,7 +172,7 @@ class ProfileTest extends TestCase
     public function test_password_expires_at_is_null_when_expiry_is_disabled(): void
     {
         $this->seedRbac();
-        AppSetting::current()->update(['password_expiry_days' => null]);
+        AppSetting::current($this->pressingId())->update(['password_expiry_days' => null]);
         $user = $this->makeUser('accueil');
 
         $response = $this->actingAs($user)->getJson('/api/me');

@@ -22,7 +22,7 @@ class CustomerSubscriptionController extends ApiController
 
         $subscriptions = CustomerSubscription::query()
             ->with('plan', 'client')
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->when($request->filled('client_id'), fn ($query) => $query->where('client_id', $request->integer('client_id')))
             ->latest()
             ->get();
@@ -37,7 +37,8 @@ class CustomerSubscriptionController extends ApiController
         $this->authorizeAgency($request->user(), $client->agency_id);
 
         $plan = SubscriptionPlan::findOrFail($data['subscription_plan_id']);
-        if ($plan->agency_id !== null && $plan->agency_id !== $client->agency_id) {
+        if ($plan->pressing_id !== $request->user()->pressing_id
+            || ($plan->agency_id !== null && $plan->agency_id !== $client->agency_id)) {
             throw new HttpException(422, "Ce plan n'est pas disponible pour l'agence du client.");
         }
 

@@ -95,7 +95,7 @@ Route::prefix('platform')->group(function () {
     });
 });
 
-Route::middleware(['auth:sanctum', 'license'])->group(function () {
+Route::middleware(['auth:sanctum', 'license', 'pressing'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 

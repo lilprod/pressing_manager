@@ -1,8 +1,22 @@
 # Pressing Manager — notes pour agents
 
 Laravel 12 (API) + React 19/TypeScript (SPA Vite) + PostgreSQL. Multi-agence,
-**mono-tenant par déploiement** (une base par client pressing — voir `docs/ARCHITECTURE.md`
-hypothèse H1, ne pas remettre en cause sans validation produit).
+**multi-tenant depuis le 2026-10-02** (voir « Pivot multi-tenant » ci-dessous).
+
+**Pivot d'architecture (2026-10-02)** : l'hypothèse H1 d'origine (`docs/ARCHITECTURE.md`,
+« une base PostgreSQL par client pressing », déploiement dédié par client) a été
+**explicitement inversée sur demande utilisateur** — un seul déploiement Laravel/
+PostgreSQL héberge désormais plusieurs pressings clients, chacun avec ses agences,
+son personnel, ses clients, ses commandes, son catalogue et sa caisse totalement
+étanches des autres. Le superadmin (console `/superadmin`) crée un Pressing + sa
+première agence + un compte manager bootstrap ; ce manager se connecte ensuite sur
+le `/login` tenant habituel (pas `/superadmin/login`) et n'y voit jamais que les
+données de son propre pressing. Détail complet (modèle de données, scoping
+centralisé, décisions de scope) en §2 « Pivot multi-tenant ». **Ne pas revenir à
+l'hypothèse mono-tenant** sans nouvelle instruction explicite — le mécanisme de
+rapport `pressing_report_logs`/`POST /api/platform/reports` (toujours en place)
+reste utilisable pour d'éventuels déploiements réellement séparés, mais n'est plus
+la seule façon d'opérer plusieurs pressings sur cette base de code.
 
 **Décision d'architecture actée (2026-09-30)** : le Cahier des charges v3.0 vise
 Next.js + MySQL/MariaDB + Spatie Permission (voir analyse détaillée référencée en
@@ -1205,6 +1219,151 @@ code :
   écran de gestion des rôles eux-mêmes (catalogue fixe), invitation par e-mail
   (mot de passe temporaire affiché à l'admin, comme côté tenant), provisionnement
   réel d'un espace tenant à la création d'un pressing (voir point ci-dessus).
+
+**Pivot multi-tenant — un seul déploiement héberge plusieurs pressings** — fait le
+2026-10-02, sur demande utilisateur explicite : *« le super admin [doit pouvoir]
+créer un Pressing et ses agences et permettre ensuite au manager du Pressing de
+créer/paramétrer son espace et gérer l'opérationnel »*. Inverse directement
+l'hypothèse H1 (`docs/ARCHITECTURE.md`) sur laquelle toute l'app reposait jusque-là
+— confirmé explicite via `AskUserQuestion` (« vrai pivot, pas une relecture »),
+plan détaillé approuvé en mode plan avant tout code vu l'ampleur (touche ~22
+contrôleurs, chantier de sécurité/isolation avant d'être fonctionnel) :
+- **Modèle de données — footprint minimal** : nouvelle colonne `pressing_id` (FK
+  `pressings`, `restrictOnDelete`) sur **seulement 5 tables racines** :
+  `agencies`, `users`, `app_settings`, `services`, `treatment_types` (+ 2 de plus
+  découvertes en cours de route, `subscription_plans`/`suppliers`, qui avaient un
+  `agency_id` nullable « global » sans aucune dimension pressing). **Aucune autre
+  table métier n'a été touchée** (orders, clients, invoices, payments,
+  cash_movements, cash_closures, stock_movements, deliveries, shifts,
+  attendances, order_pickups, audit_logs, customer_subscriptions...) — toutes ont
+  déjà `agency_id` non-null, donc scopées **transitivement** via
+  `agencies.pressing_id` une fois celui-ci autoritaire. `agencies.code`/
+  `services.code`/`treatment_types.code` : unicité `unique()` → composite
+  `unique(['pressing_id', 'code'])`. **`users.email` reste unique globalement**
+  (décision explicite, pas un oubli) — scoper par pressing aurait exigé un
+  sélecteur de pressing au login (gap déjà noté, non construit) pour lever
+  l'ambiguïté `User::where('email', ...)->first()` ; garder l'unicité globale
+  signifie zéro changement sur `AuthController::login()`. Conséquence acceptée :
+  deux pressings ne peuvent pas avoir de personnel avec le même e-mail.
+  Migration de backfill (`2026_10_02_300001_...`) : crée un pressing `LEGACY` si
+  aucun n'existe déjà et y rattache toutes les lignes existantes avant de poser
+  les contraintes NOT NULL — zéro perte de données sur la base de dev déjà
+  peuplée, vérifié.
+- **`roles`/`permissions` restent un catalogue partagé**, non personnalisable par
+  pressing (décision explicite, rôles métier génériques). **`License` (licence
+  logicielle du déploiement) reste deployment-wide**, volontairement **non
+  fusionnée** avec le nouveau statut opérationnel par pressing
+  (`pressings.status`, déjà actionnable par le superadmin via `suspend`/
+  `reactivate`) — duplication assumée et documentée, pas un oubli, chantier à
+  part si besoin réel un jour.
+- **Les deux choke points centraux rendus sûrs, le reste suit sans y toucher** :
+  - `User::canAccessAgency()` — `agency_id === null` signifiait avant cette passe
+    *accès à absolument toutes les agences de la table* (un utilisateur global
+    d'un pressing aurait pu accéder à n'importe quelle agence de n'importe quel
+    autre pressing). Réécrite pour vérifier l'agence contre `pressing_id`
+    (et, pour un utilisateur local, aussi contre `agency_id` exactement). Tous
+    les appels existants à `authorizeAgency()` (déjà présents sur `show`/
+    `update`/`destroy` dans ~15 contrôleurs) deviennent automatiquement sûrs
+    **sans modifier ces call sites**.
+  - `ApiController::resolveAgencyFilter()` — changeait de contrat : retournait
+    `?int` (`null` = *« pas de filtre »*, le bug de fond : un utilisateur global
+    sans agence choisie ne filtrait **rien du tout**, exposant toute la table).
+    Retourne désormais `array<int>` (agences de son pressing, jamais vide) ;
+    chaque site appelant passe de `->when($agencyId, ...)` à
+    `->whereIn('agency_id', $agencyIds)` — changement mécanique et uniforme,
+    donc auditable à 100 % plutôt qu'au cas par cas, appliqué aux 22
+    contrôleurs déjà recensés dans le plan.
+  - **Cas particuliers hors de ce patron** (filtrent `pressing_id` directement,
+    pas via `agency_id`) : `AgencyController`, `UserController` (annuaire),
+    `ServiceController`/`TreatmentTypeController` (catalogues). **Contrôleurs à
+    une seule agence requise** (pas un tableau) : `AtelierController`,
+    `CashController`, `PerformanceController`, `NotificationLogController`/
+    `NotificationSettingController` — nouvelle méthode dédiée
+    `resolveSingleAgency()` plutôt que de forcer `resolveAgencyFilter()` dans un
+    cas qu'il ne couvre pas.
+  - **`AppSetting::current()`** change de signature :
+    `current(int $pressingId)` (ne peut plus deviner de pressing tout seul) —
+    branding/politique de sécurité/etc. sont désormais réellement indépendants
+    par pressing, pas un singleton deployment-wide comme avant.
+  - **Fuites supplémentaires trouvées par relecture de code, pas par un test
+    qui échouait** (aucun test existant n'exerçait un scénario à deux
+    pressings avant cette passe) : `KpiService`/`MultiAgencyService` — les vues
+    « consolidées/réseau » (`metrics(null, ...)`, `Agency::query()->get()` sans
+    filtre) auraient agrégé/listé littéralement toutes les agences du
+    déploiement, pas seulement celles du pressing courant, une fois plusieurs
+    pressings partagés — corrigé en fil `pressingAgencyIds`/`pressingId` à
+    travers les deux services. `TreatmentType::findOrFail()` dans
+    `OrderController::store()` (aucun scoping pressing) et le lookup de plan
+    global dans `CustomerSubscriptionController::store()` (un plan global d'un
+    *autre* pressing passait la validation) — les deux corrigés.
+  - **Fuites en écriture** : tout `store()` acceptant un `agency_id`
+    client-fourni pour un utilisateur global (`OrderController`,
+    `ClientController`, `StockMovementController`, `AttendanceController`,
+    `PaymentController`, `DeliveryZoneController`, `SubscriptionPlanController`)
+    gagne un appel `authorizeAgency()` avant la création — avant cette passe,
+    cette garde n'existait qu'en lecture (`show`/`update`), jamais en écriture.
+  - **Nouveau middleware `CheckPressingStatus`** (mirrors `CheckLicenseStatus`),
+    alias `'pressing'`, ajouté au groupe `['auth:sanctum', 'license', 'pressing']`
+    — bloque (403) toutes les routes tenant authentifiées si
+    `$user->pressing->status === 'suspended'` (sauf `/logout`/`/me`). Distinct
+    et non fusionné avec `CheckLicenseStatus` (décision ci-dessus).
+- **Provisionnement superadmin** (`PressingController::store()`) : crée
+  désormais Pressing + première Agence + compte manager bootstrap (rôle admin,
+  `agency_id` null, `must_change_password: true`) **dans la même transaction
+  DB** — avant cette passe, créer un pressing n'était qu'une ligne de registre,
+  sans aucun espace réellement utilisable derrière (confirmé par l'utilisateur
+  lui-même en question posée pendant la Phase 2). `StorePressingRequest` gagne
+  `agency_code`/`agency_name`/`agency_city`/`manager_name`/`manager_email`
+  (requis à la création). Réponse : jeton de rapport (existant, toujours
+  affiché une fois) + `manager_email`/`manager_temporary_password` (nouveau,
+  affiché une fois). Le superadmin crée **une seule agence initiale** — des
+  agences supplémentaires s'ajoutent ensuite via l'écran `/agencies` existant
+  (déjà un CRUD complet, maintenant pressing-scopé), pas de UI multi-agences
+  dupliquée dans le formulaire superadmin.
+- **Frontend** : `PressingFormPage.tsx` gagne deux sections create-only
+  (« Première agence », « Compte manager ») avant le bloc existant ; l'écran de
+  succès affiche désormais deux cartes « secret affiché une seule fois »
+  (nouveau composant `CopyableSecret`, mirrors `TemporaryPasswordBanner` côté
+  tenant `UsersPage.tsx`) — compte manager (e-mail + mot de passe temporaire)
+  et jeton de rapport, chacune avec son propre avertissement contextuel (le
+  jeton de rapport n'a de sens que pour un déploiement réellement séparé qui
+  pousse des rapports, pas pour un pressing hébergé ici).
+- **Bug latent corrigé en marge, prérequis bloquant pour tout déploiement
+  neuf** : `SubscriptionPlanSeeder`/`StockSeeder` (création de `Supplier`)
+  n'avaient jamais été mis à jour avec le nouveau `pressing_id` NOT NULL sur
+  `subscription_plans`/`suppliers` — `php artisan migrate:fresh --seed` aurait
+  cassé sur une base neuve immédiatement après cette passe. Repéré en
+  validant la procédure de seed de bout en bout (pas par la suite de tests,
+  qui ne passe jamais par les seeders), pas supposé fonctionner.
+- Tests : `tests/Feature/Platform/PressingProvisioningTest.php` (provisionnement
+  réel → connexion tenant du manager → `GET /me` renvoie le bon `pressing_id` →
+  un deuxième pressing peut réutiliser le même code d'agence) et
+  `tests/Feature/Tenancy/CrossPressingIsolationTest.php` (le plus important : un
+  utilisateur global ne liste/n'atteint jamais les clients/commandes/catalogue
+  d'un autre pressing, ni en devinant un id ni via `?agency_id=`, `AppSetting`
+  diffère par pressing, écriture cross-pressing bloquée). Nouveau trait
+  `tests/Concerns/SeedsTenant.php` (`pressingId()`) pour les rares tests qui ont
+  besoin de nommer leur pressing explicitement. **Compatibilité ascendante** :
+  les ~300 tests existants (écrits sous l'hypothèse mono-pressing implicite)
+  n'ont demandé **aucune réécriture** — `AgencyFactory`/`UserFactory`/
+  `ServiceFactory`/`TreatmentTypeFactory`/`SupplierFactory` réutilisent
+  silencieusement le premier pressing déjà créé dans la transaction du test en
+  cours (ou en créent un à la volée), donc un test qui ne crée jamais
+  explicitement deux pressings continue de voir un monde mono-pressing, sans
+  changement de comportement. Suite complète 351/351 après ajout (aucune
+  régression). Smoke test Playwright bout en bout (navigateur réel, jeton
+  Sanctum injecté pour contourner uniquement le flux de connexion MFA
+  superadmin — inchangé dans cette passe, déjà couvert par ses propres tests) :
+  remplissage du formulaire → écran de succès avec les deux cartes → les
+  identifiants manager affichés à l'écran fonctionnent réellement sur
+  `POST /api/login` (tenant), `pressing_id` correct, `agency_id` null.
+- **Hors scope de cette passe** (décisions documentées, pas des oublis) :
+  sélecteur de pressing au login (users.email reste unique globalement, voir
+  ci-dessus), fusion `License`/`pressings.status`, dashboard superadmin
+  interrogeant les données tenant en direct (reste basé sur les rapports
+  poussés périodiquement, `pressing_report_logs` inchangé), personnalisation de
+  `roles`/`permissions` par pressing, écran de transfert d'un pressing existant
+  vers ce modèle hébergé (seul un pressing *créé* via ce flux en bénéficie).
 
 ## Conventions établies dans ce projet (à respecter)
 

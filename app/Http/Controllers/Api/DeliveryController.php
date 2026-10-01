@@ -27,7 +27,7 @@ class DeliveryController extends ApiController
 
         $deliveries = Delivery::query()
             ->with('zone', 'livreur', 'order.client')
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
             ->when($request->boolean('mine'), fn ($query) => $query->where('livreur_id', $request->user()->id))
             ->latest()

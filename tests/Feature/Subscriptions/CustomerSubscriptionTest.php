@@ -5,6 +5,7 @@ namespace Tests\Feature\Subscriptions;
 use App\Models\Agency;
 use App\Models\Client;
 use App\Models\CustomerSubscription;
+use App\Models\Pressing;
 use App\Models\Service;
 use App\Models\SubscriptionPlan;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -18,6 +19,7 @@ class CustomerSubscriptionTest extends TestCase
     private function makePlan(): SubscriptionPlan
     {
         return SubscriptionPlan::create([
+            'pressing_id' => Pressing::query()->value('id') ?? Pressing::factory()->create()->id,
             'agency_id' => null,
             'name' => 'Forfait test',
             'quota_type' => 'articles',

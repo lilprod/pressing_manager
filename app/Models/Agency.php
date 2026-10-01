@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -13,7 +14,7 @@ class Agency extends Model
     use HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'code', 'name', 'city', 'address', 'phone',
+        'pressing_id', 'code', 'name', 'city', 'address', 'phone',
         'unclaimed_item_threshold_days', 'is_active', 'workshop_capacity',
     ];
 
@@ -22,6 +23,11 @@ class Agency extends Model
         return [
             'is_active' => 'boolean',
         ];
+    }
+
+    public function pressing(): BelongsTo
+    {
+        return $this->belongsTo(Pressing::class);
     }
 
     public function users(): HasMany

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Service;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreServiceRequest extends FormRequest
 {
@@ -14,7 +15,7 @@ class StoreServiceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code' => ['required', 'string', 'max:30', 'unique:services,code'],
+            'code' => ['required', 'string', 'max:30', Rule::unique('services', 'code')->where('pressing_id', $this->user()->pressing_id)],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', 'in:nettoyage,lavage,repassage,retouche,teinture,autre'],
             'billing_mode' => ['required', 'in:piece,kg,mixte'],

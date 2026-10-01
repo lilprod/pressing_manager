@@ -20,7 +20,7 @@ class StockMovementController extends ApiController
 
         $movements = StockMovement::query()
             ->with('stockItem', 'supplier', 'user')
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->when($request->filled('stock_item_id'), fn ($query) => $query->where('stock_item_id', $request->integer('stock_item_id')))
             ->latest('occurred_at')
             ->paginate($request->integer('per_page', 30));
@@ -32,6 +32,7 @@ class StockMovementController extends ApiController
     {
         $data = $request->validated();
         $agencyId = $request->user()->agency_id ?? $data['agency_id'];
+        $this->authorizeAgency($request->user(), $agencyId);
 
         try {
             $movement = $this->stock->recordMovement(

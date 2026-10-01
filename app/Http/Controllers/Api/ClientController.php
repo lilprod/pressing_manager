@@ -32,7 +32,7 @@ class ClientController extends ApiController
         $agencyId = $this->resolveAgencyFilter($request, $request->user());
 
         $clients = Client::query()
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->when($request->filled('search'), function ($query) use ($request) {
                 $term = '%'.$request->string('search')->value().'%';
                 $query->where(fn ($q) => $q->where('first_name', 'ilike', $term)
@@ -49,7 +49,7 @@ class ClientController extends ApiController
     public function stats(Request $request): JsonResponse
     {
         $agencyId = $this->resolveAgencyFilter($request, $request->user());
-        $base = fn () => Client::query()->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId));
+        $base = fn () => Client::query()->whereIn('agency_id', $agencyId);
 
         $topTier = LoyaltyTier::query()->where('is_active', true)->orderByDesc('min_points')->first();
 
@@ -72,6 +72,7 @@ class ClientController extends ApiController
     {
         $data = $request->validated();
         $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $this->authorizeAgency($request->user(), $data['agency_id']);
 
         $client = Client::create($data)->refresh();
 

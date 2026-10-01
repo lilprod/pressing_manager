@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Pressing;
 use App\Models\Role;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -32,6 +33,8 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'role_id' => Role::where('slug', 'accueil')->value('id'),
             'agency_id' => null,
+            // Voir AgencyFactory : même réutilisation du premier pressing du test.
+            'pressing_id' => fn () => Pressing::query()->value('id') ?? Pressing::factory()->create()->id,
             'is_active' => true,
             'must_change_password' => false,
             'password_changed_at' => now(),

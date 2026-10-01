@@ -21,7 +21,10 @@ class ServicePricingService
     public function createService(array $data, ?User $actor): Service
     {
         return DB::transaction(function () use ($data, $actor) {
-            $service = Service::create(Arr::except($data, ['price_tiers']));
+            $service = Service::create([
+                'pressing_id' => $actor?->pressing_id,
+                ...Arr::except($data, ['price_tiers']),
+            ]);
 
             if (! empty($data['price_tiers'])) {
                 $this->syncTiers($service, $data['price_tiers'], $actor);

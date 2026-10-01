@@ -29,6 +29,7 @@ class User extends Authenticatable
         'password',
         'role_id',
         'agency_id',
+        'pressing_id',
         'is_active',
         'must_change_password',
         'password_changed_at',
@@ -71,8 +72,14 @@ class User extends Authenticatable
     protected function passwordExpired(): Attribute
     {
         return Attribute::get(function () {
-            $days = AppSetting::current()->password_expiry_days;
-            if (! $days || $this->password_changed_at === null) {
+            // pressing_id/password_changed_at absents : modèle chargé avec un select()
+            // partiel (ex. annuaire allégé UserController::index) — rien à calculer.
+            if ($this->password_changed_at === null || $this->pressing_id === null) {
+                return false;
+            }
+
+            $days = AppSetting::current($this->pressing_id)->password_expiry_days;
+            if (! $days) {
                 return false;
             }
 
@@ -84,8 +91,12 @@ class User extends Authenticatable
     protected function passwordExpiresAt(): Attribute
     {
         return Attribute::get(function () {
-            $days = AppSetting::current()->password_expiry_days;
-            if (! $days || $this->password_changed_at === null) {
+            if ($this->password_changed_at === null || $this->pressing_id === null) {
+                return null;
+            }
+
+            $days = AppSetting::current($this->pressing_id)->password_expiry_days;
+            if (! $days) {
                 return null;
             }
 
@@ -106,6 +117,11 @@ class User extends Authenticatable
         return $this->belongsTo(Agency::class);
     }
 
+    public function pressing(): BelongsTo
+    {
+        return $this->belongsTo(Pressing::class);
+    }
+
     public function hasRole(string ...$slugs): bool
     {
         return in_array($this->role?->slug, $slugs, true);
@@ -117,10 +133,16 @@ class User extends Authenticatable
     }
 
     /**
-     * Un utilisateur sans agence (rôle global) accède à toutes les agences.
+     * Un utilisateur sans agence (rôle global) accède à toutes les agences — mais
+     * seulement celles de SON pressing (pivot multi-tenant, voir CLAUDE.md) : avant
+     * cette passe, `agency_id === null` donnait accès à toute la table `agencies`,
+     * ce qui exposait les autres pressings dès qu'ils ont partagé la même base.
      */
     public function canAccessAgency(int $agencyId): bool
     {
-        return $this->agency_id === null || $this->agency_id === $agencyId;
+        return Agency::where('id', $agencyId)
+            ->where('pressing_id', $this->pressing_id)
+            ->when($this->agency_id !== null, fn ($q) => $q->where('id', $this->agency_id))
+            ->exists();
     }
 }

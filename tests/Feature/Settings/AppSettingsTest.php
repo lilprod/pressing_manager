@@ -7,11 +7,12 @@ use App\Models\AppSetting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Tests\Concerns\SeedsRbac;
+use Tests\Concerns\SeedsTenant;
 use Tests\TestCase;
 
 class AppSettingsTest extends TestCase
 {
-    use RefreshDatabase, SeedsRbac;
+    use RefreshDatabase, SeedsRbac, SeedsTenant;
 
     public function test_settings_are_publicly_readable_without_authentication(): void
     {
@@ -66,12 +67,12 @@ class AppSettingsTest extends TestCase
         $first = $this->actingAs($admin)->post('/api/settings', [
             'logo' => UploadedFile::fake()->image('logo1.png'),
         ]);
-        $firstPath = AppSetting::current()->logo_path;
+        $firstPath = AppSetting::current($this->pressingId())->logo_path;
 
         $this->actingAs($admin)->post('/api/settings', [
             'logo' => UploadedFile::fake()->image('logo2.png'),
         ]);
-        $secondPath = AppSetting::current()->logo_path;
+        $secondPath = AppSetting::current($this->pressingId())->logo_path;
 
         $this->assertNotSame($firstPath, $secondPath);
         $this->assertFalse(\Illuminate\Support\Facades\Storage::disk(config('filesystems.default'))->exists($firstPath));

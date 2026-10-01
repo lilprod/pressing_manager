@@ -48,6 +48,7 @@ class CashController extends ApiController
     {
         $data = $request->validated();
         $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $this->authorizeAgency($request->user(), $data['agency_id']);
         if ($request->hasFile('proof')) {
             $data['proof'] = $request->file('proof');
         }
@@ -105,6 +106,7 @@ class CashController extends ApiController
     {
         $data = $request->validated();
         $agencyId = $request->user()->agency_id ?? $data['agency_id'];
+        $this->authorizeAgency($request->user(), $agencyId);
 
         $closure = $this->cash->closeRegister(
             $agencyId,
@@ -132,11 +134,13 @@ class CashController extends ApiController
 
     private function resolveAgencyId(Request $request): int
     {
-        $agencyId = $this->resolveAgencyFilter($request, $request->user());
+        $agencyId = $request->user()->agency_id ?? ($request->filled('agency_id') ? $request->integer('agency_id') : null);
 
         if (! $agencyId) {
             throw new HttpException(422, "Paramètre 'agency_id' requis pour un rôle global.");
         }
+
+        $this->authorizeAgency($request->user(), $agencyId);
 
         return $agencyId;
     }

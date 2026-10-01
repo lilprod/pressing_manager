@@ -4,9 +4,16 @@ namespace App\Http\Controllers\Api\Platform;
 
 use App\Http\Requests\Platform\StorePressingRequest;
 use App\Http\Requests\Platform\UpdatePressingRequest;
+use App\Models\Agency;
 use App\Models\Pressing;
+use App\Models\Role;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class PressingController extends PlatformApiController
 {
@@ -46,17 +53,59 @@ class PressingController extends PlatformApiController
         return response()->json($query->paginate($request->integer('per_page', 15)));
     }
 
+    /**
+     * Provisionnement réel (pivot multi-tenant, voir CLAUDE.md « Pivot
+     * multi-tenant ») : crée le pressing ET sa première agence ET un compte
+     * manager bootstrap, dans la même transaction — avant cette passe, créer un
+     * pressing n'était qu'une ligne de registre, sans aucun espace réellement
+     * utilisable derrière. Des agences supplémentaires s'ajoutent ensuite via
+     * l'écran /agencies existant (déjà un CRUD complet, maintenant scopé par
+     * pressing), pas re-fabriqué ici.
+     */
     public function store(StorePressingRequest $request): JsonResponse
     {
         // Pas de vérification d'affectation ici : un pressing n'existe pas encore,
         // donc rien à affecter — la permission pressings.manage suffit.
         $this->authorizePermission($request->user(), 'pressings.manage');
 
-        $pressing = Pressing::create($request->validated());
-        $reportToken = $pressing->generateReportToken();
+        $data = $request->validated();
+        $pressingFields = Arr::except($data, ['agency_code', 'agency_name', 'agency_city', 'manager_name', 'manager_email']);
+
+        $managerTemporaryPassword = Str::password(12);
+
+        [$pressing, $reportToken] = DB::transaction(function () use ($data, $pressingFields, $managerTemporaryPassword) {
+            $pressing = Pressing::create($pressingFields);
+            $reportToken = $pressing->generateReportToken();
+
+            $agency = Agency::create([
+                'pressing_id' => $pressing->id,
+                'code' => $data['agency_code'],
+                'name' => $data['agency_name'],
+                'city' => $data['agency_city'] ?? null,
+            ]);
+
+            $adminRole = Role::where('slug', 'admin')->firstOrFail();
+
+            User::create([
+                'pressing_id' => $pressing->id,
+                'agency_id' => null,
+                'role_id' => $adminRole->id,
+                'name' => $data['manager_name'],
+                'email' => $data['manager_email'],
+                'password' => Hash::make($managerTemporaryPassword),
+                'is_active' => true,
+                'must_change_password' => true,
+            ]);
+
+            return [$pressing, $reportToken];
+        });
 
         return response()->json(
-            $pressing->fresh('platformPlan')->toArray() + ['report_token' => $reportToken],
+            $pressing->fresh('platformPlan')->toArray() + [
+                'report_token' => $reportToken,
+                'manager_email' => $data['manager_email'],
+                'manager_temporary_password' => $managerTemporaryPassword,
+            ],
             201
         );
     }

@@ -46,8 +46,8 @@ flowchart TB
 ```
 
 **Principes clés :**
-- Une **base PostgreSQL par client pressing** (déploiement dédié) — pas de mutualisation multi-clients sur une même base (voir hypothèse H1).
-- Le multi-agence est géré **à l'intérieur** d'un déploiement via `agency_id` sur chaque table métier.
+- ~~Une **base PostgreSQL par client pressing** (déploiement dédié) — pas de mutualisation multi-clients sur une même base~~ **hypothèse H1 inversée le 2026-10-02** (voir `CLAUDE.md` « Pivot multi-tenant », décision utilisateur explicite) : un seul déploiement héberge désormais **plusieurs pressings clients**, isolés les uns des autres par `pressing_id` (nouvelle colonne sur `agencies`/`users`/`app_settings`/`services`/`treatment_types` — les autres tables métier restent scopées via `agency_id` existant, transitivement). Le schéma ci-dessous reste correct tel quel ; ajouter mentalement `pressings ||--o{ agencies : "héberge"` en amont de `AGENCIES`. Le mécanisme de déploiement dédié par client reste possible (une base par pressing) mais n'est plus la seule façon d'opérer : le superadmin peut aussi provisionner un pressing directement dans une base partagée.
+- Le multi-agence est géré **à l'intérieur** d'un déploiement via `agency_id` sur chaque table métier ; le multi-pressing (nouveau) l'englobe via `agencies.pressing_id`.
 - Le mode hors-ligne ne concerne que la création de commande et l'encaissement **espèces** à l'accueil ; les paiements carte/Mobile Money exigent une connexion active.
 - Chaque webhook de paiement (Flooz, T-Money, gateway carte) est traité de façon idempotente (voir `payments.external_reference`, contrainte unique combinée à `method`).
 

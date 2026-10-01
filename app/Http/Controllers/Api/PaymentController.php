@@ -17,6 +17,7 @@ class PaymentController extends ApiController
     {
         $data = $request->validated();
         $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $this->authorizeAgency($request->user(), $data['agency_id']);
 
         $payment = $this->payments->recordCashPayment($data, $request->user());
 
@@ -27,6 +28,7 @@ class PaymentController extends ApiController
     {
         $data = $request->validated();
         $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $this->authorizeAgency($request->user(), $data['agency_id']);
 
         $payment = $this->payments->initiateRemotePayment($data);
 

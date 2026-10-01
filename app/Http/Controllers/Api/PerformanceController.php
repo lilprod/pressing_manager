@@ -16,7 +16,7 @@ class PerformanceController extends ApiController
     {
         $this->authorizePermission($request->user(), 'hr.manage');
 
-        $agencyId = $this->resolveAgencyFilter($request, $request->user());
+        $agencyId = $request->user()->agency_id ?? ($request->filled('agency_id') ? $request->integer('agency_id') : null);
         if (! $agencyId) {
             throw new HttpException(422, 'Veuillez sélectionner une agence.');
         }

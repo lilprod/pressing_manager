@@ -15,7 +15,7 @@ class UpdateTreatmentTypeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code' => ['sometimes', 'required', 'string', 'max:30', Rule::unique('treatment_types', 'code')->ignore($this->route('treatmentType'))],
+            'code' => ['sometimes', 'required', 'string', 'max:30', Rule::unique('treatment_types', 'code')->where('pressing_id', $this->user()->pressing_id)->ignore($this->route('treatmentType'))],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'price_ratio' => ['sometimes', 'required', 'numeric', 'min:0.01', 'max:99.99'],
             'is_active' => ['boolean'],

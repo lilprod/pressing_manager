@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Agency;
+use App\Models\Pressing;
 use App\Models\StockItem;
 use App\Models\Supplier;
 use App\Models\User;
@@ -27,11 +28,12 @@ class StockSeeder extends Seeder
 
         $stockService = app(StockService::class);
         $admin = User::whereHas('role', fn ($q) => $q->where('slug', 'admin'))->first();
+        $pressingId = Pressing::where('code', 'DEMO')->value('id');
 
         foreach (Agency::all() as $agency) {
             $supplier = Supplier::query()->updateOrCreate(
                 ['name' => "Fournitures {$agency->city}"],
-                ['agency_id' => null, 'phone' => '+228 91 00 00 00', 'is_active' => true],
+                ['pressing_id' => $pressingId, 'agency_id' => null, 'phone' => '+228 91 00 00 00', 'is_active' => true],
             );
 
             foreach ($items as $item) {

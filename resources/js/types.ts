@@ -820,6 +820,8 @@ export interface Pressing {
     last_report_at: string | null;
     created_at: string;
     report_token?: string;
+    manager_email?: string;
+    manager_temporary_password?: string;
 }
 
 export interface PlatformPermission {

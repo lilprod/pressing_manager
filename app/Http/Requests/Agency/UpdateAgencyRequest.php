@@ -15,7 +15,7 @@ class UpdateAgencyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code' => ['sometimes', 'string', 'max:20', Rule::unique('agencies', 'code')->ignore($this->route('agency'))],
+            'code' => ['sometimes', 'string', 'max:20', Rule::unique('agencies', 'code')->where('pressing_id', $this->user()->pressing_id)->ignore($this->route('agency'))],
             'name' => ['sometimes', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],

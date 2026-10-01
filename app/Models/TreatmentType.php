@@ -10,7 +10,7 @@ class TreatmentType extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['code', 'name', 'price_ratio', 'is_active'];
+    protected $fillable = ['pressing_id', 'code', 'name', 'price_ratio', 'is_active'];
 
     protected function casts(): array
     {

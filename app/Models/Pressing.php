@@ -3,15 +3,17 @@
 namespace App\Models;
 
 use App\Models\Concerns\PlatformAuditable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 class Pressing extends Model
 {
-    use PlatformAuditable;
+    use HasFactory, PlatformAuditable;
 
     protected $fillable = [
         'name', 'code', 'country_code', 'platform_plan_id', 'status',
@@ -45,6 +47,36 @@ class Pressing extends Model
     public function platformUsers(): BelongsToMany
     {
         return $this->belongsToMany(PlatformUser::class, 'pressing_platform_user');
+    }
+
+    /**
+     * Données tenant hébergées pour ce pressing (pivot multi-tenant, voir
+     * CLAUDE.md) — ce même déploiement peut héberger plusieurs pressings,
+     * chacun avec ses propres agences/personnel/catalogue.
+     */
+    public function agencies(): HasMany
+    {
+        return $this->hasMany(Agency::class);
+    }
+
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class);
+    }
+
+    public function services(): HasMany
+    {
+        return $this->hasMany(Service::class);
+    }
+
+    public function treatmentTypes(): HasMany
+    {
+        return $this->hasMany(TreatmentType::class);
+    }
+
+    public function appSetting(): HasOne
+    {
+        return $this->hasOne(AppSetting::class);
     }
 
     /** Un abonnement est « à renouveler » dans les 30 jours — même fenêtre que le reste de l'app. */

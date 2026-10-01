@@ -15,7 +15,7 @@ class DeliveryZoneController extends ApiController
 
         $zones = DeliveryZone::query()
             ->where('is_active', true)
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->orderBy('name')
             ->get();
 
@@ -26,6 +26,7 @@ class DeliveryZoneController extends ApiController
     {
         $data = $request->validated();
         $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $this->authorizeAgency($request->user(), $data['agency_id']);
 
         return response()->json(DeliveryZone::create($data), 201);
     }

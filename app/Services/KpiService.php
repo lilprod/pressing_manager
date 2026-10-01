@@ -17,9 +17,13 @@ class KpiService
 {
     /**
      * agencyId null => vue consolidée multi-agences (totaux globaux + ventilation
-     * par agence) ; agencyId fourni => vue d'une seule agence.
+     * par agence) ; agencyId fourni => vue d'une seule agence. `pressingAgencyIds`
+     * borne toujours la vue consolidée aux agences du pressing de l'acteur (jamais
+     * tout le déploiement — voir CLAUDE.md « Pivot multi-tenant »).
+     *
+     * @param  array<int>  $pressingAgencyIds
      */
-    public function build(?int $agencyId, Carbon $from, Carbon $to): array
+    public function build(?int $agencyId, array $pressingAgencyIds, Carbon $from, Carbon $to): array
     {
         $header = [
             'scope' => $agencyId ? 'agency' : 'consolidated',
@@ -30,49 +34,48 @@ class KpiService
         if ($agencyId) {
             $agency = Agency::find($agencyId);
 
-            return $header + ['agency' => $agency ? ['id' => $agency->id, 'name' => $agency->name] : null] + $this->metrics($agencyId, $from, $to);
+            return $header + ['agency' => $agency ? ['id' => $agency->id, 'name' => $agency->name] : null] + $this->metrics([$agencyId], $from, $to);
         }
 
-        $byAgency = Agency::query()->orderBy('name')->get()
-            ->map(fn (Agency $a) => ['agency_id' => $a->id, 'agency_name' => $a->name] + $this->metrics($a->id, $from, $to))
+        $byAgency = Agency::whereIn('id', $pressingAgencyIds)->orderBy('name')->get()
+            ->map(fn (Agency $a) => ['agency_id' => $a->id, 'agency_name' => $a->name] + $this->metrics([$a->id], $from, $to))
             ->values()->all();
 
-        return $header + $this->metrics(null, $from, $to) + ['by_agency' => $byAgency];
+        return $header + $this->metrics($pressingAgencyIds, $from, $to) + ['by_agency' => $byAgency];
     }
 
-    private function metrics(?int $agencyId, Carbon $from, Carbon $to): array
+    /** @param  array<int>  $agencyIds */
+    private function metrics(array $agencyIds, Carbon $from, Carbon $to): array
     {
         $orders = Order::query()
-            ->when($agencyId, fn ($q) => $q->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyIds)
             ->whereBetween('created_at', [$from, $to]);
         $ordersCount = (clone $orders)->count();
         $expressCount = (clone $orders)->where('is_express', true)->count();
         $ordersTotal = (clone $orders)->sum('total_amount');
 
         $revenue = (int) Payment::query()
-            ->when($agencyId, fn ($q) => $q->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyIds)
             ->where('status', 'complete')
             ->whereBetween('paid_at', [$from, $to])
             ->sum('amount');
 
         $movements = StockMovement::query()
-            ->when($agencyId, fn ($q) => $q->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyIds)
             ->whereBetween('occurred_at', [$from, $to])
             ->count();
 
-        $lowStock = $agencyId
-            ? $this->lowStockCount($agencyId)
-            : Agency::query()->get()->sum(fn (Agency $a) => $this->lowStockCount($a->id));
+        $lowStock = collect($agencyIds)->sum(fn (int $id) => $this->lowStockCount($id));
 
         $deliveries = Delivery::query()
-            ->when($agencyId, fn ($q) => $q->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyIds)
             ->whereBetween('created_at', [$from, $to]);
         $deliveriesTotal = (clone $deliveries)->count();
         $deliveriesCompleted = (clone $deliveries)->where('status', 'livree')->count();
         $deliveriesFailed = (clone $deliveries)->where('status', 'echouee')->count();
 
         $attendances = Attendance::query()
-            ->when($agencyId, fn ($q) => $q->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyIds)
             ->whereBetween('created_at', [$from, $to])
             ->get();
         $hoursWorked = $attendances
@@ -80,7 +83,7 @@ class KpiService
             ->sum(fn (Attendance $a) => $a->clock_in->diffInMinutes($a->clock_out) / 60);
 
         $activeSubscriptions = CustomerSubscription::query()
-            ->when($agencyId, fn ($q) => $q->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyIds)
             ->where('status', 'active')
             ->count();
 

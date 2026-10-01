@@ -12,9 +12,11 @@ use Illuminate\Contracts\Validation\ValidationRule;
  */
 class PasswordPolicy implements ValidationRule
 {
+    public function __construct(private readonly int $pressingId) {}
+
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $settings = AppSetting::current();
+        $settings = AppSetting::current($this->pressingId);
         $password = (string) $value;
 
         if (mb_strlen($password) < $settings->password_min_length) {

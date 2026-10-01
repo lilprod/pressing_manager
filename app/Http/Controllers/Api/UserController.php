@@ -27,16 +27,17 @@ class UserController extends ApiController
             throw new HttpException(403, 'Permission manquante.');
         }
 
-        $agencyId = $this->resolveAgencyFilter($request, $request->user());
+        $agencyId = $this->resolvePressingScopedAgencyFilter($request, $request->user());
 
         $users = User::query()
             ->select('id', 'name', 'agency_id')
+            ->where('pressing_id', $request->user()->pressing_id)
             ->where('is_active', true)
             ->when($request->filled('role'), function ($query) use ($request) {
                 $roleId = Role::where('slug', $request->string('role')->value())->value('id');
                 $query->where('role_id', $roleId);
             })
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->when($agencyId !== null, fn ($query) => $query->where('agency_id', $agencyId))
             ->orderBy('name')
             ->get();
 
@@ -46,9 +47,10 @@ class UserController extends ApiController
     /** Annuaire complet pour l'administration des comptes (rôle, agence, état du mot de passe). */
     private function indexForAdmin(Request $request): JsonResponse
     {
-        $agencyId = $this->resolveAgencyFilter($request, $request->user());
+        $agencyId = $this->resolvePressingScopedAgencyFilter($request, $request->user());
 
         $users = User::query()
+            ->where('pressing_id', $request->user()->pressing_id)
             ->with('role', 'agency')
             // Dernière activité = dernier usage d'un jeton Sanctum (colonne last_used_at déjà
             // tenue à jour par Sanctum à chaque requête authentifiée) : colonne « Dernière activité »
@@ -58,11 +60,36 @@ class UserController extends ApiController
                 $roleId = Role::where('slug', $request->string('role')->value())->value('id');
                 $query->where('role_id', $roleId);
             })
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->when($agencyId !== null, fn ($query) => $query->where('agency_id', $agencyId))
             ->orderBy('name')
             ->paginate($request->integer('per_page', 20));
 
         return response()->json($users);
+    }
+
+    /**
+     * `UserController` liste la table `users` elle-même (pas une table liée par
+     * `agency_id`) : contrairement à `resolveAgencyFilter` (qui renvoie toutes les
+     * agences du pressing quand aucune n'est choisie, pour un `whereIn` sur une
+     * table TOUJOURS rattachée à une agence), ici "aucune agence choisie" doit
+     * laisser passer aussi les comptes à portée globale (`agency_id` null) du
+     * pressing — d'où un simple filtre optionnel à une seule agence, combiné à un
+     * `where('pressing_id', ...)` obligatoire dans l'appelant.
+     */
+    private function resolvePressingScopedAgencyFilter(Request $request, User $user): ?int
+    {
+        if ($user->agency_id !== null) {
+            return $user->agency_id;
+        }
+
+        if ($request->filled('agency_id')) {
+            $agencyId = $request->integer('agency_id');
+            $this->authorizeAgency($user, $agencyId);
+
+            return $agencyId;
+        }
+
+        return null;
     }
 
     public function store(StoreUserRequest $request): JsonResponse
@@ -74,6 +101,8 @@ class UserController extends ApiController
         $agencyId = $request->user()->agency_id ?? ($data['agency_id'] ?? null);
         if ($role->isGlobal()) {
             $agencyId = null;
+        } elseif ($agencyId !== null) {
+            $this->authorizeAgency($request->user(), $agencyId);
         }
 
         $temporaryPassword = Str::password(12);
@@ -84,6 +113,7 @@ class UserController extends ApiController
             'phone' => $data['phone'] ?? null,
             'role_id' => $role->id,
             'agency_id' => $agencyId,
+            'pressing_id' => $request->user()->pressing_id,
             'is_active' => true,
             'password' => Hash::make($temporaryPassword),
             'must_change_password' => true,
@@ -109,6 +139,10 @@ class UserController extends ApiController
         } elseif ($request->user()->agency_id !== null) {
             // Un acteur local ne peut pas déplacer un compte vers une autre agence.
             unset($data['agency_id']);
+        }
+
+        if (! empty($data['agency_id'])) {
+            $this->authorizeAgency($request->user(), $data['agency_id']);
         }
 
         $user->update($data);
@@ -149,6 +183,9 @@ class UserController extends ApiController
     private function authorizeUserAccess(Request $request, User $user): void
     {
         $actor = $request->user();
+        if ($user->pressing_id !== $actor->pressing_id) {
+            throw new HttpException(403, "Vous n'avez pas accès à ce compte.");
+        }
         if ($actor->agency_id !== null && $user->agency_id !== $actor->agency_id) {
             throw new HttpException(403, "Vous n'avez pas accès à ce compte.");
         }

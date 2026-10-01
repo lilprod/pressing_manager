@@ -24,7 +24,7 @@ class PickupController extends ApiController
         $orders = Order::query()
             ->where('status', 'pret')
             ->with(['client', 'items' => fn ($q) => $q->whereIn('status', ['pret', 'non_recupere']), 'invoice.payments'])
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->when($request->filled('q'), function ($query) use ($request) {
                 $term = $request->string('q')->value();
                 $query->whereHas('client', fn ($c) => $c->where('first_name', 'ilike', "%{$term}%")
@@ -54,7 +54,7 @@ class PickupController extends ApiController
         $readyOrders = Order::query()
             ->where('status', 'pret')
             ->with('items', 'invoice.payments')
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->get();
 
         $piecesReady = $readyOrders->sum(fn (Order $order) => $order->items
@@ -70,7 +70,7 @@ class PickupController extends ApiController
         $unpaid = $readyOrders->filter(fn (Order $order) => $this->balanceDue($order) > 0);
 
         $pickupsToday = OrderPickup::query()
-            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereIn('agency_id', $agencyId)
             ->whereDate('processed_at', now()->toDateString())
             ->count();
 

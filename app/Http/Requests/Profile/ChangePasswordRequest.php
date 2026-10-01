@@ -16,7 +16,7 @@ class ChangePasswordRequest extends FormRequest
     {
         return [
             'current_password' => ['required', 'current_password'],
-            'new_password' => ['required', 'confirmed', new PasswordPolicy],
+            'new_password' => ['required', 'confirmed', new PasswordPolicy($this->user()->pressing_id)],
         ];
     }
 }

@@ -20,9 +20,12 @@ class MultiAgencyController extends ApiController
         $user = $request->user();
         $this->authorizePermission($user, 'reports.view');
         [$from, $to] = $this->resolveDateRange($request);
-        $agencyId = $this->resolveAgencyFilter($request, $user);
+        $agencyId = $user->agency_id ?? ($request->filled('agency_id') ? $request->integer('agency_id') : null);
+        if ($agencyId !== null) {
+            $this->authorizeAgency($user, $agencyId);
+        }
 
-        return response()->json($this->service->overview($from, $to, $agencyId));
+        return response()->json($this->service->overview($from, $to, $agencyId, $user->pressing_id));
     }
 
     public function show(Request $request, Agency $agency): JsonResponse

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Agency;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreAgencyRequest extends FormRequest
 {
@@ -14,7 +15,7 @@ class StoreAgencyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code' => ['required', 'string', 'max:20', 'unique:agencies,code'],
+            'code' => ['required', 'string', 'max:20', Rule::unique('agencies', 'code')->where('pressing_id', $this->user()->pressing_id)],
             'name' => ['required', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],

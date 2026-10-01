@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Agency;
+use App\Models\Pressing;
 use App\Models\Service;
 use Illuminate\Database\Seeder;
 
@@ -119,10 +120,12 @@ class ServiceSeeder extends Seeder
 
     public function run(): void
     {
+        $pressingId = Pressing::where('code', 'DEMO')->value('id');
+
         // Le catalogue générique initial est désactivé (pas supprimé : des order_items
         // existants peuvent encore y faire référence) au profit du catalogue détaillé.
         foreach (self::LEGACY_SERVICES as $service) {
-            Service::query()->updateOrCreate(['code' => $service['code']], [
+            Service::query()->updateOrCreate(['pressing_id' => $pressingId, 'code' => $service['code']], [
                 ...$service,
                 'is_active' => false,
             ]);
@@ -132,7 +135,7 @@ class ServiceSeeder extends Seeder
 
         foreach (self::ARTICLES as $article) {
             $services->push(Service::query()->updateOrCreate(
-                ['code' => "REP-{$article['id']}"],
+                ['pressing_id' => $pressingId, 'code' => "REP-{$article['id']}"],
                 [
                     'name' => "Repassage - {$article['title']}",
                     'category' => 'repassage',
@@ -144,7 +147,7 @@ class ServiceSeeder extends Seeder
             ));
 
             $services->push(Service::query()->updateOrCreate(
-                ['code' => "LAV-{$article['id']}"],
+                ['pressing_id' => $pressingId, 'code' => "LAV-{$article['id']}"],
                 [
                     'name' => "Lavage - {$article['title']}",
                     'category' => 'lavage',
@@ -156,7 +159,7 @@ class ServiceSeeder extends Seeder
             ));
 
             $services->push(Service::query()->updateOrCreate(
-                ['code' => "NET-{$article['id']}"],
+                ['pressing_id' => $pressingId, 'code' => "NET-{$article['id']}"],
                 [
                     'name' => "Nettoyage - {$article['title']}",
                     'category' => 'nettoyage',
@@ -169,7 +172,7 @@ class ServiceSeeder extends Seeder
         }
 
         // Chaque service est disponible dans chaque agence, au tarif de base par défaut.
-        foreach (Agency::all() as $agency) {
+        foreach (Agency::where('pressing_id', $pressingId)->get() as $agency) {
             foreach ($services as $service) {
                 $agency->services()->syncWithoutDetaching([
                     $service->id => ['is_active' => true],

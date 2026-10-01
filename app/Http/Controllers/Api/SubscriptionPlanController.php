@@ -10,15 +10,16 @@ use Illuminate\Http\Request;
 class SubscriptionPlanController extends ApiController
 {
     /**
-     * Plans visibles par une agence : les siens + les plans globaux (agency_id NULL).
+     * Plans visibles par une agence : les siens + les plans globaux de son pressing
+     * (agency_id NULL, mais toujours rattachés à un pressing — voir CLAUDE.md).
      */
     public function index(Request $request): JsonResponse
     {
         $agencyId = $this->resolveAgencyFilter($request, $request->user());
 
-        $plans = SubscriptionPlan::query()
+        $plans = SubscriptionPlan::where('pressing_id', $request->user()->pressing_id)
             ->where('is_active', true)
-            ->when($agencyId, fn ($query) => $query->where(fn ($q) => $q->whereNull('agency_id')->orWhere('agency_id', $agencyId)))
+            ->where(fn ($q) => $q->whereNull('agency_id')->orWhereIn('agency_id', $agencyId))
             ->orderBy('name')
             ->get();
 
@@ -30,7 +31,10 @@ class SubscriptionPlanController extends ApiController
         $data = $request->validated();
         if ($request->user()->agency_id !== null) {
             $data['agency_id'] = $request->user()->agency_id;
+        } elseif ($data['agency_id'] ?? null) {
+            $this->authorizeAgency($request->user(), $data['agency_id']);
         }
+        $data['pressing_id'] = $request->user()->pressing_id;
 
         return response()->json(SubscriptionPlan::create($data), 201);
     }

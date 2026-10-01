@@ -26,10 +26,7 @@ class AtelierController extends ApiController
     {
         $this->authorizePermission($request->user(), 'orders.update_status');
 
-        $agencyId = $this->resolveAgencyFilter($request, $request->user());
-        if ($agencyId === null) {
-            throw new HttpException(422, "Sélectionnez une agence.");
-        }
+        $agencyId = $this->resolveSingleAgency($request);
 
         $staff = User::query()
             ->select('id', 'name')
@@ -46,10 +43,7 @@ class AtelierController extends ApiController
     {
         $this->authorizePermission($request->user(), 'orders.update_status');
 
-        $agencyId = $this->resolveAgencyFilter($request, $request->user());
-        if ($agencyId === null) {
-            throw new HttpException(422, "Sélectionnez une agence pour afficher le tableau de l'atelier.");
-        }
+        $agencyId = $this->resolveSingleAgency($request, "Sélectionnez une agence pour afficher le tableau de l'atelier.");
 
         $agency = Agency::findOrFail($agencyId);
 
@@ -138,6 +132,27 @@ class AtelierController extends ApiController
         return response()->json($order);
     }
 
+    /**
+     * `board()`/`staff()` montrent toujours une seule agence à la fois (jamais un
+     * agrégat réseau) — contrairement à `resolveAgencyFilter` (qui renvoie toutes
+     * les agences du pressing quand aucune n'est choisie), ici une agence doit
+     * explicitement être sélectionnée, et vérifiée comme appartenant au pressing
+     * de l'acteur.
+     */
+    private function resolveSingleAgency(Request $request, string $message = 'Sélectionnez une agence.'): int
+    {
+        $user = $request->user();
+        $agencyId = $user->agency_id ?? ($request->filled('agency_id') ? $request->integer('agency_id') : null);
+
+        if ($agencyId === null) {
+            throw new HttpException(422, $message);
+        }
+
+        $this->authorizeAgency($user, $agencyId);
+
+        return $agencyId;
+    }
+
     public function updateResponsables(UpdateOrderResponsablesRequest $request, Order $order): JsonResponse
     {
         $this->authorizeAgency($request->user(), $order->agency_id);
@@ -146,7 +161,8 @@ class AtelierController extends ApiController
         foreach (['washer_id', 'sorter_id'] as $field) {
             if (array_key_exists($field, $data) && $data[$field] !== null) {
                 $user = User::findOrFail($data[$field]);
-                if ($user->agency_id !== null && $user->agency_id !== $order->agency_id) {
+                if ($user->pressing_id !== $order->agency->pressing_id
+                    || ($user->agency_id !== null && $user->agency_id !== $order->agency_id)) {
                     throw new HttpException(422, "Ce membre du personnel n'appartient pas à l'agence du dépôt.");
                 }
             }

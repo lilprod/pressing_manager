@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Requests\Settings\UpdateAppSettingsRequest;
 use App\Models\AppSetting;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -12,18 +13,25 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class SettingsController extends ApiController
 {
     /**
-     * Identité globale du pressing (nom, adresse, logo, favicon). Public : utilisée
-     * pour la marque de l'application avant même la connexion (écran de connexion,
-     * titre de l'onglet, favicon).
+     * Identité du pressing courant (nom, adresse, logo, favicon). Route publique
+     * (pas de middleware `auth:sanctum`) : utilisée avant même la connexion (écran
+     * de connexion, titre de l'onglet, favicon) — voir `routes/web.php`. Depuis le
+     * pivot multi-tenant (CLAUDE.md), l'identité dépend du pressing de l'utilisateur
+     * connecté ; résolue manuellement via le guard pour rester accessible sans
+     * middleware, repli générique si aucun jeton n'est présent (visiteur anonyme,
+     * écran de connexion — il n'y a alors aucun moyen de savoir de quel pressing il
+     * s'agit, l'app n'utilise pas de sous-domaine par pressing).
      */
     public function show(): JsonResponse
     {
-        return response()->json($this->present(AppSetting::current()));
+        $pressingId = Auth::guard('sanctum')->user()?->pressing_id;
+
+        return response()->json($pressingId !== null ? $this->present(AppSetting::current($pressingId)) : $this->presentDefault());
     }
 
     public function update(UpdateAppSettingsRequest $request): JsonResponse
     {
-        $settings = AppSetting::current();
+        $settings = AppSetting::current($request->user()->pressing_id);
         $disk = Storage::disk(config('filesystems.default'));
 
         $data = $request->safe()->only([
@@ -53,12 +61,16 @@ class SettingsController extends ApiController
 
     public function logo(): StreamedResponse
     {
-        return $this->streamAsset(AppSetting::current()->logo_path);
+        $pressingId = Auth::guard('sanctum')->user()?->pressing_id;
+
+        return $this->streamAsset($pressingId !== null ? AppSetting::current($pressingId)->logo_path : null);
     }
 
     public function favicon(): StreamedResponse
     {
-        return $this->streamAsset(AppSetting::current()->favicon_path);
+        $pressingId = Auth::guard('sanctum')->user()?->pressing_id;
+
+        return $this->streamAsset($pressingId !== null ? AppSetting::current($pressingId)->favicon_path : null);
     }
 
     private function streamAsset(?string $path): StreamedResponse
@@ -69,6 +81,36 @@ class SettingsController extends ApiController
         }
 
         return $disk->response($path);
+    }
+
+    /**
+     * Visiteur anonyme (pas de jeton, ex. écran de connexion) : impossible de savoir
+     * de quel pressing il s'agit (pas de sous-domaine par pressing dans cette app).
+     * Reprend volontairement les mêmes défauts que les colonnes `app_settings`
+     * (voir migrations) — c'est exactement ce qu'afficherait un pressing flambant
+     * neuf, donc pas une donnée inventée, juste pas celle d'un pressing arbitraire.
+     */
+    private function presentDefault(): array
+    {
+        return [
+            'pressing_name' => 'Pressing Manager',
+            'address' => null,
+            'phone' => null,
+            'email' => null,
+            'tax_id' => null,
+            'logo_url' => null,
+            'favicon_url' => null,
+            'password_expiry_days' => null,
+            'password_expiry_warning_days' => 14,
+            'session_timeout_minutes' => 30,
+            'password_min_length' => 8,
+            'password_require_uppercase' => true,
+            'password_require_number' => true,
+            'password_require_symbol' => false,
+            'tax_rate' => (float) config('invoicing.tax_rate'),
+            'loyalty_amount_per_point' => max(1, (int) config('loyalty.amount_per_point')),
+            'updated_at' => null,
+        ];
     }
 
     private function present(AppSetting $settings): array

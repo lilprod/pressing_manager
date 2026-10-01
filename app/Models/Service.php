@@ -12,7 +12,7 @@ class Service extends Model
     use HasFactory;
 
     protected $fillable = [
-        'code', 'name', 'category', 'billing_mode', 'description', 'base_price', 'estimated_duration_hours',
+        'pressing_id', 'code', 'name', 'category', 'billing_mode', 'description', 'base_price', 'estimated_duration_hours',
         'priority', 'is_active', 'allow_discount', 'round_to_hundred', 'price_editable_at_counter',
     ];
 

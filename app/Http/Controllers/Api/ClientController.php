@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Requests\Client\StoreClientRequest;
 use App\Http\Requests\Client\UpdateClientRequest;
 use App\Models\Client;
+use App\Models\LoyaltyTier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -39,6 +40,22 @@ class ClientController extends ApiController
             ->paginate($request->integer('per_page', 20));
 
         return response()->json($clients);
+    }
+
+    /** KPI de la liste des clients, calculés uniquement à partir de données réelles. */
+    public function stats(Request $request): JsonResponse
+    {
+        $agencyId = $this->resolveAgencyFilter($request, $request->user());
+        $base = fn () => Client::query()->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId));
+
+        $topTier = LoyaltyTier::query()->where('is_active', true)->orderByDesc('min_points')->first();
+
+        return response()->json([
+            'active_count' => $base()->where('is_active', true)->count(),
+            'new_this_month' => $base()->where('created_at', '>=', now()->startOfMonth())->count(),
+            'vip_count' => $topTier ? $base()->where('loyalty_points', '>=', $topTier->min_points)->count() : 0,
+            'points_issued' => (int) $base()->sum('loyalty_points'),
+        ]);
     }
 
     #[OA\Post(

@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Requests\Order\StoreOrderRequest;
 use App\Models\Agency;
 use App\Models\Client;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\CustomerSubscription;
 use App\Models\OrderSyncLog;
+use App\Models\Payment;
 use App\Services\OrderNumberGenerator;
 use App\Services\QrCodeGenerator;
 use App\Services\ServicePricingService;
@@ -41,6 +43,44 @@ class OrderController extends ApiController
             ->paginate($request->integer('per_page', 20));
 
         return response()->json($orders);
+    }
+
+    /** KPI de la liste des dépôts, calculés uniquement à partir de données réelles. */
+    public function stats(Request $request): JsonResponse
+    {
+        $agencyId = $this->resolveAgencyFilter($request, $request->user());
+        $today = now()->toDateString();
+
+        $todayCount = Order::query()
+            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereDate('created_at', $today)
+            ->count();
+
+        $todayRevenue = (int) Payment::query()
+            ->where('status', 'complete')
+            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereDate('paid_at', $today)
+            ->sum('amount');
+
+        $dueToday = Order::query()
+            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->whereDate('promised_at', $today)
+            ->whereNotIn('status', ['livre', 'annule'])
+            ->count();
+
+        $outstandingBalance = (int) Invoice::query()
+            ->whereIn('status', ['emise', 'partiellement_payee'])
+            ->when($agencyId, fn ($query) => $query->where('agency_id', $agencyId))
+            ->withSum(['payments as paid_amount' => fn ($query) => $query->where('status', 'complete')], 'amount')
+            ->get()
+            ->sum(fn (Invoice $invoice) => max(0, $invoice->total_amount - (int) ($invoice->paid_amount ?? 0)));
+
+        return response()->json([
+            'today_count' => $todayCount,
+            'today_revenue' => $todayRevenue,
+            'due_today' => $dueToday,
+            'outstanding_balance' => $outstandingBalance,
+        ]);
     }
 
     #[OA\Post(

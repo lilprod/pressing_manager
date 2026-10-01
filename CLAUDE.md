@@ -73,9 +73,9 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 |---|---|---|---|
 | 00 Vue d'ensemble | Dashboard SPARK PRESSING | `pages/DashboardPage.tsx` (route `/dashboard`, 1er lien de la sidebar, permission `reports.view`) | **fait** (2026-09-30) — écran distinct de `/kpi` (la maquette sépare section 00 et section 08). Uniquement des données existantes : `/kpi` période courante + précédente (variations), compteurs `/orders?status=…` (total paginé), `/cash/summary`, `/invoices` (`total_outstanding`), file hors ligne IndexedDB. Blocs sans agrégat backend omis (voir §2). `/` reste « Nouvelle commande » (flux comptoir inchangé). |
 | 01 Authentification | Authentification staff | `pages/Login.tsx` | **fait** (2026-09-30) — carte de connexion, pastille réseau réelle, alerte d'inactivité alimentée par `session_timeout_minutes` ; choix d'agence / « se souvenir de moi » / réinitialisation libre-service omis (§2) |
-| 02 Dépôts & POS | Gestion des dépôts (liste) | `pages/counter/OrdersList.tsx` | **fait** (commit `408e94e`) |
+| 02 Dépôts & POS | Gestion des dépôts (liste) | `pages/counter/OrdersList.tsx` | **fait** (commit `408e94e`), KPI en-tête ajoutés le 2026-10-01 (voir détail en §2) |
 | 02 Dépôts & POS | Nouveau dépôt (formulaire) | `pages/counter/NewOrder.tsx` | jugé déjà conforme le 2026-09-30 — hérite des tokens, structure (client→catalogue groupé par catégorie→panier sticky) déjà proche de Figma et plus riche (recherche live, remise fidélité auto, conditions de réception, file offline). Ne pas réécrire sans raison concrète. |
-| 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`) |
+| 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`), KPI en-tête ajoutés le 2026-10-01 (voir détail en §2) |
 | 03 Clients & fidélité | Nouveau/Modifier client | `pages/clients/ClientFormPage.tsx` (routes `/clients/new`, `/clients/:id/edit`) | **fait** (commit `11de473`, écrans séparés depuis commit `eaf68bf`) — a aussi exposé le champ `notes` (backend déjà prêt, jamais affiché côté front) |
 | 03 Clients & fidélité | Fiche client (consultation) | panneau détail dans `ClientsList.tsx` | **fait** — reste un panneau latéral sur la liste (pas de retour utilisateur demandant un écran séparé pour la consultation, contrairement à la création/édition) |
 | 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait, renforcement livré** (2026-10-01) — rapprochement par moyen de paiement (espèces/mobile money/carte), checklist de clôture obligatoire, double contrôle sur mouvement sensible (seuil configurable), pièces justificatives, rapport PDF de clôture. Restent différés : distinction dépôt/solde sur `Payment`, vue « opérateurs de la journée », notification au contrôleur (aucun canal interne staff n'existe) — détail en §2 |
@@ -525,9 +525,37 @@ pas de node exact) — écarts additionnels à ceux déjà notés :
 
 **02 Dépôts — Gestion des dépôts (vue globale) et Fiche dépôt enrichie** (captures
 Figma fournies le 2026-10-01) : la vue « Gestion des dépôts » multi-agences
-(`OrdersList.tsx`) reste à enrichir de KPI (détail en §2 CDC-restylage ci-dessous) ;
-colonnes « Synchro » par ligne et bouton « Colonnes » configurables toujours hors
-scope (données non disponibles / fonctionnalité non prioritaire).
+(`OrdersList.tsx`) a reçu ses 4 KPI en-tête (voir ci-dessous) ; colonnes « Synchro »
+par ligne et bouton « Colonnes » configurables toujours hors scope (données non
+disponibles / fonctionnalité non prioritaire).
+
+~~**KPI en-tête `OrdersList.tsx` + `ClientsList.tsx`**~~ **fait** (2026-10-01) :
+- `OrdersList.tsx` : `GET /orders/stats` (`OrderController::stats`, scopé par agence
+  via `resolveAgencyFilter`, aucune permission dédiée — même accessibilité que la
+  liste elle-même) → dépôts aujourd'hui (`created_at` du jour), chiffre d'affaires du
+  jour (somme des `payments.amount` à `status=complete` payés aujourd'hui — pas le
+  total des commandes du jour, qui inclurait du non encaissé), à retirer aujourd'hui
+  (`promised_at` du jour, hors `livre`/`annule`), reste à encaisser (même formule que
+  `InvoiceController::index` → `total_outstanding`, sur les factures `emise`/
+  `partiellement_payee`). Grille `grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-4`
+  (pas `grid-cols-2` dès le mobile : les montants type « 177 310 FCFA » se faisaient
+  tronquer par le `truncate` de `StatCard` à 390px — bug rencontré et corrigé pendant
+  cette passe, cf. le piège équivalent déjà documenté sur `ClientsList.tsx` en 2026-09-30
+  mais ici sur du texte numérique, pas juste un layout qui s'écrase).
+- `ClientsList.tsx` : `GET /clients/stats` (`ClientController::stats`, même scoping)
+  → clients actifs (`is_active=true`), nouveaux ce mois-ci (`created_at >=` début de
+  mois), clients VIP (`loyalty_points >=` le `min_points` du palier de fidélité actif
+  le plus élevé — 0 si aucun palier actif), points cumulés (somme de `loyalty_points`,
+  présenté honnêtement comme un cumul et non comme « points attribués sur la
+  période », cf. le gap déjà noté : aucun historique de mouvements de points
+  n'existe). Grille `grid-cols-2 sm:grid-cols-4` (valeurs numériques courtes,
+  pas de troncature constatée à 390px, vérifié par capture).
+- **Explicitement non fabriqué** (cf. l'analyse de capture déjà faite le 2026-09-30,
+  confirmée ici) : pas de donut de répartition fidélité ni de colonnes fréquence/
+  valeur client sur `ClientsList.tsx` (demanderaient des agrégats supplémentaires non
+  couverts par cette passe, rester sur les 4 StatCards suffit à combler l'écart
+  visuel principal) ; pas de colonne « Synchro » ni de statut « Archivé » (aucun flag
+  réel).
 
 **Fiche dépôt — renforcement livré (2026-10-01)**, `OrderDetail.tsx` :
 - ~~**4 cartes (statut commercial/état atelier/synchronisation/reste à payer)**~~

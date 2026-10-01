@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useI18n } from '../../contexts/I18nContext';
 import { api, ApiError } from '../../lib/api';
-import type { Client, Order, Paginated } from '../../types';
+import type { Client, ClientStats, Order, Paginated } from '../../types';
 import { Link } from 'react-router-dom';
-import { Award, ChevronRight, Mail, MapPin, Pencil, Phone, Search, StickyNote, Trash2, UserPlus, Users, X } from 'lucide-react';
+import { Award, ChevronRight, Gem, Mail, MapPin, Pencil, Phone, Search, Sparkles, StickyNote, Trash2, UserPlus, Users, UserRoundPlus, X } from 'lucide-react';
 import PageHeader, { Avatar } from '../../components/ui/PageHeader';
 import StatusBadge, { Pill } from '../../components/ui/StatusBadge';
 import { Alert, EmptyState, LoadingState } from '../../components/ui/Feedback';
+import { StatCard } from '../../components/ui/Metrics';
 import Pagination from '../../components/ui/Pagination';
 import { button, card, cx, iconButton, inputLg, sectionTitle } from '../../components/ui/styles';
 
@@ -14,6 +15,7 @@ export default function ClientsList() {
     const { t } = useI18n();
     const [search, setSearch] = useState('');
     const [clients, setClients] = useState<Client[]>([]);
+    const [stats, setStats] = useState<ClientStats | null>(null);
     const [meta, setMeta] = useState<Pick<Paginated<Client>, 'current_page' | 'last_page' | 'total'>>({
         current_page: 1,
         last_page: 1,
@@ -39,6 +41,10 @@ export default function ClientsList() {
     }
 
     useEffect(reload, [page]);
+
+    useEffect(() => {
+        api.get<ClientStats>('/clients/stats').then(setStats).catch(() => setStats(null));
+    }, []);
 
     useEffect(() => {
         const timeout = setTimeout(() => {
@@ -86,6 +92,15 @@ export default function ClientsList() {
                     </Link>
                 }
             />
+
+            {stats && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <StatCard label={t('client.stats.active')} value={stats.active_count} icon={Users} tone="brand" />
+                    <StatCard label={t('client.stats.newThisMonth')} value={stats.new_this_month} icon={UserRoundPlus} tone="emerald" />
+                    <StatCard label={t('client.stats.vip')} value={stats.vip_count} icon={Gem} tone="accent" hint={t('client.stats.vipHint')} />
+                    <StatCard label={t('client.stats.pointsIssued')} value={stats.points_issued} icon={Sparkles} tone="amber" />
+                </div>
+            )}
 
             <div className={cx('grid items-start gap-6', selected && 'lg:grid-cols-[minmax(0,1fr)_360px]')}>
                 <div className="min-w-0 space-y-4">

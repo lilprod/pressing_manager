@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, ClipboardList, Clock, CloudUpload, Package, Zap } from 'lucide-react';
+import { Banknote, CalendarClock, ChevronRight, ClipboardList, Clock, CloudUpload, PackageCheck, PiggyBank, Package, Zap } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
 import { api } from '../../lib/api';
@@ -9,9 +9,10 @@ import { useSyncQueue } from '../../lib/useSyncQueue';
 import PageHeader, { Avatar } from '../../components/ui/PageHeader';
 import StatusBadge, { Pill } from '../../components/ui/StatusBadge';
 import { EmptyState, LoadingState } from '../../components/ui/Feedback';
+import { StatCard } from '../../components/ui/Metrics';
 import Pagination from '../../components/ui/Pagination';
 import { button, card, cx } from '../../components/ui/styles';
-import type { Order, OrderStatus, Paginated } from '../../types';
+import type { Order, OrderStats, OrderStatus, Paginated } from '../../types';
 
 const STATUSES: OrderStatus[] = ['recu', 'trie', 'en_traitement', 'controle_qualite', 'pret', 'livre', 'annule'];
 
@@ -21,6 +22,7 @@ export default function OrdersList() {
     const { activeAgencyId } = useAuth();
     const pending = useSyncQueue();
     const [orders, setOrders] = useState<Order[]>([]);
+    const [stats, setStats] = useState<OrderStats | null>(null);
     const [meta, setMeta] = useState<Pick<Paginated<Order>, 'current_page' | 'last_page' | 'total'>>({
         current_page: 1,
         last_page: 1,
@@ -47,6 +49,15 @@ export default function OrdersList() {
             .catch(() => setOrders([]))
             .finally(() => setLoading(false));
     }, [status, readyToday, activeAgencyId, page]);
+
+    useEffect(() => {
+        const params = new URLSearchParams();
+        if (activeAgencyId) params.set('agency_id', String(activeAgencyId));
+        api
+            .get<OrderStats>(`/orders/stats?${params}`)
+            .then(setStats)
+            .catch(() => setStats(null));
+    }, [activeAgencyId]);
 
     function changeStatus(next: OrderStatus | '') {
         setStatus(next);
@@ -80,6 +91,15 @@ export default function OrdersList() {
                     </Link>
                 }
             />
+
+            {stats && (
+                <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:grid-cols-4">
+                    <StatCard label={t('order.stats.today')} value={stats.today_count} icon={PackageCheck} tone="brand" />
+                    <StatCard label={t('order.stats.todayRevenue')} value={money(stats.today_revenue)} icon={Banknote} tone="emerald" />
+                    <StatCard label={t('order.stats.dueToday')} value={stats.due_today} icon={CalendarClock} tone="sky" />
+                    <StatCard label={t('order.stats.outstanding')} value={money(stats.outstanding_balance)} icon={PiggyBank} tone="amber" />
+                </div>
+            )}
 
             <div role="group" aria-label={t('order.filterByStatus')} className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
                 <button type="button" aria-pressed={status === ''} onClick={() => changeStatus('')} className={filterClass(status === '')}>

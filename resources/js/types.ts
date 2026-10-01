@@ -204,6 +204,20 @@ export interface ServiceStats {
     stale_count: number;
 }
 
+export interface OrderStats {
+    today_count: number;
+    today_revenue: number;
+    due_today: number;
+    outstanding_balance: number;
+}
+
+export interface ClientStats {
+    active_count: number;
+    new_this_month: number;
+    vip_count: number;
+    points_issued: number;
+}
+
 export type OrderItemStatus =
     | 'recu'
     | 'trie'

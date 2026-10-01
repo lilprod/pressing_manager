@@ -74,6 +74,7 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::patch('/license-plans/{licensePlan}', [LicensePlanController::class, 'update']);
     Route::delete('/license-plans/{licensePlan}', [LicensePlanController::class, 'destroy']);
 
+    Route::get('/clients/stats', [ClientController::class, 'stats']);
     Route::apiResource('clients', ClientController::class)->except(['destroy'])->parameters(['clients' => 'client']);
     Route::delete('/clients/{client}', [ClientController::class, 'destroy']);
 
@@ -92,6 +93,7 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::patch('/loyalty-tiers/{loyaltyTier}', [LoyaltyTierController::class, 'update']);
 
     Route::get('/orders', [OrderController::class, 'index']);
+    Route::get('/orders/stats', [OrderController::class, 'stats']);
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::post('/orders/{order}/invoice', [InvoiceController::class, 'storeForOrder']);

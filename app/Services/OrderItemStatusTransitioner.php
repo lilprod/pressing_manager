@@ -27,7 +27,10 @@ class OrderItemStatusTransitioner
         'perdu' => [],
     ];
 
-    public function __construct(private readonly NotificationService $notifications) {}
+    public function __construct(
+        private readonly NotificationService $notifications,
+        private readonly OrderStatusSynchronizer $statusSync,
+    ) {}
 
     /**
      * @param  array{quality_check_result?: string|null, quality_check_notes?: string|null, is_damaged?: bool, damage_compensation_amount?: int|null, notes?: string|null}  $context
@@ -76,6 +79,8 @@ class OrderItemStatusTransitioner
             return $item;
         });
 
+        $this->statusSync->sync($item->order()->first());
+
         if ($to === 'pret') {
             $this->notifyIfOrderReady($item);
         }
@@ -96,7 +101,7 @@ class OrderItemStatusTransitioner
         );
 
         if ($allReady) {
-            $this->notifications->notify($order->agency_id, 'order_ready', $order->client, new OrderReadyNotification($order));
+            $this->notifications->notify($order->agency_id, 'order_ready', $order->client, new OrderReadyNotification($order), $order->id);
         }
     }
 

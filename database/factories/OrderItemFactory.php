@@ -20,6 +20,7 @@ class OrderItemFactory extends Factory
             'service_id' => Service::factory(),
             'qr_code' => strtoupper('QR-'.Str::random(10)),
             'quantity' => 1,
+            'quantity_delivered' => 0,
             'unit_price' => fake()->numberBetween(500, 5000),
             'status' => 'recu',
         ];

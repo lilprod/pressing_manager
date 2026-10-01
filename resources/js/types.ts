@@ -175,6 +175,7 @@ export interface OrderItem {
     intake_notes: string | null;
     intake_conditions?: IntakeCondition[];
     quantity: number;
+    quantity_delivered: number;
     unit_price: number;
     status: OrderItemStatus;
     quality_check_result: 'ok' | 'echec' | null;
@@ -183,6 +184,17 @@ export interface OrderItem {
     damage_compensation_amount: number | null;
     ready_at: string | null;
     delivered_at: string | null;
+    status_histories?: OrderItemStatusHistory[];
+}
+
+export interface OrderItemStatusHistory {
+    id: number;
+    order_item_id: number;
+    from_status: OrderItemStatus;
+    to_status: OrderItemStatus;
+    notes: string | null;
+    changed_at: string;
+    actor?: { id: number; name: string } | null;
 }
 
 export type OrderStatus = 'recu' | 'trie' | 'en_traitement' | 'controle_qualite' | 'pret' | 'livre' | 'annule';
@@ -202,8 +214,51 @@ export interface Order {
     notes: string | null;
     created_at: string;
     promised_at: string | null;
+    delivered_at: string | null;
     items: OrderItem[];
     invoice?: Invoice[];
+    pickups?: OrderPickup[];
+    // Présents uniquement sur les réponses de /pickups (Centre de retrait).
+    balance_due?: number;
+    pieces_remaining?: number;
+    notification_status?: 'sent' | 'simulated' | 'failed' | null;
+}
+
+export type PickupRecipientType = 'client' | 'tiers';
+export type PickupConditionStatus = 'conforme' | 'reserve' | 'anomalie';
+
+export interface OrderPickupItem {
+    id: number;
+    order_pickup_id: number;
+    order_item_id: number;
+    quantity: number;
+    order_item?: OrderItem;
+}
+
+export interface OrderPickup {
+    id: number;
+    order_id: number;
+    agency_id: number;
+    recipient_type: PickupRecipientType;
+    recipient_name: string;
+    condition_status: PickupConditionStatus;
+    condition_notes: string | null;
+    payment_collected_amount: number;
+    payment_id: number | null;
+    balance_overridden: boolean;
+    override_reason: string | null;
+    processed_at: string;
+    processor?: { id: number; name: string } | null;
+    items?: OrderPickupItem[];
+}
+
+export interface PickupSummary {
+    ready_orders: number;
+    pieces_ready: number;
+    awaiting_notification: number;
+    pickups_today: number;
+    unpaid_orders: number;
+    unpaid_amount: number;
 }
 
 export interface Invoice {

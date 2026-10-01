@@ -16,7 +16,7 @@ class NotificationService
      * pour l'agence. Ne fait rien si le canal est désactivé ou si le client n'a pas les
      * coordonnées nécessaires (email/téléphone).
      */
-    public function notify(int $agencyId, string $event, Client $client, ConfigurableNotification $notification): void
+    public function notify(int $agencyId, string $event, Client $client, ConfigurableNotification $notification, ?int $orderId = null): void
     {
         $setting = NotificationSetting::query()->firstOrCreate(
             ['agency_id' => $agencyId, 'event' => $event],
@@ -25,7 +25,7 @@ class NotificationService
 
         if ($setting->channel_email && $client->email) {
             Notification::route('mail', $client->email)->notify($notification);
-            $this->log($agencyId, $client, $event, 'mail', $client->email, $notification->summary(), 'sent');
+            $this->log($agencyId, $client, $event, 'mail', $client->email, $notification->summary(), 'sent', $orderId);
         }
 
         if ($setting->channel_sms && $client->phone) {
@@ -33,15 +33,16 @@ class NotificationService
             // déploiement : le message est journalisé plutôt que transmis, dans une structure
             // qui permettrait de brancher un vrai opérateur sans changer les appelants.
             Log::info('[SMS simulé] '.$client->phone.' : '.$notification->summary());
-            $this->log($agencyId, $client, $event, 'sms', $client->phone, $notification->summary(), 'simulated');
+            $this->log($agencyId, $client, $event, 'sms', $client->phone, $notification->summary(), 'simulated', $orderId);
         }
     }
 
-    private function log(int $agencyId, Client $client, string $event, string $channel, string $recipient, string $message, string $status): void
+    private function log(int $agencyId, Client $client, string $event, string $channel, string $recipient, string $message, string $status, ?int $orderId): void
     {
         NotificationLog::create([
             'agency_id' => $agencyId,
             'client_id' => $client->id,
+            'order_id' => $orderId,
             'event' => $event,
             'channel' => $channel,
             'recipient' => $recipient,

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class NotificationLog extends Model
 {
-    protected $fillable = ['agency_id', 'client_id', 'event', 'channel', 'recipient', 'message', 'status', 'sent_at'];
+    protected $fillable = ['agency_id', 'client_id', 'order_id', 'event', 'channel', 'recipient', 'message', 'status', 'sent_at'];
 
     protected function casts(): array
     {
@@ -24,5 +24,10 @@ class NotificationLog extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function order(): BelongsTo
+    {
+        return $this->belongsTo(Order::class);
     }
 }

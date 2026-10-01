@@ -98,7 +98,7 @@ class DeliveryService
         });
 
         $delivery->loadMissing('order.client');
-        $this->notifications->notify($delivery->agency_id, 'delivery_completed', $delivery->order->client, new DeliveryCompletedNotification($delivery));
+        $this->notifications->notify($delivery->agency_id, 'delivery_completed', $delivery->order->client, new DeliveryCompletedNotification($delivery), $delivery->order_id);
 
         return $delivery;
     }
@@ -112,7 +112,7 @@ class DeliveryService
         $delivery->save();
 
         $delivery->loadMissing('order.client');
-        $this->notifications->notify($delivery->agency_id, 'delivery_failed', $delivery->order->client, new DeliveryFailedNotification($delivery));
+        $this->notifications->notify($delivery->agency_id, 'delivery_failed', $delivery->order->client, new DeliveryFailedNotification($delivery), $delivery->order_id);
 
         return $delivery;
     }

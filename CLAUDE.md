@@ -102,9 +102,19 @@ Gaps vérifiés en code (pas juste visuels) lors de l'audit du 2026-09-30 :
   agence peut légitimement inclure des paiements espèces historiques antérieurs
   à toute clôture (première clôture d'une agence avec déjà de l'activité) —
   normal, pas un bug.
-- **Retraits en agence** (section 05) : pas de flux dédié comptoir (file "prêt à
-  retirer", remise d'articles, encaissement du solde). Seule la livraison à domicile
-  (`DeliveriesPage.tsx`) existe — flux différent.
+- ~~**Retraits en agence**~~ **fait** (2026-10-01) : `PickupService` (retrait total ou
+  partiel pièce par pièce via `order_items.quantity_delivered`, blocage automatique si
+  solde impayé avec dérogation motivée et tracée, réceptionnaire client/tiers, état des
+  pièces), tables `order_pickups`/`order_pickup_items`, endpoints `/pickups`,
+  `/pickups/summary`, `POST /orders/{id}/pickups`, écrans `pages/pickups/PickupsList.tsx`
+  (route `/pickups`, « Centre de retrait ») et `PickupProcessPage.tsx` (route
+  `/pickups/:orderId`, « Traiter le retrait »). Corrige au passage un bug préexistant
+  réel : `orders.status` n'était jamais mis à jour après la création (toujours `recu`),
+  ce qui aurait empêché ce module de fonctionner — voir `OrderStatusSynchronizer`,
+  détail en §« 05 Retraits en agence » ci-dessous. L'écran « Ticket et facture »
+  (prévisualisation/impression dédiée, envoi WhatsApp) et l'écran de supervision de la
+  synchronisation hors ligne, montrés sur les mêmes captures, restent **non construits**
+  (voir détail plus bas) — à reprendre si prioritaire.
 - ~~**Gestion des agences** (section 10, Multi-agences)~~ **fait** (2026-09-30) :
   CRUD complet (`AgencyController::manage/show/store/update`, permission
   `agencies.manage`), écrans `pages/agencies/AgenciesPage.tsx` (liste, avec
@@ -380,57 +390,49 @@ une table de réglages par agence (`agency_settings`) + endpoints `GET/PATCH
 
 **05 Retraits en agence — Centre de retrait, Traiter le retrait, Ticket et facture**
 (captures Figma fournies par l'utilisateur le 2026-10-01, pas de node Figma exact) —
-**module entièrement absent** (confirmé en code : aucune route, contrôleur, migration
-ni écran contenant « retrait/pickup/withdraw » autre que le libellé `promisedAt`).
-C'est la première maquette complète reçue pour le gap déjà noté en §2
-(« Retraits en agence (section 05) : pas de flux dédié comptoir »). Détail du besoin
-tel que montré :
-- **Centre de retrait** (liste) : KPI (prêts aujourd'hui, en attente de notification,
-  retraits effectués vs période précédente, soldes impayés), recherche instantanée
-  (code/téléphone/nom + scan), filtres (période, agence, mode de paiement, état —
-  « Prêt & contrôlé »), tableau des dépôts prêts avec code/client/téléphone/articles/
-  retrait prévu/état atelier/total/reste/état notification (SMS lu, envoyé, à
-  notifier, relance requise)/sync/action « Traiter ». Rien de tout ceci n'existe :
-  il faudrait un agrégat `GET /orders?status=pret` enrichi (reste à payer via
-  `invoice.balance_due`, dernier `NotificationLog` par commande) + des compteurs
-  dédiés (`GET /pickups/stats` ou équivalent).
-- **Traiter le retrait** (écran de traitement, le cœur du module) : chronologie
-  atelier (réception → lavage → repassage → contrôle → prêt → remise, avec horaires),
-  vérification article par article avec quantité confirmée vs attendue et **retrait
-  partiel** (choix explicite « retrait total » vs « retrait partiel » avec sélection
-  des pièces), état des pièces à la remise (conforme / réserve client / anomalie
-  constatée) avec remarques, **blocage du retrait si solde impayé** avec bouton
-  « Encaisser » ou « Demander une dérogation » (recoupe EF-RET-05, déjà noté en §2
-  comme non implémenté — ici on voit l'UI exacte : montant à régler affiché en
-  rouge, mode de paiement espèces/mobile money/carte, montant reçu), identification
-  du **réceptionnaire** (client lui-même vs tiers autorisé, nom + confirmation de
-  signature/identité), actions après confirmation (imprimer bon de retrait,
-  notifier le client par SMS), et un **journal d'audit dédié à l'opération**
-  (horodatage de chaque étape : dépôt ouvert pour retrait, retrait partiel
-  sélectionné, identité confirmée…). Rien n'existe côté backend : il faudrait au
-  minimum un champ de retrait partiel sur `order_items` (quantité remise vs
-  quantité totale), une notion de réceptionnaire (`pickup_recipient_name`,
-  `pickup_recipient_type` : client/tiers, éventuellement une signature comme pour
-  `Delivery`), le blocage si impayé (dépend du même réglage par agence que
-  EF-RET-05, pas encore en base), et l'écriture d'événements d'audit par étape
-  (le `AuditLog` générique existe mais rien ne l'alimente pour ce flux).
-- **Ticket et facture** (écran de prévisualisation/impression dédié) : aperçu côte à
-  côte ticket thermique + facture A4, choix du format, imprimante, copies,
-  actions « Imprimer maintenant » / « Télécharger le PDF » / « Envoyer au client »
-  (WhatsApp), bandeau « impression hors connexion » avec numéro de document local
-  temporaire avant synchronisation. Le ticket et la facture PDF existent déjà
-  (DomPDF, voir `InvoiceController`) mais pas cet écran de prévisualisation/choix de
-  format dédié, ni l'envoi direct par WhatsApp (seul SMS/e-mail existent via
-  `NotificationService`).
-- Conclusion : contrairement aux autres « écarts de fidélité » déjà documentés
-  (Caisse, Articles), ici il n'y a **aucune base existante à enrichir** — c'est un
-  module neuf de bout en bout (migrations, contrôleur, policy d'agence, 2-3 écrans
-  React), avec des décisions produit à trancher avant de coder : seuil/portée exacte
-  du blocage si impayé et qui peut accorder une dérogation (déjà signalé comme
-  question ouverte pour EF-RET-05), ce que couvre exactement un « retrait partiel »
-  pour la facturation (le reste des articles reste-t-il « prêt » pour un retrait
-  ultérieur ?), et si la signature du réceptionnaire doit être capturée comme pour
-  `Delivery` (`signature_path`) ou simplement un nom saisi.
+**fait pour les deux premiers écrans** (2026-10-01), le troisième reste en attente.
+- **Centre de retrait** (`PickupsList.tsx`, route `/pickups`) : KPI réels (prêts
+  aujourd'hui + pièces disponibles, en attente de notification — dernier
+  `NotificationLog.order_id` à `sent`, retraits effectués aujourd'hui, soldes impayés
+  agrégés), recherche (nom/téléphone client), tableau dépôts prêts avec reste à payer
+  et état de notification. **Omis faute de données réelles** : comparaison « vs lundi
+  dernier » (demanderait un historique, pas juste la période précédente — ambigu),
+  planning des rendez-vous du jour, filtre par mode de paiement et scan code-barres/QR
+  direct sur cet écran (le scan existe déjà ailleurs, `pages/Scan.tsx`, non dupliqué
+  ici), colonne « sync » (la file hors ligne ne couvre pas encore les retraits, voir
+  ci-dessous).
+- **Traiter le retrait** (`PickupProcessPage.tsx`, route `/pickups/:orderId`) :
+  vérification article par article avec **retrait partiel réel au niveau de la
+  quantité** (`order_items.quantity_delivered`, pas juste un statut binaire — un
+  article avec 7 pièces peut être remis 3 puis 4 lors de deux visites), réceptionnaire
+  client/tiers, état des pièces (conforme/réserve/anomalie) + remarques, **blocage
+  systématique si solde impayé** avec encaissement espèces inline ou dérogation
+  motivée obligatoire (texte libre, tracée sur l'enregistrement de retrait —
+  `order_pickups.override_reason`). **Décisions prises faute de spécification
+  produit** (à revoir si l'utilisateur le demande) : le blocage n'est pas encore
+  configurable par agence (dépend de la table `agency_settings` non construite, voir
+  EF-RET-05 en §2 — ici toujours actif) ; seul l'encaissement **espèces** est proposé
+  en ligne (mobile money/carte restent asynchrones dans `PaymentService`, incompatibles
+  avec un déblocage immédiat au comptoir) ; la dérogation est accessible à tout
+  utilisateur ayant `orders.manage` (pas de second palier de validation manager) ; le
+  réceptionnaire est un nom saisi, sans capture de signature (contrairement à
+  `Delivery.signature_path`). **Omis** : chronologie atelier horodatée par étape
+  (nécessite l'agrégat déjà noté en §2 Dashboard) et journal d'audit dédié affiché à
+  l'écran (les événements existent bien — `order_item_status_histories`,
+  `order_pickups` — mais ne sont pas présentés sous cette forme chronologique ici).
+- **Ticket et facture** (écran de prévisualisation/impression dédié) — **toujours non
+  construit** : le ticket et la facture PDF existent déjà (DomPDF,
+  `InvoiceController`) mais pas cet écran de choix de format/imprimante ni l'envoi
+  WhatsApp (seuls SMS/e-mail existent via `NotificationService`).
+- **Bug corrigé au passage, prérequis bloquant pour ce module** : `orders.status`
+  n'était jamais réécrit après la création de la commande (`OrderController::store`
+  le fixe une fois à `recu`) — seul `order_items.status` progressait. Le filtre
+  `GET /orders?status=pret`, utilisé par ce module ainsi que par `OrdersList.tsx`,
+  ne pouvait donc jamais rien retourner au-delà de `recu`. Nouveau service
+  `OrderStatusSynchronizer` (agrège le statut commande = le moins avancé de ses
+  articles, `livre` seulement quand tous les articles sont `livre`/`perdu`), appelé
+  après chaque transition d'article (`OrderItemStatusTransitioner`) et après chaque
+  retrait (`PickupService`).
 
 **Synchronisation hors ligne — écran dédié « Retour en ligne et synchronisation »**
 (capture Figma fournie le 2026-10-01, pas de node exact) : la file hors ligne existe

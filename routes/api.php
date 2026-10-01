@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\LoyaltyTierController;
 use App\Http\Controllers\Api\NotificationLogController;
 use App\Http\Controllers\Api\NotificationSettingController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\PickupController;
 use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentWebhookController;
@@ -91,6 +92,10 @@ Route::middleware(['auth:sanctum', 'license'])->group(function () {
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::post('/orders/{order}/invoice', [InvoiceController::class, 'storeForOrder']);
+
+    Route::get('/pickups', [PickupController::class, 'index']);
+    Route::get('/pickups/summary', [PickupController::class, 'summary']);
+    Route::post('/orders/{order}/pickups', [PickupController::class, 'store']);
 
     Route::patch('/order-items/{orderItem}/status', [OrderItemController::class, 'updateStatus']);
     Route::get('/order-items/{orderItem}/qr-code', [OrderItemController::class, 'qrImage']);

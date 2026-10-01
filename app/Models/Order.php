@@ -52,4 +52,9 @@ class Order extends Model
     {
         return $this->hasMany(Invoice::class);
     }
+
+    public function pickups(): HasMany
+    {
+        return $this->hasMany(OrderPickup::class);
+    }
 }

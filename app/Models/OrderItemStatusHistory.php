@@ -23,7 +23,10 @@ class OrderItemStatusHistory extends Model
         return $this->belongsTo(OrderItem::class);
     }
 
-    public function changedBy(): BelongsTo
+    // Nommé différemment de la colonne `changed_by` : voir le piège documenté dans
+    // CLAUDE.md (une relation au même nom snake_case qu'une colonne FK écrase celle-ci
+    // dans Model::toArray()). Jamais chargée ailleurs avant ce commit — renommage sûr.
+    public function actor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'changed_by');
     }

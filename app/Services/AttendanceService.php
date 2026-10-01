@@ -29,10 +29,15 @@ class AttendanceService
 
             $now = now();
 
+            // Fenêtre temporelle plutôt que whereDate(starts_at, aujourd'hui) : un créneau
+            // commençant juste avant minuit pour un pointage juste après n'était jamais
+            // retrouvé (bug découvert via un test flaky aux alentours de minuit UTC, même
+            // famille que celui corrigé sur AgencyScopingTest::ready_today).
             $shift = Shift::query()
                 ->where('user_id', $user->id)
-                ->whereDate('starts_at', $now->toDateString())
-                ->orderBy('starts_at')
+                ->where('starts_at', '<=', $now)
+                ->where('ends_at', '>=', $now)
+                ->orderByDesc('starts_at')
                 ->first();
 
             $status = 'present';

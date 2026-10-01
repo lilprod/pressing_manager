@@ -13,6 +13,7 @@ import {
     LogOut,
     Menu,
     Moon,
+    PackageCheck,
     ScanLine,
     Settings as SettingsIcon,
     Shirt,
@@ -80,6 +81,7 @@ function useSidebarSections(onNavigate?: () => void) {
             <NavSection label={t('nav.section.counter')}>
                 <NavItem to="/" end icon={ShoppingBag} label={t('nav.newOrder')} onClick={onNavigate} />
                 <NavItem to="/orders" icon={ClipboardList} label={t('nav.orders')} onClick={onNavigate} />
+                {hasPermission(user, 'orders.manage') && <NavItem to="/pickups" icon={PackageCheck} label={t('nav.pickups')} onClick={onNavigate} />}
                 <NavItem to="/scan" icon={ScanLine} label={t('nav.scan')} onClick={onNavigate} />
                 {hasPermission(user, 'payments.manage') && <NavItem to="/cash" icon={Wallet} label={t('nav.cash')} onClick={onNavigate} />}
                 {(hasPermission(user, 'deliveries.manage') || hasPermission(user, 'deliveries.fulfill')) && (

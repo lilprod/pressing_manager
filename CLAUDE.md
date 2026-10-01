@@ -398,15 +398,37 @@ une table de réglages par agence (`agency_settings`) + endpoints `GET/PATCH
   téléphone, articles, **atelier** (badge dérivé des statuts réels des articles —
   « Non récupéré » si au moins un article `non_recupere`, sinon « Prêt » — pas de
   3e état fabriqué), retrait prévu, **total**, reste à payer et notification.
-  **Renforcement livré le 2026-10-01** : carte « Retraits du jour » (dépôts dont
-  `promised_at` tombe aujourd'hui, `GET /pickups/summary` → `due_today`), filtre de
-  période (Tous/Aujourd'hui/7 prochains jours, `GET /pickups?promised_from&promised_to`),
-  carte de recherche stylée (fond `brand-700→brand-900`), bannière de procédure de
-  sécurité statique en pied de page. **Omis faute de données réelles** : comparaison
-  « vs lundi dernier » (demanderait un historique, pas juste la période précédente —
-  ambigu), filtre par mode de paiement, scan code-barres/QR direct sur cet écran (le
-  scan existe déjà ailleurs, `pages/Scan.tsx`, non dupliqué ici), colonne « sync » (la
-  file hors ligne ne couvre pas encore les retraits, voir ci-dessous).
+  **Renforcement livré le 2026-10-01, en deux passes** (captures annotées par
+  l'utilisateur) :
+  - 1ère passe : carte « Retraits du jour » (dépôts dont `promised_at` tombe
+    aujourd'hui), filtre de période, carte de recherche stylée (fond
+    `brand-700→brand-900`), bannière de procédure de sécurité statique.
+  - 2e passe (captures annotées avec des zones entourées) : badge « N prêt(s) »
+    à côté du titre, boutons d'en-tête « Imprimer la liste » (`window.print()`,
+    même motif que `OrderDetail.tsx`) et « Traiter le retrait » (focus la barre
+    de recherche — pas de flux dédié distinct, le champ de recherche sert déjà à
+    localiser un dépôt). Carte « Retraits du jour » enrichie : heure (`time()`,
+    nouvel helper dans `lib/format.ts`), badge **À encaisser/Soldé** par rendez-vous
+    (`balance_due` désormais inclus dans `GET /pickups/summary` → `due_today`),
+    compteur « N prochain(s) rendez-vous », lien « Voir tout » qui applique le
+    filtre date=aujourd'hui et défile jusqu'au tableau (pas de « planning »
+    séparé — le tableau lui-même fait office de planning filtré). Barre
+    « Affiner la file de retrait » remplace les anciens filtres période :
+    compteur de résultats, date de retrait prévue (`<input type="date">`, un
+    seul jour, réutilise `promised_from`/`promised_to`), **état atelier**
+    (Tous/Prêt/Non récupéré — nouveau paramètre `GET /pickups?item_status=`,
+    `whereHas('items', …)`), lien « Réinitialiser ».
+  **Omis faute de données réelles ou redondant avec l'existant** (décisions
+  documentées, pas des oublis) : comparaison « vs lundi dernier » (demanderait un
+  historique, pas juste la période précédente — ambigu), filtre par mode de
+  paiement (`reste à payer` n'est pas rattachable à un mode de paiement avant
+  d'être réglé), filtre agence dans la barre (déjà couvert par le sélecteur
+  d'agence global de l'en-tête — ne pas dupliquer), scan code-barres/QR direct
+  sur cet écran (existe déjà ailleurs, `pages/Scan.tsx`), colonne « sync » par
+  ligne et widget « Réseau agences »/« dernière synchro » (la file hors ligne ne
+  couvre pas les retraits — un indicateur de sync constant à 100 % serait
+  fabriqué), menu d'actions « ⋯ » par ligne (aucune action secondaire définie
+  au-delà de « Traiter »).
 - **Traiter le retrait** (`PickupProcessPage.tsx`, route `/pickups/:orderId`) :
   vérification article par article avec **retrait partiel réel au niveau de la
   quantité** (`order_items.quantity_delivered`, pas juste un statut binaire — un

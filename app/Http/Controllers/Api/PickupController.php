@@ -33,6 +33,10 @@ class PickupController extends ApiController
             })
             ->when($request->filled('promised_from'), fn ($query) => $query->whereDate('promised_at', '>=', $request->date('promised_from')))
             ->when($request->filled('promised_to'), fn ($query) => $query->whereDate('promised_at', '<=', $request->date('promised_to')))
+            ->when(
+                $request->filled('item_status') && in_array($request->string('item_status')->value(), ['pret', 'non_recupere'], true),
+                fn ($query) => $query->whereHas('items', fn ($q) => $q->where('status', $request->string('item_status')->value()))
+            )
             ->orderBy('promised_at')
             ->paginate($request->integer('per_page', 20));
 
@@ -80,6 +84,7 @@ class PickupController extends ApiController
                 'client_name' => trim(($order->client->first_name ?? '').' '.($order->client->last_name ?? '')),
                 'promised_at' => $order->promised_at,
                 'pieces_remaining' => $order->items->whereIn('status', ['pret', 'non_recupere'])->sum(fn ($item) => $item->quantity - $item->quantity_delivered),
+                'balance_due' => $this->balanceDue($order),
             ]);
 
         return response()->json([

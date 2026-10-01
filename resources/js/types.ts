@@ -316,6 +316,7 @@ export interface PickupDueToday {
     client_name: string;
     promised_at: string;
     pieces_remaining: number;
+    balance_due: number;
 }
 
 export interface PickupSummary {

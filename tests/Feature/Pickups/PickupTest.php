@@ -295,6 +295,23 @@ class PickupTest extends TestCase
         $this->assertCount(1, $response->json('due_today'));
         $response->assertJsonPath('due_today.0.id', $dueToday->id);
         $response->assertJsonPath('due_today.0.pieces_remaining', 2);
+        $response->assertJsonPath('due_today.0.balance_due', 0);
+    }
+
+    public function test_the_list_endpoint_can_be_filtered_by_workshop_item_status(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $ready = $this->makeReadyOrder($agency);
+        $overdue = $this->makeReadyOrder($agency);
+        $overdue->items()->first()->update(['status' => 'non_recupere']);
+
+        $response = $this->actingAs($accueil)->getJson('/api/pickups?item_status=non_recupere');
+
+        $response->assertOk();
+        $this->assertCount(1, $response->json('data'));
+        $this->assertSame($overdue->id, $response->json('data.0.id'));
     }
 
     public function test_the_list_endpoint_can_be_filtered_by_promised_date_range(): void

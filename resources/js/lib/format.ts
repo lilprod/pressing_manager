@@ -30,5 +30,11 @@ export function useFormat() {
         [locale],
     );
 
-    return { money, date, dateTime };
+    const time = useCallback(
+        (value: string | null | undefined) =>
+            value ? new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—',
+        [locale],
+    );
+
+    return { money, date, dateTime, time };
 }

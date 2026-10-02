@@ -21,12 +21,7 @@ class QrCodeGenerator
      */
     public function toPngDataUri(string $qrCode): string
     {
-        $result = Builder::create()
-            ->writer(new PngWriter())
-            ->data($qrCode)
-            ->size(300)
-            ->margin(10)
-            ->build();
+        $result = (new Builder(writer: new PngWriter(), data: $qrCode, size: 300, margin: 10))->build();
 
         return $result->getDataUri();
     }

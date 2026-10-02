@@ -4,7 +4,7 @@ import type { PlatformUser } from '../types';
 
 type LoginChallenge =
     | { mfa_required: true; challenge: string }
-    | { mfa_setup_required: true; challenge: string; otpauth_uri: string };
+    | { mfa_setup_required: true; challenge: string; otpauth_uri: string; qr_code_data_uri: string };
 
 interface SuperadminAuthContextValue {
     user: PlatformUser | null;

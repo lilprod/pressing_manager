@@ -13,12 +13,14 @@ import { button, card, cx, input, label } from '../../components/ui/styles';
  * SuperadminAuthContext, guard `platform` côté API). Double authentification
  * obligatoire : mot de passe, puis code TOTP — soit saisi directement (compte déjà
  * configuré), soit configuré à la première connexion (secret affiché pour saisie
- * manuelle dans une application d'authentification, aucune dépendance QR ajoutée). */
+ * manuelle en repli, ou scan direct du QR). Le QR est rendu côté serveur
+ * (Endroid\QrCode, déjà une dépendance composer pour les étiquettes articles) —
+ * pas de nouvelle dépendance JS pour cet écran. */
 
 type Step =
     | { kind: 'credentials' }
     | { kind: 'verify'; challenge: string }
-    | { kind: 'setup'; challenge: string; secret: string }
+    | { kind: 'setup'; challenge: string; secret: string; qrCodeDataUri: string }
     | { kind: 'recovery-codes'; codes: string[] };
 
 function extractSecret(otpauthUri: string): string {
@@ -45,7 +47,12 @@ export default function PlatformLoginPage() {
         try {
             const result = await requestLogin(email, password);
             if ('mfa_setup_required' in result) {
-                setStep({ kind: 'setup', challenge: result.challenge, secret: extractSecret(result.otpauth_uri) });
+                setStep({
+                    kind: 'setup',
+                    challenge: result.challenge,
+                    secret: extractSecret(result.otpauth_uri),
+                    qrCodeDataUri: result.qr_code_data_uri,
+                });
             } else {
                 setStep({ kind: 'verify', challenge: result.challenge });
             }
@@ -165,8 +172,17 @@ export default function PlatformLoginPage() {
 
                     {step.kind === 'setup' && (
                         <div className="space-y-3">
+                            <div className="flex justify-center">
+                                <img
+                                    src={step.qrCodeDataUri}
+                                    alt="QR code à scanner avec votre application d'authentification"
+                                    className="h-40 w-40 rounded-xl border border-ink-100 bg-white p-2 dark:border-ink-800"
+                                />
+                            </div>
                             <div className="rounded-xl bg-ink-50 p-3 dark:bg-ink-950/40">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-ink-500 dark:text-ink-400">Clé secrète</p>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-ink-500 dark:text-ink-400">
+                                    Ou saisissez cette clé manuellement
+                                </p>
                                 <p className="mt-1 break-all font-mono text-sm text-ink-900 dark:text-ink-50">{step.secret}</p>
                             </div>
                             <label className="block">

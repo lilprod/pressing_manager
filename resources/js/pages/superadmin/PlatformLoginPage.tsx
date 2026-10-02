@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { ArrowRight, Check, KeyRound, Lock, ShieldCheck, User } from 'lucide-react';
 import { useSuperadminAuth } from '../../contexts/SuperadminAuthContext';
 import { PlatformApiError } from '../../lib/platformApi';
+import { BrandLogo } from '../../components/BrandMark';
 import { Alert, Spinner } from '../../components/ui/Feedback';
 import { Pill } from '../../components/ui/StatusBadge';
 import { button, card, cx, input, label } from '../../components/ui/styles';
@@ -87,13 +88,15 @@ export default function PlatformLoginPage() {
     }
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-ink-950 px-4 py-12">
-            <div className="w-full max-w-md space-y-6">
+        <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-brand-950 px-4 py-12">
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+                <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-brand-400/20 blur-3xl" />
+                <div className="absolute -bottom-32 -left-20 h-96 w-96 rounded-full bg-accent-400/10 blur-3xl" />
+            </div>
+            <div className="relative w-full max-w-md space-y-6">
                 <div className="flex items-center justify-center gap-2.5">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-accent-400 to-accent-600 font-display text-sm font-extrabold text-ink-950">
-                        SP
-                    </span>
-                    <span className="font-display text-[15px] font-extrabold text-white">SPARK PRESSING</span>
+                    <BrandLogo className="h-9 w-9" />
+                    <span className="font-display text-[15px] font-extrabold text-white">ADMIN Pressing</span>
                 </div>
 
                 <form

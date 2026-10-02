@@ -1,25 +1,31 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
     ArrowRight,
     Bell,
     Building2,
+    Clock3,
     Crown,
     Gift,
+    Hash,
     KeyRound,
     LockKeyhole,
     Palette,
+    ScrollText,
     Search,
     Settings as SettingsIcon,
-    ShieldCheck,
     Shirt,
     Truck,
     Users,
+    WashingMachine,
+    WifiOff,
     type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useSettings } from '../contexts/SettingsContext';
+import { api } from '../lib/api';
+import { auditLogLabel, auditTypeLabel } from '../lib/auditLog';
 import { brandingChecklist } from '../lib/brandingChecklist';
 import { useFormat } from '../lib/format';
 import { hasPermission } from '../lib/permissions';
@@ -28,15 +34,16 @@ import { EmptyState } from '../components/ui/Feedback';
 import { ChipToggle, ProgressBar } from '../components/ui/Metrics';
 import { Pill, TONES, type Tone } from '../components/ui/StatusBadge';
 import { card, cardInteractive, cardPadded, cx, input, sectionTitle } from '../components/ui/styles';
+import type { AuditLog } from '../types';
 
 /* Hub « Paramètres » (Figma SPARK PRESSING, section 09, node 25:12184) : recherche,
- * état de configuration et cartes de catégories menant aux écrans de réglage.
- * Seules les catégories qui ont un écran réel sont listées ; celles de la maquette sans
- * backend (agences, numérotation, horaires, promotions, workflow atelier, devise,
- * paiements, mode hors ligne) et le journal « Dernières modifications » sont omis —
- * voir CLAUDE.md §2. */
+ * état global et cartes de catégories menant aux écrans de réglage, plus un panneau
+ * « Dernières modifications » (journal d'audit générique, voir CLAUDE.md « Un système
+ * d'audit générique existe déjà »). Seules les catégories qui ont un écran réel sont
+ * listées — notamment « Promotions » (moteur marketing entièrement absent du backend,
+ * chantier à part) est omise, voir CLAUDE.md §2. */
 
-type GroupKey = 'organisation' | 'customers' | 'brand';
+type GroupKey = 'structure' | 'operations' | 'finance' | 'platform';
 
 interface Category {
     key: string;
@@ -57,61 +64,83 @@ export default function SettingsPage() {
     const { date } = useFormat();
     const [query, setQuery] = useState('');
     const [group, setGroup] = useState<GroupKey | 'all'>('all');
+    const [recentChanges, setRecentChanges] = useState<AuditLog[]>([]);
+
+    const canSeeRecentChanges = hasPermission(user, 'agencies.manage');
+
+    useEffect(() => {
+        if (!canSeeRecentChanges) return;
+        api
+            .get<AuditLog[]>('/settings/recent-changes')
+            .then(setRecentChanges)
+            .catch(() => setRecentChanges([]));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [canSeeRecentChanges]);
 
     const checklist = brandingChecklist(settings);
-    const done = checklist.filter((item) => item.done).length;
-    const brandingComplete = done === checklist.length;
+    const brandingDone = checklist.filter((item) => item.done).length;
+    const brandingComplete = brandingDone === checklist.length;
     const expiry = settings?.password_expiry_days;
+
+    // Un seul type Agency/AppSetting est journalisé à ce stade (chantier « Paramètres
+    // opérationnels » ajoutera AgencySetting pour les cartes Codes dépôt/Délais/Cycle
+    // atelier/Tarification) — pas de badge fabriqué pour les catégories sans signal réel.
+    const lastAgencyChange = recentChanges.find((log) => log.auditable_type === 'Agency');
+    const agencyStatus = lastAgencyChange
+        ? recencyStatus(lastAgencyChange.created_at, t)
+        : undefined;
 
     const categories: Category[] = [
         {
             key: 'agencies',
-            group: 'organisation',
+            group: 'structure',
             to: '/agencies',
             icon: Building2,
             title: t('agency.title'),
             detail: t('settingsHub.card.agencies'),
+            status: agencyStatus ? { tone: agencyStatus.tone, label: agencyStatus.label } : undefined,
+            updatedAt: agencyStatus ? lastAgencyChange!.created_at : null,
             allowed: hasPermission(user, 'agencies.manage'),
         },
         {
             key: 'users',
-            group: 'organisation',
+            group: 'structure',
             to: '/users',
             icon: Users,
-            title: t('users.title'),
+            title: t('settingsHub.card.usersRolesTitle'),
             detail: t('settingsHub.card.users'),
             allowed: hasPermission(user, 'users.manage'),
         },
         {
-            key: 'roles',
-            group: 'organisation',
-            to: '/roles-permissions',
-            icon: ShieldCheck,
-            title: t('rbac.title'),
-            detail: t('settingsHub.card.roles'),
-            allowed: hasPermission(user, 'users.manage'),
-        },
-        {
             key: 'services',
-            group: 'organisation',
+            group: 'structure',
             to: '/services',
             icon: Shirt,
-            title: t('nav.services'),
+            title: t('settingsHub.card.catalogTitle'),
             detail: t('settingsHub.card.services'),
             allowed: hasPermission(user, 'services.manage'),
         },
         {
-            key: 'deliveries',
-            group: 'organisation',
-            to: '/deliveries',
-            icon: Truck,
-            title: t('nav.deliveries'),
-            detail: t('settingsHub.card.deliveries'),
-            allowed: hasPermission(user, 'deliveries.manage'),
+            key: 'orderCodes',
+            group: 'structure',
+            to: '/settings/operational',
+            icon: Hash,
+            title: t('settingsHub.card.orderCodesTitle'),
+            detail: t('settingsHub.card.orderCodes'),
+            allowed: hasPermission(user, 'agencies.manage'),
+        },
+        {
+            key: 'delays',
+            group: 'operations',
+            to: '/settings/operational',
+            icon: Clock3,
+            title: t('settingsHub.card.delaysTitle'),
+            detail: t('settingsHub.card.delays'),
+            allowed: hasPermission(user, 'agencies.manage'),
         },
         {
             key: 'loyalty',
-            group: 'customers',
+            group: 'operations',
             to: '/loyalty',
             icon: Gift,
             title: t('loyalty.title'),
@@ -119,8 +148,35 @@ export default function SettingsPage() {
             allowed: hasPermission(user, 'clients.manage'),
         },
         {
+            key: 'workshop',
+            group: 'operations',
+            to: '/settings/operational',
+            icon: WashingMachine,
+            title: t('settingsHub.card.workshopTitle'),
+            detail: t('settingsHub.card.workshop'),
+            allowed: hasPermission(user, 'agencies.manage'),
+        },
+        {
+            key: 'pricing',
+            group: 'finance',
+            to: '/settings/operational',
+            icon: Palette,
+            title: t('settingsHub.card.pricingTitle'),
+            detail: t('settingsHub.card.pricing'),
+            allowed: hasPermission(user, 'agencies.manage'),
+        },
+        {
+            key: 'deliveries',
+            group: 'finance',
+            to: '/deliveries',
+            icon: Truck,
+            title: t('settingsHub.card.deliveriesTitle'),
+            detail: t('settingsHub.card.deliveries'),
+            allowed: hasPermission(user, 'deliveries.manage'),
+        },
+        {
             key: 'subscriptions',
-            group: 'customers',
+            group: 'finance',
             to: '/subscriptions',
             icon: Crown,
             title: t('subscription.title'),
@@ -129,7 +185,7 @@ export default function SettingsPage() {
         },
         {
             key: 'notifications',
-            group: 'customers',
+            group: 'finance',
             to: '/notifications',
             icon: Bell,
             title: t('nav.notifications'),
@@ -138,7 +194,7 @@ export default function SettingsPage() {
         },
         {
             key: 'branding',
-            group: 'brand',
+            group: 'platform',
             to: '/settings/branding',
             icon: Palette,
             title: t('branding.title'),
@@ -149,7 +205,7 @@ export default function SettingsPage() {
         },
         {
             key: 'security',
-            group: 'brand',
+            group: 'platform',
             to: '/settings/security',
             icon: LockKeyhole,
             title: t('settings.security'),
@@ -161,8 +217,26 @@ export default function SettingsPage() {
             allowed: hasPermission(user, 'agencies.manage'),
         },
         {
+            key: 'offline',
+            group: 'platform',
+            to: '/settings/operational',
+            icon: WifiOff,
+            title: t('settingsHub.card.offlineTitle'),
+            detail: t('settingsHub.card.offline'),
+            allowed: hasPermission(user, 'agencies.manage'),
+        },
+        {
+            key: 'audit',
+            group: 'platform',
+            to: '/audit-logs',
+            icon: ScrollText,
+            title: t('auditLogs.title'),
+            detail: t('settingsHub.card.audit'),
+            allowed: hasPermission(user, 'audit.view'),
+        },
+        {
             key: 'license',
-            group: 'brand',
+            group: 'platform',
             to: '/license',
             icon: KeyRound,
             title: t('nav.license'),
@@ -171,7 +245,7 @@ export default function SettingsPage() {
         },
     ];
 
-    const groups: GroupKey[] = ['organisation', 'customers', 'brand'];
+    const groups: GroupKey[] = ['structure', 'operations', 'finance', 'platform'];
 
     const visible = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -179,7 +253,11 @@ export default function SettingsPage() {
             (c) => c.allowed && (group === 'all' || c.group === group) && (!q || `${c.title} ${c.detail}`.toLowerCase().includes(q)),
         );
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [query, group, settings, user]);
+    }, [query, group, settings, user, recentChanges]);
+
+    // « À vérifier » = nb de cartes avec un badge "Action requise" réel (amber) — pas de
+    // compte fabriqué pour matcher un total arbitraire. Aujourd'hui, seul Branding en a un.
+    const toVerify = visible.filter((c) => c.status?.tone === 'amber').length;
 
     return (
         <div className="space-y-6">
@@ -210,16 +288,18 @@ export default function SettingsPage() {
                     </div>
                 </div>
 
-                <section aria-labelledby="settings-config-state" className={cx(cardPadded, 'flex flex-col justify-between gap-3')}>
+                <section aria-labelledby="settings-global-state" className={cx(cardPadded, 'flex flex-col justify-between gap-3')}>
                     <div>
-                        <h2 id="settings-config-state" className={sectionTitle}>
-                            {t('settingsHub.configState')}
+                        <h2 id="settings-global-state" className={sectionTitle}>
+                            {t('settingsHub.globalState')}
                         </h2>
-                        <p className="text-sm text-ink-600 dark:text-ink-350">{t('settingsHub.configStateHint')}</p>
+                        <p className="text-sm text-ink-600 dark:text-ink-350">{t('settingsHub.globalStateHint', { count: visible.length })}</p>
                     </div>
-                    <ProgressBar value={done} max={checklist.length} className="h-2" />
+                    <ProgressBar value={visible.length - toVerify} max={Math.max(visible.length, 1)} className="h-2" />
                     <div className="flex items-center justify-between gap-2 text-sm">
-                        <span className="font-semibold text-ink-900 dark:text-ink-50">{t('settingsHub.configCount', { done, total: checklist.length })}</span>
+                        <span className="font-semibold text-ink-900 dark:text-ink-50">
+                            {t('settingsHub.globalStateCount', { upToDate: visible.length - toVerify, toVerify })}
+                        </span>
                         {!brandingComplete && hasPermission(user, 'agencies.manage') && (
                             <Link to="/settings/branding" className="font-semibold text-brand-700 underline-offset-4 hover:underline dark:text-brand-300">
                                 {t('settingsHub.complete')}
@@ -256,8 +336,19 @@ export default function SettingsPage() {
                     );
                 })
             )}
+
+            {canSeeRecentChanges && <RecentChangesPanel logs={recentChanges} />}
         </div>
     );
+}
+
+/** Règle générique (CLAUDE.md §2 « Hub — badges de statut ») : aucun statut fabriqué —
+ * "Modifié" si l'entrée d'audit la plus récente date de moins de 48h, sinon "À jour". */
+function recencyStatus(createdAt: string, t: (key: string, vars?: Record<string, string | number>) => string): { tone: Tone; label: string } {
+    const hoursAgo = (Date.now() - new Date(createdAt).getTime()) / 3_600_000;
+    return hoursAgo < 48
+        ? { tone: 'sky', label: t('settingsHub.status.recentlyModified') }
+        : { tone: 'emerald', label: t('settingsHub.status.upToDate') };
 }
 
 function CategoryCard({ category, updatedLabel }: { category: Category; updatedLabel: string | null }) {
@@ -283,5 +374,39 @@ function CategoryCard({ category, updatedLabel }: { category: Category; updatedL
                 </span>
             </div>
         </Link>
+    );
+}
+
+/** Panneau « Dernières modifications » (node 25:12184) : vraies entrées du journal
+ * d'audit générique, pas une liste fabriquée — voir GET /settings/recent-changes. */
+function RecentChangesPanel({ logs }: { logs: AuditLog[] }) {
+    const { t } = useI18n();
+    const { money, dateTime } = useFormat();
+
+    return (
+        <section aria-labelledby="settings-recent-changes" className={cx(cardPadded, 'space-y-3')}>
+            <div className="flex items-center justify-between gap-2">
+                <h2 id="settings-recent-changes" className={sectionTitle}>
+                    {t('settingsHub.recentChanges.title')}
+                </h2>
+                <Link to="/audit-logs" className="text-sm font-semibold text-brand-700 hover:underline dark:text-brand-300">
+                    {t('settingsHub.recentChanges.viewAll')}
+                </Link>
+            </div>
+            {logs.length === 0 ? (
+                <p className="text-sm text-ink-600 dark:text-ink-350">{t('settingsHub.recentChanges.none')}</p>
+            ) : (
+                <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                    {logs.map((log) => (
+                        <li key={log.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                            <span className="w-32 shrink-0 text-xs text-ink-500 dark:text-ink-400">{dateTime(log.created_at)}</span>
+                            <Pill tone="neutral">{auditTypeLabel(log.auditable_type, t)}</Pill>
+                            <span className="flex-1 font-medium text-ink-900 dark:text-white">{auditLogLabel(log, t, money)}</span>
+                            <span className="text-xs text-ink-500 dark:text-ink-400">{log.user?.name ?? t('order.audit.systemActor')}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </section>
     );
 }

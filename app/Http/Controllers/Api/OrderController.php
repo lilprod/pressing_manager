@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Requests\Order\StoreOrderRequest;
 use App\Models\Agency;
+use App\Models\AgencySetting;
 use App\Models\Client;
 use App\Models\Invoice;
 use App\Models\Order;
@@ -115,8 +116,9 @@ class OrderController extends ApiController
         }
 
         $agency = Agency::findOrFail($agencyId);
+        $agencySettings = AgencySetting::forAgency($agencyId);
 
-        $order = DB::transaction(function () use ($data, $agencyId, $agency, $request) {
+        $order = DB::transaction(function () use ($data, $agencyId, $agency, $agencySettings, $request) {
             $order = Order::create([
                 'agency_id' => $agencyId,
                 'client_id' => $data['client_id'],
@@ -197,8 +199,20 @@ class OrderController extends ApiController
                 $total += $unitPrice * $quantity;
             }
 
+            // Montant minimum configurable (« Paramètres opérationnels ») : plancher
+            // honnête, rejette avant toute facturation plutôt qu'après coup.
+            if ($agencySettings->minimum_order_amount !== null && $total < $agencySettings->minimum_order_amount) {
+                throw new HttpException(422, "Le montant du dépôt ({$total} FCFA) est sous le minimum configuré ({$agencySettings->minimum_order_amount} FCFA).");
+            }
+
             $order->total_amount = $total;
             if ($order->promised_at === null) {
+                // Délai configuré par agence (classique/express) comme PLANCHER, pas un
+                // remplacement : ne raccourcit jamais une promesse déjà plus longue
+                // dérivée du catalogue (Service::estimated_duration_hours).
+                $isExpress = $data['is_express'] ?? false;
+                $configuredDelay = $isExpress ? $agencySettings->express_delay_hours : $agencySettings->standard_delay_hours;
+                $maxDurationHours = max($maxDurationHours, $configuredDelay ?? 0);
                 $order->promised_at = now()->addHours($maxDurationHours);
             }
             $order->save();
@@ -239,6 +253,10 @@ class OrderController extends ApiController
             'washer', 'sorter',
         );
         $order->setAttribute('balance_due', $this->balanceDue($order));
+        // Codes dépôt (« Paramètres opérationnels ») : couche d'affichage uniquement,
+        // appliquée ici (fiche dépôt + ticket imprimé) — pas sur les listes paginées,
+        // pour éviter un N+1 sur AgencySetting à chaque ligne (voir CLAUDE.md).
+        $order->setAttribute('order_number_formatted', $order->agency->formatOrderNumber($order->order_number));
 
         return response()->json($order);
     }

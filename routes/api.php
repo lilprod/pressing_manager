@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AgencyController;
+use App\Http\Controllers\Api\AgencySettingController;
 use App\Http\Controllers\Api\AtelierController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuditLogController;
@@ -107,11 +108,19 @@ Route::middleware(['auth:sanctum', 'license', 'pressing'])->group(function () {
     Route::get('/agencies/{agency}', [AgencyController::class, 'show']);
     Route::post('/agencies', [AgencyController::class, 'store']);
     Route::patch('/agencies/{agency}', [AgencyController::class, 'update']);
+    Route::get('/agencies/{agency}/settings', [AgencySettingController::class, 'show']);
+    Route::patch('/agencies/{agency}/settings', [AgencySettingController::class, 'update']);
 
     Route::get('/multi-agencies', [MultiAgencyController::class, 'overview']);
     Route::get('/multi-agencies/{agency}', [MultiAgencyController::class, 'show']);
 
     Route::post('/settings', [SettingsController::class, 'update']);
+    Route::get('/settings/recent-changes', [SettingsController::class, 'recentChanges']);
+    Route::patch('/settings/draft', [SettingsController::class, 'saveDraft']);
+    Route::post('/settings/draft/discard', [SettingsController::class, 'discardDraft']);
+    Route::post('/settings/publish', [SettingsController::class, 'publish']);
+    Route::get('/settings/versions', [SettingsController::class, 'versions']);
+    Route::post('/settings/versions/{version}/restore', [SettingsController::class, 'restoreVersion']);
 
     Route::get('/license', [LicenseController::class, 'show']);
     Route::get('/license/history', [LicenseController::class, 'history']);

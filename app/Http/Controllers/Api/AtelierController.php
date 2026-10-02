@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Requests\Atelier\UpdateOrderPriorityRequest;
 use App\Http\Requests\Atelier\UpdateOrderResponsablesRequest;
 use App\Models\Agency;
+use App\Models\AgencySetting;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\AtelierBoardService;
@@ -101,10 +102,16 @@ class AtelierController extends ApiController
                 : ['unit' => 'articles', 'value' => (int) $order->items->sum('quantity')]);
         });
 
+        $agencySettings = AgencySetting::forAgency($agencyId);
+
         return response()->json([
             'capacity' => $agency->workshop_capacity ?? config('atelier.default_capacity'),
             'active_count' => $activeCount,
             'orders' => $orders->values(),
+            // « Cycle atelier » (Paramètres opérationnels) : masque les champs responsable
+            // correspondants côté front quand l'étape est désactivée pour cette agence.
+            'washer_step_enabled' => $agencySettings->washer_step_enabled,
+            'sorter_step_enabled' => $agencySettings->sorter_step_enabled,
         ]);
     }
 

@@ -144,7 +144,7 @@ export default function TicketFacturePage() {
 
             <PageHeader
                 title={t('documents.title')}
-                subtitle={`${t('order.number')}${order.order_number} — ${order.client?.first_name} ${order.client?.last_name}`}
+                subtitle={`${t('order.number')}${order.order_number_formatted ?? order.order_number} — ${order.client?.first_name} ${order.client?.last_name}`}
                 icon={Receipt}
                 actions={
                     <>

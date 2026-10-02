@@ -3,6 +3,7 @@
 namespace Tests\Feature\Orders;
 
 use App\Models\Agency;
+use App\Models\AgencySetting;
 use App\Models\Client;
 use App\Models\Order;
 use App\Models\Service;
@@ -320,5 +321,73 @@ class OrderCreationTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('washer.name', $washer->name);
+    }
+
+    /** « Paramètres opérationnels » (CLAUDE.md « Opérationnel ») : standard_delay_hours
+     * agit comme un PLANCHER — il relève promised_at quand le catalogue promettait moins,
+     * mais ne raccourcit jamais une promesse déjà plus longue (voir le test suivant). */
+    public function test_the_configured_standard_delay_raises_promised_at_when_the_catalog_promises_less(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        AgencySetting::forAgency($agency->id)->update(['standard_delay_hours' => 72]);
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['estimated_duration_hours' => 6]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $this->travelTo(now()->startOfSecond());
+        $frozenNow = now();
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 1]],
+        ]);
+
+        $response->assertCreated();
+        $this->assertTrue($frozenNow->clone()->addHours(72)->equalTo($response->json('promised_at')));
+    }
+
+    public function test_the_configured_delay_never_shortens_a_longer_catalog_promise(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        AgencySetting::forAgency($agency->id)->update(['standard_delay_hours' => 24]);
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['estimated_duration_hours' => 96]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $this->travelTo(now()->startOfSecond());
+        $frozenNow = now();
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 1]],
+        ]);
+
+        $response->assertCreated();
+        $this->assertTrue($frozenNow->clone()->addHours(96)->equalTo($response->json('promised_at')));
+    }
+
+    /** Montant minimum configurable (EF gap « Paramètres opérationnels »), rejette avant
+     * toute facturation. */
+    public function test_an_order_below_the_configured_minimum_amount_is_rejected(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        AgencySetting::forAgency($agency->id)->update(['minimum_order_amount' => 5000]);
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 2]],
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertSame(0, Order::count());
     }
 }

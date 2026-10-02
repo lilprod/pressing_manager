@@ -3,6 +3,7 @@
 namespace Tests\Feature\Pickups;
 
 use App\Models\Agency;
+use App\Models\AgencySetting;
 use App\Models\Client;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -158,6 +159,30 @@ class PickupTest extends TestCase
 
         $response->assertStatus(422);
         $this->assertSame(0, $item->refresh()->quantity_delivered);
+    }
+
+    /** « Paramètres opérationnels » (CLAUDE.md « Opérationnel ») : EF-RET-05, le blocage
+     * est désormais désactivable par agence, sans toucher au comportement par défaut. */
+    public function test_pickup_is_not_blocked_when_the_agency_disables_the_unpaid_block(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        AgencySetting::forAgency($agency->id)->update(['block_pickup_if_unpaid' => false]);
+        $accueil = $this->makeUser('accueil', $agency);
+        $order = $this->makeReadyOrder($agency, quantity: 1, unitPrice: 2000);
+        $item = $order->items()->first();
+        $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/invoice")->assertCreated();
+
+        $response = $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/pickups", [
+            'recipient_type' => 'client',
+            'recipient_name' => 'Aminata Koné',
+            'condition_status' => 'conforme',
+            'items' => [['order_item_id' => $item->id, 'quantity' => 1]],
+        ]);
+
+        $response->assertCreated();
+        $this->assertSame(1, $item->refresh()->quantity_delivered);
+        $this->assertDatabaseHas('order_pickups', ['order_id' => $order->id, 'balance_overridden' => true, 'override_reason' => null]);
     }
 
     public function test_collecting_the_full_balance_unblocks_the_pickup(): void

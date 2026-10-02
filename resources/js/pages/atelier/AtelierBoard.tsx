@@ -484,28 +484,32 @@ export default function AtelierBoard() {
 
                                         {editingResponsables ? (
                                             <div className="space-y-3">
-                                                <div>
-                                                    <label className={labelClass}>{t('atelier.detail.washer')}</label>
-                                                    <select value={washerDraft} onChange={(e) => setWasherDraft(e.target.value ? Number(e.target.value) : '')} className={select}>
-                                                        <option value="">{t('atelier.detail.unassigned')}</option>
-                                                        {staff.map((s) => (
-                                                            <option key={s.id} value={s.id}>
-                                                                {s.name}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label className={labelClass}>{t('atelier.detail.sorter')}</label>
-                                                    <select value={sorterDraft} onChange={(e) => setSorterDraft(e.target.value ? Number(e.target.value) : '')} className={select}>
-                                                        <option value="">{t('atelier.detail.unassigned')}</option>
-                                                        {staff.map((s) => (
-                                                            <option key={s.id} value={s.id}>
-                                                                {s.name}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                </div>
+                                                {board?.washer_step_enabled !== false && (
+                                                    <div>
+                                                        <label className={labelClass}>{t('atelier.detail.washer')}</label>
+                                                        <select value={washerDraft} onChange={(e) => setWasherDraft(e.target.value ? Number(e.target.value) : '')} className={select}>
+                                                            <option value="">{t('atelier.detail.unassigned')}</option>
+                                                            {staff.map((s) => (
+                                                                <option key={s.id} value={s.id}>
+                                                                    {s.name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
+                                                {board?.sorter_step_enabled !== false && (
+                                                    <div>
+                                                        <label className={labelClass}>{t('atelier.detail.sorter')}</label>
+                                                        <select value={sorterDraft} onChange={(e) => setSorterDraft(e.target.value ? Number(e.target.value) : '')} className={select}>
+                                                            <option value="">{t('atelier.detail.unassigned')}</option>
+                                                            {staff.map((s) => (
+                                                                <option key={s.id} value={s.id}>
+                                                                    {s.name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
                                                 <div className="flex gap-2">
                                                     <button type="button" disabled={actionBusy} onClick={() => void saveResponsables(detailOrder.id)} className={button('primary', 'sm')}>
                                                         {actionBusy && <Spinner className="h-3.5 w-3.5" />}
@@ -518,14 +522,18 @@ export default function AtelierBoard() {
                                             </div>
                                         ) : (
                                             <dl className="space-y-2 text-sm">
-                                                <div className="flex items-center justify-between">
-                                                    <dt className="text-ink-500 dark:text-ink-400">{t('atelier.detail.washer')}</dt>
-                                                    <dd className="font-medium text-ink-800 dark:text-ink-100">{detailOrder.washer?.name ?? t('atelier.card.notAssigned')}</dd>
-                                                </div>
-                                                <div className="flex items-center justify-between">
-                                                    <dt className="text-ink-500 dark:text-ink-400">{t('atelier.detail.sorter')}</dt>
-                                                    <dd className="font-medium text-ink-800 dark:text-ink-100">{detailOrder.sorter?.name ?? t('atelier.card.notAssigned')}</dd>
-                                                </div>
+                                                {board?.washer_step_enabled !== false && (
+                                                    <div className="flex items-center justify-between">
+                                                        <dt className="text-ink-500 dark:text-ink-400">{t('atelier.detail.washer')}</dt>
+                                                        <dd className="font-medium text-ink-800 dark:text-ink-100">{detailOrder.washer?.name ?? t('atelier.card.notAssigned')}</dd>
+                                                    </div>
+                                                )}
+                                                {board?.sorter_step_enabled !== false && (
+                                                    <div className="flex items-center justify-between">
+                                                        <dt className="text-ink-500 dark:text-ink-400">{t('atelier.detail.sorter')}</dt>
+                                                        <dd className="font-medium text-ink-800 dark:text-ink-100">{detailOrder.sorter?.name ?? t('atelier.card.notAssigned')}</dd>
+                                                    </div>
+                                                )}
                                             </dl>
                                         )}
                                     </div>

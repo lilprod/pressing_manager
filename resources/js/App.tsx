@@ -40,6 +40,7 @@ import InvoicesOutstandingPage from './pages/InvoicesOutstandingPage';
 import SettingsPage from './pages/SettingsPage';
 import BrandingSettingsPage from './pages/settings/BrandingSettingsPage';
 import SecuritySettingsPage from './pages/settings/SecuritySettingsPage';
+import OperationalSettingsPage from './pages/settings/OperationalSettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import UsersPage from './pages/UsersPage';
 import RolesPermissionsPage from './pages/RolesPermissionsPage';
@@ -150,6 +151,7 @@ export default function App() {
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/settings/branding" element={<BrandingSettingsPage />} />
                     <Route path="/settings/security" element={<SecuritySettingsPage />} />
+                    <Route path="/settings/operational" element={<OperationalSettingsPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
                     <Route path="/users" element={<UsersPage />} />
                     <Route path="/roles-permissions" element={<RolesPermissionsPage />} />

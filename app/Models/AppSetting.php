@@ -2,12 +2,18 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AppSetting extends Model
 {
+    use Auditable;
+
     protected $fillable = [
-        'pressing_id', 'pressing_name', 'address', 'phone', 'email', 'tax_id', 'logo_path', 'favicon_path',
+        'pressing_id', 'pressing_name', 'address', 'phone', 'email', 'tax_id', 'website', 'legal_notice',
+        'logo_path', 'favicon_path', 'primary_color', 'secondary_color', 'monogram',
+        'ticket_footer', 'ticket_conditions', 'draft_data', 'draft_saved_at',
         'password_expiry_days', 'password_expiry_warning_days', 'session_timeout_minutes',
         'password_min_length', 'password_require_uppercase', 'password_require_number', 'password_require_symbol',
     ];
@@ -22,7 +28,14 @@ class AppSetting extends Model
             'password_require_uppercase' => 'boolean',
             'password_require_number' => 'boolean',
             'password_require_symbol' => 'boolean',
+            'draft_data' => 'array',
+            'draft_saved_at' => 'datetime',
         ];
+    }
+
+    public function versions(): HasMany
+    {
+        return $this->hasMany(AppSettingVersion::class)->latest('created_at');
     }
 
     /**
@@ -37,5 +50,11 @@ class AppSetting extends Model
         // sans ce rechargement, l'instance en mémoire les aurait à null.
         return static::query()->where('pressing_id', $pressingId)->first()
             ?? static::create(['pressing_id' => $pressingId, 'pressing_name' => 'Pressing Manager'])->refresh();
+    }
+
+    /** Scopé par pressing_id, pas agency_id — pas d'agence à rattacher. */
+    protected function auditAgencyId(): ?int
+    {
+        return null;
     }
 }

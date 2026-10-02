@@ -257,8 +257,12 @@ class MultiAgencyTest extends TestCase
         $response = $this->actingAs($admin)->getJson("/api/multi-agencies/{$agency->id}");
 
         $response->assertOk();
-        $this->assertNotEmpty($response->json('recent_activity'));
-        $this->assertSame('Order', $response->json('recent_activity.0.auditable_type'));
+        $types = collect($response->json('recent_activity'))->pluck('auditable_type');
+        // Agency journalise désormais aussi ses propres changements (ex. création de
+        // l'agence elle-même) — on vérifie que l'entrée Order est bien présente, pas
+        // qu'elle est la toute première (plusieurs entrées peuvent partager le même
+        // timestamp à la seconde près dans un test).
+        $this->assertContains('Order', $types);
     }
 
     public function test_cash_flow_net_excludes_pending_cash_movements(): void

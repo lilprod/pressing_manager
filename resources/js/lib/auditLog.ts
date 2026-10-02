@@ -13,6 +13,9 @@ const TYPE_LABEL_KEYS: Record<string, string> = {
     CashMovement: 'audit.type.cashMovement',
     CashClosure: 'audit.type.cashClosure',
     StockMovement: 'audit.type.stockMovement',
+    Agency: 'audit.type.agency',
+    AppSetting: 'audit.type.appSetting',
+    AgencySetting: 'audit.type.agencySetting',
 };
 
 const PAYMENT_METHOD_KEYS: Record<string, string> = {

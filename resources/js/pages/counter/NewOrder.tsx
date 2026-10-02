@@ -11,7 +11,7 @@ import { readCachedTreatmentTypes, writeCachedTreatmentTypes } from '../../lib/t
 import { readRecentClients, rememberClients } from '../../lib/recentClientsCache';
 import { syncEvents } from '../../lib/sync';
 import { categoryMeta } from '../../lib/serviceCategory';
-import type { Client, IntakeCondition, Order, Service, ServiceCategory, TreatmentType } from '../../types';
+import type { AgencySettings, Client, IntakeCondition, Order, Service, ServiceCategory, TreatmentType } from '../../types';
 import {
     Award,
     Building2,
@@ -87,6 +87,7 @@ export default function NewOrder() {
     const agencyId = user?.agency_id ?? activeAgencyId;
 
     const [services, setServices] = useState<(Service & { effective_price: number })[]>([]);
+    const [agencySettings, setAgencySettings] = useState<AgencySettings | null>(null);
     const [intakeConditions, setIntakeConditions] = useState<IntakeCondition[]>(readCachedIntakeConditions());
     const [treatmentTypes, setTreatmentTypes] = useState<TreatmentType[]>(readCachedTreatmentTypes());
     const [expandedLine, setExpandedLine] = useState<number | null>(null);
@@ -117,6 +118,16 @@ export default function NewOrder() {
             .catch(() => {
                 // Hors-ligne : on garde le catalogue mis en cache lors du dernier chargement réussi.
             });
+    }, [agencyId]);
+
+    // Réglages opérationnels par agence (« Paramètres opérationnels ») : seul le seuil
+    // d'utilisation de la fidélité est consommé ici (gate la remise auto ci-dessous).
+    useEffect(() => {
+        if (!agencyId) return;
+        api
+            .get<AgencySettings>(`/agencies/${agencyId}/settings`)
+            .then(setAgencySettings)
+            .catch(() => setAgencySettings(null));
     }, [agencyId]);
 
     useEffect(() => {
@@ -204,8 +215,12 @@ export default function NewOrder() {
     useEffect(() => {
         if (discountEdited) return;
         const rate = selectedClient?.loyalty_discount_rate ?? 0;
-        setDiscount(rate > 0 ? Math.round(total * rate) : 0);
-    }, [selectedClient, total, discountEdited]);
+        // Seuil d'utilisation configurable par agence (« Paramètres opérationnels ») :
+        // pas de remise auto tant que le client n'a pas atteint le seuil de points requis.
+        const threshold = agencySettings?.loyalty_redemption_threshold ?? 0;
+        const meetsThreshold = (selectedClient?.loyalty_points ?? 0) >= threshold;
+        setDiscount(rate > 0 && meetsThreshold ? Math.round(total * rate) : 0);
+    }, [selectedClient, total, discountEdited, agencySettings]);
 
     // Même formule que InvoiceService::createFromOrder côté back, pour que le total annoncé
     // au comptoir corresponde exactement à celui de la facture générée ensuite (TVA incluse).

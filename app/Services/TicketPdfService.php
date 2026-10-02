@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AppSetting;
 use App\Models\Order;
 use Barryvdh\DomPDF\Facade\Pdf;
 
@@ -15,7 +16,13 @@ class TicketPdfService
     public function render(Order $order): string
     {
         $order->loadMissing('items.service', 'items.treatmentType', 'client', 'agency');
+        $orderNumberFormatted = $order->agency->formatOrderNumber($order->order_number);
+        $settings = AppSetting::current($order->agency->pressing_id);
 
-        return Pdf::loadView('tickets.pdf', ['order' => $order])->output();
+        return Pdf::loadView('tickets.pdf', [
+            'order' => $order,
+            'orderNumberFormatted' => $orderNumberFormatted,
+            'settings' => $settings,
+        ])->output();
     }
 }

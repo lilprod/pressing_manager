@@ -108,9 +108,10 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 08 Rapports & bilans | Rapports et bilans | `pages/KpiPage.tsx` (route `/kpi`, libellé nav « Rapports & bilans ») | **fait** (2026-09-30) — filtres période + raccourcis, 4 KPI avec variation vs période précédente, tableau « Performance des agences », indicateurs opérationnels existants conservés (hors maquette mais déjà exposés par l'API), raccourcis vers les écrans détaillés. Histogramme CA / répartition paiements / synthèse fidélité / planification omis (§2) |
 | 08 Rapports & bilans | Bilan journalier et performance caissiers | — | **non construit** : quasi intégralement dépendant d'agrégats absents (recettes par mode de paiement et par heure, performance par caissier, remises du jour). Les données existantes (clôture de caisse théorique/compté/écart) sont déjà sur `/cash/closures/:id` ; lien depuis « Rapports détaillés ». Voir §2 |
 | 10 Multi-agences | Vue consolidée multi-agences, détail par agence | `pages/multiagency/MultiAgencyOverviewPage.tsx` (route `/multi-agences`), `MultiAgencyDetailPage.tsx` (`/multi-agences/:id`), permission `reports.view` | **fait** (2026-10-01) — KPI réseau, évolution du CA, classement et comparaison inter-agences, alertes opérationnelles, détail par agence (atelier, comparaison au réseau, clients/fidélité, retards/impayés, équipe présente, historique récent) — tout dérivé de données réelles, aucun objectif/cible ni statut « en ligne » fabriqué (détail complet en §2) |
-| 09 Paramètres | Paramètres (hub) | `pages/SettingsPage.tsx` (route `/settings`) | **fait** (2026-09-30) — l'ancien formulaire unique devient un hub : recherche + filtres par groupe, « État de configuration » (checklist d'identité réelle, `lib/brandingChecklist.ts`), cartes vers les écrans existants uniquement (gating par permission, y compris « Agences » vers le CRUD livré en parallèle), « Mis à jour le » via `updated_at` (colonne existante, désormais exposée par `GET /settings`) |
-| 09 Paramètres | Branding du pressing | `pages/settings/BrandingSettingsPage.tsx` (route `/settings/branding`) | **fait** (2026-09-30) — nom, logo, favicon, coordonnées + NIF, aperçu en direct (en-tête app + documents), checklist, barre « non enregistré » ; enregistrement partiel de `/settings` (testé) |
-| 09 Paramètres | Sécurité (politique de mots de passe) | `pages/settings/SecuritySettingsPage.tsx` (route `/settings/security`) | **fait** (2026-09-30) — pas d'écran dédié dans la maquette : mise en page calquée sur « Paramètres opérationnels » (node `25:12525`, champs suffixés + bascules). Les réglages opérationnels eux-mêmes (codes agence, délais, workflow, tarification) n'existent pas (§2) |
+| 09 Paramètres | Paramètres (hub) | `pages/SettingsPage.tsx` (route `/settings`) | **fait, refonte complète livrée** (2026-10-02) — 4 groupes (Structure/Opérations/Finance & services/Plateforme), 16 cartes réelles, panneau « Dernières modifications » (`GET /settings/recent-changes`), « État global » honnête. Détail complet en §2 « Hub Paramètres + Branding + Opérationnel » |
+| 09 Paramètres | Branding du pressing | `pages/settings/BrandingSettingsPage.tsx` (route `/settings/branding`) | **fait, renforcement livré** (2026-10-02) — workflow brouillon/publication/versions restaurables, palette avec validateur de contraste AA (aperçu seul), monogramme, site web, mentions légales, pied/conditions de ticket réellement imprimés. Détail complet en §2 |
+| 09 Paramètres | Sécurité (politique de mots de passe) | `pages/settings/SecuritySettingsPage.tsx` (route `/settings/security`) | **fait** (2026-09-30) — pas d'écran dédié dans la maquette : mise en page calquée sur « Paramètres opérationnels » (node `25:12525`, champs suffixés + bascules) |
+| 09 Paramètres | Paramètres opérationnels | `pages/settings/OperationalSettingsPage.tsx` (route `/settings/operational`) | **fait** (2026-10-02) — réglages par agence (codes dépôt, délais plancher, cycle atelier, tarification, fidélité), tous réellement câblés côté backend (pas un formulaire cosmétique). Détail complet en §2 |
 | 09 Paramètres | Promotions et fidélité | `pages/LoyaltyPage.tsx` (route `/loyalty`) | **fait** (2026-09-30) — volet fidélité seulement : KPI dérivés de la config (paliers actifs, remise max, règle d'acquisition réelle via `loyalty_amount_per_point` exposé par `GET /settings`), paliers éditables en ligne (le `PATCH /loyalty-tiers/{id}` existait sans UI d'édition). Volet promotions entièrement absent du backend (§2) |
 | 09 Paramètres | Notifications | `pages/NotificationsPage.tsx` (route `/notifications`) | **fait** (2026-09-30) — cartes d'état des canaux (comptes réels d'évènements activés, passerelle SMS « non connectée » = état réel), matrice évènement × SMS/e-mail avec interrupteurs, journal filtrable |
 | 11 Équipe | Utilisateurs et équipe | `pages/UsersPage.tsx` (route `/users`) | **fait** (2026-09-30) — annuaire en tableau (`table-fixed`, `overflow-x-auto`) + panneau latéral création/édition (la maquette montre un panneau à côté de la liste, **pas** un écran dédié : la convention `/<ressource>/new` ne s'applique donc pas ; l'ancienne modale d'édition est remplacée par ce panneau), filtre par rôle (serveur), colonne « Dernière activité » = `last_active_at` (max de `personal_access_tokens.last_used_at`, déjà tenu par Sanctum, exposé par `GET /users?full=1`, testé) |
@@ -312,47 +313,44 @@ côté front : chaque élément a été **omis** et attend le backend décrit ic
   existe, il faudrait l'agréger par utilisateur dans un endpoint ; la notion de
   session de caisse par caissier et les objectifs n'existent pas du tout.
 
-**09 Paramètres — hub** (node `25:12184`)
-- Bouton « Historique » et journal « Dernières modifications » (date, détail, auteur,
-  badge) : **revu le 2026-10-01, plus simple que prévu** — pas besoin d'une nouvelle
-  table `settings_audits` dédiée : le système d'audit générique `AuditLog`/`Auditable`
-  existe déjà (voir « Conventions établies » ci-dessus) et couvre exactement ce besoin.
-  Il suffirait d'ajouter `use Auditable;` à `AppSetting` (et `Role`/`Permission` pour
-  le gap équivalent noté en §11 ci-dessous) puis de réutiliser `AuditLogController`/
-  `lib/auditLog.ts` déjà construits pour la fiche dépôt — reste à faire : ajouter
-  `app_setting`/`role` à `AuditLogController::TYPES`, et un lien/filtre dédié sur cet
-  écran vers `/audit-logs?type=app_setting`. Non fait ici (hors scope de cette passe,
-  mais le coût réel est maintenant faible, à reprioriser).
-- Cartes de catégories sans écran/backend, omises : **Numérotation** (hash — préfixes/format des
-  n° de commande et facture ; `OrderNumberGenerator` est codé en dur), **Horaires et
-  délais** (clock-3 — horaires d'ouverture, délais standard/express par défaut),
-  **Promotions** (ticket-percent — voir ci-dessous), **Workflow atelier** (workflow —
-  étapes activables), **Tarifs et devise** (badge-cent — devise/TVA : `tax_rate` vient
-  de `config/invoicing.php`, non éditable), **Paiements** (credit-card — moyens de
-  paiement activés, clés opérateurs Flooz/T-Money : aujourd'hui en `.env`),
-  **Mode hors ligne** (cloud-off — politique de rétention/synchro).
-- Badges d'état et date de mise à jour par catégorie : n'existent que pour les
-  réglages portés par `app_settings` (branding, sécurité). Les autres modules n'ont
-  pas de notion « configuré / à compléter ».
+**09 Paramètres — hub** (node `25:12184`) — **fait** (2026-10-02, détail complet plus
+bas dans ce fichier « Hub Paramètres + Branding + Opérationnel ») :
+- ~~Bouton « Historique » et journal « Dernières modifications »~~ **fait** — nouvel
+  endpoint `GET /settings/recent-changes`, `Agency`/`AppSetting` gagnent
+  `use Auditable;`.
+- ~~Cartes de catégories sans écran/backend~~ en grande partie refermées :
+  **Numérotation** → carte « Codes dépôt » (`/settings/operational`, réel),
+  **Horaires et délais** → carte « Délais de traitement » (même écran),
+  **Workflow atelier** → carte « Cycle atelier » (même écran), **Mode hors ligne**
+  → carte affichage seul (même écran, valeurs stockées mais pas encore appliquées,
+  voir plus bas). Restent omises, inchangé : **Promotions** (chantier à part
+  entière, voir ci-dessous), **Paiements** (moyens de paiement toujours en `.env`),
+  **Tarifs et devise** (`tax_rate` toujours `config/invoicing.php`, non éditable).
+- ~~Badges d'état et date de mise à jour par catégorie~~ **fait** — généralisés à
+  toute catégorie reliée à un type audité (badge « Modifié »/« À jour » honnête,
+  voir détail plus bas), pas seulement branding/sécurité.
 
-**09 Paramètres opérationnels** (node `25:12525`) — écran non construit, aucun champ
-en base : codes agence (préfixe + séquence + aperçu, par agence), délais (standard,
-express, retrait max en jours) + bascules, options atelier et aperçu du workflow à
-6 étapes, mode de tarification (3 options) + prix/frais (frais express, livraison,
-minimum de commande), rétention hors ligne, journal des modifications. Il faudrait
-une table de réglages par agence (`agency_settings`) + endpoints `GET/PATCH
-/agencies/{id}/settings`.
+**09 Paramètres opérationnels** (node `25:12525`) — **fait** (2026-10-02),
+`pages/settings/OperationalSettingsPage.tsx` (route `/settings/operational`),
+table `agency_settings`. Détail complet plus bas dans ce fichier. Restent omis :
+mode de tarification à 3 options façon maquette (un seul montant minimum réel
+existe, pas de sélecteur de stratégie tarifaire), aperçu du workflow à 6 étapes
+(reste sur les 4 colonnes réelles d'`AtelierBoard.tsx`).
 
-**09 Branding du pressing** (node `72:21182`)
-- Palette personnalisable (couleur principale / secondaire + contrôle
-  d'accessibilité) : pas de colonnes `primary_color`/`accent_color` ; les couleurs
-  sont des tokens Tailwind compilés. Exigerait des variables CSS runtime + validation
-  de contraste côté API.
-- Champ « Site web » (globe) et zone de texte (mentions / pied de page des documents) :
-  colonnes `website` et `document_footer` absentes d'`app_settings`.
-- « Modèles de documents » (ticket, facture : statut + 2 options) : pas de
-  paramétrage des gabarits (format papier, mentions, afficher/masquer le QR…).
-- Aperçu « mobile client » : l'app mobile client (section 14) n'existe pas.
+**09 Branding du pressing** (node `72:21182`) — **fait, renforcement livré**
+(2026-10-02, détail complet plus bas) :
+- ~~Palette personnalisable + contrôle d'accessibilité~~ **fait** —
+  `primary_color`/`secondary_color` + validateur de contraste WCAG AA en direct,
+  **aperçu de cette page uniquement** (ne reteinte pas l'app en production,
+  chantier CSS runtime à part, toujours non traité).
+- ~~Champ « Site web » et mentions/pied de page~~ **fait** — `website`,
+  `legal_notice`, `ticket_footer`/`ticket_conditions` (réellement imprimés sur le
+  ticket).
+- « Modèles de documents » (format papier, afficher/masquer le QR…) : toujours
+  **omis** — un seul format réel existe par document, pas de paramétrage de
+  gabarit fabriqué.
+- Aperçu « mobile client » : toujours **omis**, l'app mobile client (section 14)
+  n'existe pas.
 
 **09 Promotions et fidélité** (node `72:20021`)
 - Tout le volet **promotions** : formulaire de création (code, type/valeur de remise,
@@ -1364,6 +1362,170 @@ contrôleurs, chantier de sécurité/isolation avant d'être fonctionnel) :
   poussés périodiquement, `pressing_report_logs` inchangé), personnalisation de
   `roles`/`permissions` par pressing, écran de transfert d'un pressing existant
   vers ce modèle hébergé (seul un pressing *créé* via ce flux en bénéficie).
+
+**Hub Paramètres + Branding (brouillon/publication) + Paramètres opérationnels** —
+fait le 2026-10-02, sur 3 captures Figma fournies par l'utilisateur (Branding,
+Paramètres opérationnels, Hub) avec la demande « vérifie si ces vues sont
+effectives… pas d'écart ». Audit direct du code (pas supposé) a confirmé des écarts
+réels sur les trois écrans ; l'utilisateur a confirmé vouloir combler les trois
+(« hub, branding et opérationnel »), tranché deux points via `AskUserQuestion`
+(Branding avec un vrai workflow brouillon/publication/versions plutôt qu'un
+enregistrement direct ; les trois chantiers enchaînés sans pause intermédiaire —
+dérogation explicite à la discipline habituelle « un chantier → stop », un seul
+point de validation à la fin des trois) puis approuvé un plan détaillé en mode plan
+avant tout code.
+
+- **Hub « Paramètres »** (`pages/SettingsPage.tsx`, inchangé en route) : nouvelle
+  taxonomie à 4 groupes (Structure/Opérations/Finance & services/Plateforme, 16
+  cartes réelles au total — coïncidence avec le compte de la maquette, pas forcé).
+  Chaque carte pointe vers un écran qui existe réellement (y compris les 3 cartes
+  nouvellement routées vers `/settings/operational` : Codes dépôt, Délais de
+  traitement, Cycle atelier, Tarification) ; carte « Paiements » explicitement
+  **omise** (aucune config de moyens de paiement n'existe, toujours `.env`), carte
+  « Promotions » **omise** (chantier à part entière déjà documenté, bien plus gros
+  qu'un écart de présentation).
+  - **Badges honnêtes** : `Agency` et `AppSetting` gagnent `use Auditable;` (
+    `auditAgencyId()` retourne respectivement `$this->id` et `null`, ce dernier
+    pressing-scopé et non agence-scopé). Règle générique : badge « Modifié » (bleu)
+    si la dernière entrée `AuditLog` du type associé date de < 48h, sinon « À jour »
+    (vert) avec la date réelle ; Branding garde en plus son badge « À compléter »
+    piloté par la checklist réelle. Catégorie sans type audité associé → pas de
+    badge (jamais de statut fabriqué).
+  - **Panneau « Dernières modifications »** : nouvel endpoint dédié
+    `GET /settings/recent-changes` (`SettingsController::recentChanges()`),
+    **volontairement pas** une réutilisation d'`AuditLogController::index()` — son
+    filtre `whereIn('agency_id', $agencyIds)` exclurait silencieusement les lignes
+    `AppSetting` (`agency_id` toujours `null`, scoping par `pressing_id`). Requête
+    dédiée à 3 branches (Agency du pressing courant / AppSetting du pressing / —
+    AgencySetting livré ci-dessous), triée desc, limite 5, réutilise le
+    `decorate()`/`auditLogLabel()` déjà construits pour la fiche dépôt.
+  - **Bug trouvé par capture Playwright, pas par les tests du premier jet** :
+    `whereIn('agency_id', $agencyIds)` sans filtre `auditable_type` sur la branche
+    Agency laissait fuiter n'importe quel modèle audité partageant ce même
+    `agency_id` (`Shift`, `Order`…) dans le panneau — corrigé en exigeant
+    `auditable_type = Agency::class` sur cette branche ; test de régression dédié
+    (`test_it_never_shows_unrelated_audited_types_sharing_the_same_agency`, utilise
+    `Order::factory()` pour le prouver).
+  - **« État global »** remplace l'ancienne « État de configuration » : total réel
+    de catégories visibles pour l'utilisateur courant (gating par permission), « à
+    vérifier » = nombre avec badge « À compléter » (Branding seul au départ, honnête
+    plutôt que de fabriquer d'autres conditions de vérification).
+- **Branding du pressing** (`pages/settings/BrandingSettingsPage.tsx`) — premier
+  écran de l'app avec un vrai cycle **brouillon → publication → historique
+  restaurable** (partout ailleurs c'est un enregistrement direct) :
+  - **Modèle de données** : `app_settings` gagne `draft_data` (JSON, fusionné pas
+    remplacé à chaque frappe — `PATCH /settings/draft`, debounce 800ms côté front)
+    et `draft_saved_at` ; nouvelle table `app_setting_versions` (append-only, même
+    principe d'immuabilité que `AuditLog` — jamais de ligne modifiée, chaque
+    publication ou restauration **crée** une nouvelle version,
+    `restored_from_version_id` chaîne les restaurations sans jamais réécrire
+    l'historique). `POST /settings/publish` applique `draft_data` sur les colonnes
+    live, crée un snapshot, vide le brouillon, retourne `affected_agencies_count`
+    (compte réel d'agences du pressing). `POST /settings/versions/{id}/restore`
+    réapplique un ancien snapshot et enchaîne une nouvelle version (jamais de
+    retour en arrière destructif).
+  - **Nouveaux champs réels** : `primary_color`/`secondary_color` (validées en hex,
+    ratio de contraste calculé en direct côté client — `lib/contrast.ts`, formule
+    WCAG déjà utilisée pour générer les tokens `brand`/`accent` — **aperçu de cette
+    page uniquement**, ne reteinte pas l'app en production, chantier CSS runtime
+    séparé déjà flagué plus haut dans ce fichier), `monogram`, `website`,
+    `legal_notice`, `ticket_footer`/`ticket_conditions` (**réellement injectés**
+    dans `resources/views/tickets/pdf.blade.php` et `TicketReceiptContent.tsx`,
+    pas juste stockés — remplacent l'ancien texte statique « Merci de votre
+    confiance. »).
+  - **Décisions de scope explicites** : logo/favicon restent hors du mécanisme de
+    brouillon (upload immédiat comme avant — un cycle brouillon sur un fichier
+    aurait exigé une distinction fichier-brouillon/fichier-publié jugée hors
+    scope) ; pas de sélecteur de gabarit de document fabriqué (un seul format réel
+    existe par document, ticket thermique et facture A4) ; bloc « Avant
+    publication » est un texte informatif statique honnête (les documents et
+    l'interface lisent réellement tous la même ligne `app_settings`, donc
+    l'affirmation est vraie sans vérification canal par canal fabriquée).
+- **Paramètres opérationnels** (`pages/settings/OperationalSettingsPage.tsx`, route
+  `/settings/operational`, nouvel écran — mirrors la mise en page de
+  `SecuritySettingsPage.tsx`, champs suffixés + bascules) — chantier le plus
+  structurant des trois : réglages **réellement câblés**, pas un formulaire
+  cosmétique.
+  - **`AgencySetting`** (nouvelle table, singleton 1:1 par agence, même pattern que
+    `AppSetting::current()` — `forAgency(int $agencyId)` auto-crée avec des
+    défauts sûrs). `block_pickup_if_unpaid` **défaut `true`** — préserve
+    explicitement le comportement historique (toujours bloqué) tant que personne
+    n'a choisi de l'assouplir.
+  - **Câblage réel, pas juste stocké** :
+    - `PickupService::process()` — le blocage de retrait si impayé (codé en dur,
+      toujours actif jusqu'ici — EF-RET-05, gap documenté depuis le chantier
+      Retraits) devient `AgencySetting::forAgency($order->agency_id)
+      ->block_pickup_if_unpaid`. Ferme ce gap.
+    - `OrderController::store()` — `standard_delay_hours`/`express_delay_hours`
+      agissent comme un **plancher** sur `promised_at` (`max()` avec la durée
+      dérivée du catalogue), jamais un remplacement : ne raccourcit jamais une
+      promesse déjà plus longue. `minimum_order_amount` rejette (422) avant toute
+      facturation si le total du dépôt est sous le seuil configuré.
+    - `AtelierController::board()` expose `washer_step_enabled`/
+      `sorter_step_enabled` ; `AtelierBoard.tsx` masque conditionnellement les
+      champs responsable Laveur/Classeur (formulaire et lecture seule) quand
+      l'étape est désactivée pour l'agence.
+    - `Agency::formatOrderNumber()` — couche d'**affichage seul** (préfixe +
+      padding + suffixe), ne touche jamais `order_number` (entier brut, toujours
+      la source de vérité pour le verrouillage de séquence
+      d'`OrderNumberGenerator`). Appliqué **uniquement aux vues à un seul dépôt**
+      (`OrderDetail.tsx`, aperçu/impression du ticket, `TicketFacturePage.tsx` via
+      `order.order_number_formatted` posé par `OrderController::show()`) —
+      **délibérément pas** aux vues en liste (`OrdersList.tsx`, Dashboard,
+      `PickupsList.tsx`…) pour éviter un risque de N+1 sur
+      `AgencySetting::forAgency()`, ni aux PDF de facture déjà émis (immuabilité
+      d'un document financier déjà émis — principe déjà acté dans ce fichier).
+    - **Fidélité** : `loyalty_redemption_threshold` câblé côté **frontend**
+      (`NewOrder.tsx`, l'effet de pré-remplissage de la remise), pas côté backend
+      — `discount_amount` est accepté tel quel par `OrderController::store()`,
+      sans validation serveur contre le taux (architecture déjà en place,
+      confirmée en lisant le code existant avant d'écrire la solution). La remise
+      de palier n'est donc plus pré-appliquée automatiquement que si
+      `client.loyalty_points >= (agencySettings.loyalty_redemption_threshold ??
+      0)`.
+  - **Explicitement affichage seul, pas fabriqué comme « actif »** :
+    `offline_sync_interval_minutes`/`offline_retention_days` sont stockés et
+    affichés avec un texte honnête (« pas encore lues par le module de
+    synchronisation hors ligne ») — `sync.ts` a un `setInterval` au niveau module,
+    hors arbre React ; le rendre configurable est un chantier à part, risque jugé
+    disproportionné pour cette passe.
+  - **Journal des modifications** (carte latérale) : **pas de nouvel endpoint** —
+    réutilise directement `GET /audit-logs?type=agency_setting&agency_id=` (déjà
+    accessible à `agencies.manage`, la même permission qui garde cet écran) plutôt
+    que de dupliquer la logique multi-branches de `recent-changes` ci-dessus
+    (`AgencySetting` a un vrai `agency_id`, contrairement à `AppSetting`, donc le
+    filtre existant d'`AuditLogController::index()` fonctionne sans adaptation).
+- Tests : `tests/Feature/Settings/RecentChangesTest.php` (5), 
+  `tests/Feature/Settings/BrandingDraftPublishTest.php` (7, dont la restauration
+  cross-pressing — piège de fixtures rencontré : `Pressing::factory()->create()`
+  déclenche `PlatformAuditable`, dont la résolution de guard Sanctum sous
+  `actingAs()` peut capter l'utilisateur tenant déjà actif et violer une FK vers
+  `platform_users` — déjà documenté comme limite connue de `actingAs()` pour
+  l'isolation de guards ; corrigé en créant tous les fixtures Pressing/User avant
+  tout `actingAs()`, et en créant l'utilisateur « local » avant le pressing
+  « étranger » pour éviter qu'`UserFactory` ne lui attribue par défaut le mauvais
+  pressing), `tests/Feature/Settings/AgencySettingsTest.php` (6 — singleton,
+  gating, format d'affichage sans toucher la colonne brute), + tests étendus
+  `PickupTest.php` (blocage désactivable), `OrderCreationTest.php` (délai plancher
+  dans les deux sens, montant minimum rejeté). Suite complète 373/373 après ajout
+  (aucune régression). Vérifié aussi par smoke test Playwright bout en bout
+  (navigateur réel, admin connecté) sur les trois écrans, 1440px et 390px :
+  hub (16 cartes, panneau dernières modifications réel) → branding (saisie →
+  bandeau brouillon → publier → « 3 agence(s) impactée(s) » → nouvelle version
+  dans l'historique) → opérationnel (agence sélectionnée dans l'en-tête → aperçu de
+  numérotation live → enregistrer → confirmation).
+- **Hors scope de ces trois chantiers** (décisions documentées, pas des oublis) :
+  réassociation de `AuditLogController::index()` pour couvrir nativement les
+  entités pressing-scopées sans `agency_id` (contournée par l'endpoint dédié du
+  hub plutôt que généralisée — aurait élargi un contrôleur partagé sans besoin
+  prouvé ailleurs) ; retouche du thème runtime de l'app à partir de la palette
+  Branding ; sélecteur de gabarit de document ; onglets Catégories/Tarifs/etc. sur
+  le catalogue (déjà différés précédemment, inchangé) ; câblage réel de la
+  synchronisation hors ligne ; configuration des règles express/premium par
+  article vs traitement (déjà actée comme hors scope dans le chantier Types de
+  traitement) ; refresh en direct du panneau « Dernières modifications » de
+  l'écran opérationnel après un enregistrement sur cette même page (affiche l'état
+  au chargement, comme le panneau équivalent du hub).
 
 ## Conventions établies dans ce projet (à respecter)
 

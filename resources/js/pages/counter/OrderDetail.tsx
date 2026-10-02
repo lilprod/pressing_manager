@@ -131,7 +131,7 @@ export default function OrderDetail() {
                         <div className="flex flex-wrap items-center gap-2">
                             <h1 className="font-display text-2xl font-extrabold text-ink-900 sm:text-3xl dark:text-white">
                                 {t('order.number')}
-                                {order.order_number}
+                                {order.order_number_formatted ?? order.order_number}
                             </h1>
                             <StatusBadge kind="order" status={order.status} size="md" />
                             {order.is_express && (

@@ -29,7 +29,7 @@ export default function TicketReceiptContent({ order }: { order: Order }) {
             <h2 className="text-base font-bold">{t('order.ticket')}</h2>
             <p>
                 {t('order.number')}
-                {order.order_number}
+                {order.order_number_formatted ?? order.order_number}
             </p>
             <p>{dateTime(order.created_at)}</p>
             <p>
@@ -51,6 +51,12 @@ export default function TicketReceiptContent({ order }: { order: Order }) {
             <p className="mt-2 font-semibold">
                 {t('common.total')} : {money(order.total_amount)}
             </p>
+            {(settings?.ticket_conditions || settings?.ticket_footer) && (
+                <div className="mt-3 border-t border-dashed border-black pt-2 text-xs">
+                    {settings.ticket_conditions && <p>{settings.ticket_conditions}</p>}
+                    {settings.ticket_footer && <p className="mt-1 text-center">{settings.ticket_footer}</p>}
+                </div>
+            )}
         </div>
     );
 }

@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Models\Agency;
+use App\Models\AgencySetting;
+use App\Models\AppSetting;
 use App\Models\AuditLog;
 use App\Models\CashClosure;
 use App\Models\CashMovement;
@@ -29,6 +32,9 @@ class AuditLogController extends ApiController
         'cash_movement' => CashMovement::class,
         'cash_closure' => CashClosure::class,
         'stock_movement' => StockMovement::class,
+        'agency' => Agency::class,
+        'app_setting' => AppSetting::class,
+        'agency_setting' => AgencySetting::class,
     ];
 
     /** Journal d'audit global (écran « Audit & logs »). */

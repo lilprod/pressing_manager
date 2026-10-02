@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AgencySetting;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -16,9 +17,11 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
  * agence") : retrait total ou partiel, encaissement du solde restant, et blocage
  * du retrait si le solde n'est pas réglé sauf dérogation explicite et motivée.
  *
- * Le blocage est systématique (pas encore configurable par agence : voir EF-RET-05
- * dans CLAUDE.md, qui dépend d'une table `agency_settings` non construite) — seule
- * une dérogation ponctuelle, tracée sur le retrait, peut le lever.
+ * Le blocage est désormais configurable par agence (`AgencySetting
+ * ::block_pickup_if_unpaid`, défaut true — ferme EF-RET-05, voir CLAUDE.md
+ * « Opérationnel »). Si désactivé, le solde reste affiché mais ne bloque plus le
+ * retrait ; une dérogation ponctuelle, tracée sur le retrait, reste disponible
+ * dans tous les cas.
  */
 class PickupService
 {
@@ -67,7 +70,8 @@ class PickupService
                 $balanceDue = max(0, $balanceDue - $collected);
             }
 
-            if ($balanceDue > 0 && empty($data['override_unpaid'])) {
+            $blockIfUnpaid = AgencySetting::forAgency($order->agency_id)->block_pickup_if_unpaid;
+            if ($blockIfUnpaid && $balanceDue > 0 && empty($data['override_unpaid'])) {
                 throw new HttpException(422, "Retrait bloqué : solde impayé de {$balanceDue} FCFA. Encaissez le solde ou confirmez une dérogation.");
             }
 

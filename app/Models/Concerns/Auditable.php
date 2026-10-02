@@ -31,7 +31,14 @@ trait Auditable
     {
         AuditLog::query()->create([
             'agency_id' => $this->auditAgencyId(),
-            'user_id' => Auth::id(),
+            // Guard explicite (pas Auth::id() nu) : une agence peut être créée par une
+            // requête authentifiée côté plateforme (provisionnement superadmin, guard
+            // `platform`, provider `platform_users`) — `platform_users.id` et `users.id`
+            // sont des séquences indépendantes, écrire l'un dans la FK de l'autre casse
+            // la contrainte (ou pire, désigne silencieusement le mauvais utilisateur
+            // tenant). Le guard `sanctum` (provider `users`) est le seul pertinent ici ;
+            // `null` si l'acteur n'est pas un utilisateur tenant (ex. provisionnement).
+            'user_id' => Auth::guard('sanctum')->id(),
             'action' => static::class.'.'.$action,
             'auditable_type' => static::class,
             'auditable_id' => $this->getKey(),

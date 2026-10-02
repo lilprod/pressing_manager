@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="utf-8">
-    <title>Ticket {{ $order->agency->code ?? '' }}-{{ $order->order_number }}</title>
+    <title>Ticket {{ $order->agency->code ?? '' }}-{{ $orderNumberFormatted }}</title>
     <style>
         @page { margin: 12px; }
         body { font-family: sans-serif; font-size: 11px; color: #222; width: 260px; }
@@ -22,7 +22,7 @@
     @endif
     <hr>
     <p>
-        <strong>Ticket n° {{ $order->order_number }}</strong><br>
+        <strong>Ticket n° {{ $orderNumberFormatted }}</strong><br>
         Date : {{ $order->created_at->format('d/m/Y H:i') }}<br>
         Client : {{ $order->client->first_name }} {{ $order->client->last_name }} ({{ $order->client->phone }})
         @if ($order->promised_at)
@@ -45,7 +45,14 @@
             <td class="right">{{ number_format($order->total_amount, 0, ',', ' ') }} FCFA</td>
         </tr>
     </table>
-    <hr>
-    <p class="muted">Merci de votre confiance.</p>
+    @if ($settings->ticket_conditions || $settings->ticket_footer)
+        <hr>
+        @if ($settings->ticket_conditions)
+            <p class="muted">{{ $settings->ticket_conditions }}</p>
+        @endif
+        @if ($settings->ticket_footer)
+            <p class="muted">{{ $settings->ticket_footer }}</p>
+        @endif
+    @endif
 </body>
 </html>

@@ -4,8 +4,17 @@ export interface AppSettings {
     phone: string | null;
     email: string | null;
     tax_id: string | null;
+    website: string | null;
+    legal_notice: string | null;
     logo_url: string | null;
     favicon_url: string | null;
+    primary_color: string | null;
+    secondary_color: string | null;
+    monogram: string | null;
+    ticket_footer: string | null;
+    ticket_conditions: string | null;
+    draft_data: Partial<AppSettings> | null;
+    draft_saved_at: string | null;
     password_expiry_days: number | null;
     password_expiry_warning_days: number;
     session_timeout_minutes: number | null;
@@ -16,6 +25,14 @@ export interface AppSettings {
     tax_rate: number;
     updated_at: string | null;
     loyalty_amount_per_point: number;
+}
+
+export interface AppSettingVersion {
+    id: number;
+    data: Partial<AppSettings>;
+    published_by: { id: number; name: string } | null;
+    restored_from_version_id: number | null;
+    created_at: string;
 }
 
 export type RoleSlug = 'admin' | 'manager' | 'accueil' | 'technicien' | 'livreur' | 'client';
@@ -52,6 +69,28 @@ export interface Agency {
     is_active: boolean;
     users_count?: number;
     clients_count?: number;
+}
+
+export interface AgencySettings {
+    agency_id: number;
+    order_number_prefix: string | null;
+    order_number_suffix: string | null;
+    order_number_padding: number;
+    standard_delay_hours: number | null;
+    express_delay_hours: number | null;
+    finishing_delay_hours: number | null;
+    allow_immediate_pickup: boolean;
+    block_pickup_if_unpaid: boolean;
+    washer_step_enabled: boolean;
+    sorter_step_enabled: boolean;
+    collection_fee: number | null;
+    delivery_fee: number | null;
+    minimum_order_amount: number | null;
+    loyalty_amount_per_point: number | null;
+    loyalty_redemption_threshold: number | null;
+    offline_sync_interval_minutes: number | null;
+    offline_retention_days: number | null;
+    updated_at: string | null;
 }
 
 export interface User {
@@ -309,6 +348,9 @@ export interface Order {
     client?: Client;
     agency?: Agency;
     order_number: number;
+    /** Préfixe/suffixe/padding configurés par agence (« Codes dépôt ») — présent
+     * uniquement sur GET /orders/{id} (fiche dépôt), pas sur les listes paginées. */
+    order_number_formatted?: string;
     client_local_uuid: string | null;
     sync_status: 'synced' | 'pending' | 'conflict';
     status: OrderStatus;
@@ -353,6 +395,8 @@ export interface AtelierBoardResponse {
     capacity: number;
     active_count: number;
     orders: AtelierCard[];
+    washer_step_enabled: boolean;
+    sorter_step_enabled: boolean;
 }
 
 export interface AuditLog {

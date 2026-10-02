@@ -9,6 +9,7 @@ use App\Models\OrderItem;
 use App\Models\OrderPickup;
 use App\Models\OrderPickupItem;
 use App\Models\User;
+use App\Notifications\PickupCompletedNotification;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -29,6 +30,7 @@ class PickupService
         private readonly OrderItemStatusTransitioner $transitioner,
         private readonly OrderStatusSynchronizer $statusSync,
         private readonly PaymentService $payments,
+        private readonly NotificationService $notifications,
     ) {}
 
     /**
@@ -46,7 +48,7 @@ class PickupService
     public function process(Order $order, array $data, User $actor): OrderPickup
     {
         return DB::transaction(function () use ($order, $data, $actor) {
-            $order->loadMissing('items', 'invoice.payments');
+            $order->loadMissing('items', 'invoice.payments', 'client');
 
             $lines = $this->resolveLines($order, $data['items']);
 
@@ -110,6 +112,9 @@ class PickupService
             }
 
             $this->statusSync->sync($order->fresh());
+
+            $pickup->setRelation('order', $order);
+            $this->notifications->notify($order->agency_id, 'pickup_completed', $order->client, new PickupCompletedNotification($pickup), $order->id);
 
             return $pickup->load('items.orderItem', 'processor');
         });

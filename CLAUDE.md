@@ -488,10 +488,67 @@ existe, pas de sélecteur de stratégie tarifaire), aperçu du workflow à 6 ét
   avec un déblocage immédiat au comptoir) ; la dérogation est accessible à tout
   utilisateur ayant `orders.manage` (pas de second palier de validation manager) ; le
   réceptionnaire est un nom saisi, sans capture de signature (contrairement à
-  `Delivery.signature_path`). **Omis** : chronologie atelier horodatée par étape
-  (nécessite l'agrégat déjà noté en §2 Dashboard) et journal d'audit dédié affiché à
-  l'écran (les événements existent bien — `order_item_status_histories`,
-  `order_pickups` — mais ne sont pas présentés sous cette forme chronologique ici).
+  `Delivery.signature_path`).
+  **Renforcement livré** (2026-10-02, audit de conformité à la maquette initié par
+  l'utilisateur à partir de deux captures du design — « Centre de retrait » jugé
+  déjà conforme, « Traiter le retrait » avait des écarts réels) :
+  - ~~Chronologie atelier horodatée~~ **fait** — réutilise **exactement** le même
+    calcul que `OrderDetail.tsx` (`order.items[].status_histories`, déjà chargés par
+    `GET /orders/{id}`, aucun nouvel appel backend) via le composant partagé
+    `Timeline`.
+  - ~~Journal d'audit dédié affiché à l'écran~~ **fait** — réutilise `GET
+    /orders/{id}/audit-logs` (`AuditLogController::forOrder()`, déjà construit pour
+    la fiche dépôt), même formatage `lib/auditLog.ts`.
+  - **Mise en page deux colonnes** (contenu principal + colonne solde/actions
+    sticky à droite, comme la maquette) — remplace l'ancienne colonne unique
+    `max-w-3xl`.
+  - **En-tête enrichi** : boutons « Imprimer le reçu » (réutilise `PrintableTicket`,
+    même mécanisme que `OrderDetail.tsx` — pas un nouveau document) et « Modifier
+    le client » (lien vers `/clients/{id}/edit`) ; carte client avec avatar,
+    téléphone, agence, date de dépôt (toutes ces données étaient déjà renvoyées par
+    `GET /orders/{id}`, simplement pas affichées) ; numéro de dépôt désormais
+    affiché via `order_number_formatted` (couche d'affichage « Codes dépôt » déjà
+    construite pour `OrderDetail.tsx`/le ticket, appliquée ici aussi — c'est bien
+    une vue à un seul dépôt).
+  - **Vérification des articles** restylée en tableau (en-têtes Article/Restant/
+    Quantité à remettre/État) plutôt qu'une simple liste, mêmes steppers −/+
+    qu'avant (comportement inchangé).
+  - **« État des pièces et remarques »** devient une carte séparée de
+    « Réceptionnaire » (regroupement visuel différent, mêmes champs).
+  - **Bloc solde en rouge/danger si bloqué** (`Alert tone="error"`, remplace
+    l'ancien ton ambre — un retrait bloqué est réellement une condition
+    bloquante) ; la dérogation reste accessible dans le même bloc.
+  - **« Après confirmation »** : checkbox réelle « Ouvrir le ticket et la facture
+    pour impression » (coché par défaut, redirige vers `/orders/{id}/documents`
+    après confirmation plutôt que `/pickups` — pas un nouveau document « reçu de
+    retrait » fabriqué, réutilise l'écran Ticket et facture déjà construit) + ligne
+    informative (pas une case à cocher — rien à activer par occurrence) sur la
+    notification automatique du client, voir point suivant.
+  - **Nouvel évènement de notification `pickup_completed`** (fermait un vrai écart :
+    rien ne notifiait le client après un retrait) — `NotificationSetting::EVENTS`
+    += `pickup_completed`, `PickupCompletedNotification`, déclenché dans
+    `PickupService::process()` après chaque retrait confirmé, **même mécanisme que
+    order_ready/delivery_completed** (respecte les canaux email/SMS activés par
+    agence, SMS toujours simulé — aucune passerelle réelle, cohérent avec
+    l'existant). Visible dans `/notifications` (nouvelle carte d'évènement) et dans
+    `/notifications` → journal. **Décision** : pas de case à cocher par occurrence
+    pour « notifier » (incohérent avec le reste de l'app où la notification est un
+    réglage d'agence, pas un choix ponctuel) — la section « Après confirmation »
+    l'affiche en lecture seule.
+  - **« Réseau et synchronisation »** : réutilise exactement la même logique que
+    `TicketFacturePage.tsx` (`order.sync_status`/`client_local_uuid`,
+    `documents.offline.pending`/`conflict`) — **omise** quand le dépôt est
+    `synced` (cas normal), pas de badge « Toujours synchronisé » fabriqué.
+  - **Toujours omis**, décision inchangée : capture de signature du réceptionnaire
+    (chantier à part — infrastructure de capture/stockage d'image à construire,
+    au-delà d'une réécriture de mise en page).
+  - Tests : `tests/Feature/Notifications/NotificationTest.php` +1
+    (`test_confirming_a_pickup_triggers_its_notification`, mirrors les tests
+    `order_ready`/`delivery_completed` existants). Suite complète 374/374 après
+    ajout (aucune régression). Vérifié par capture Playwright à 1440px et 390px,
+    et par un parcours bout en bout réel (navigateur) : dérogation saisie → retrait
+    confirmé → redirection vers `/orders/{id}/documents` → ticket et facture
+    affichent les bonnes données.
 - ~~**Ticket et facture** (écran de prévisualisation/impression dédié)~~ **fait**
   (2026-10-01) : `pages/counter/TicketFacturePage.tsx` (route `/orders/:id/documents`,
   lien « Ticket et facture » dans l'en-tête de `OrderDetail.tsx` à côté du bouton

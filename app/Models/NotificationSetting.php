@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class NotificationSetting extends Model
 {
-    public const EVENTS = ['order_ready', 'delivery_completed', 'delivery_failed'];
+    public const EVENTS = ['order_ready', 'delivery_completed', 'delivery_failed', 'pickup_completed'];
 
     protected $fillable = ['agency_id', 'event', 'channel_email', 'channel_sms'];
 

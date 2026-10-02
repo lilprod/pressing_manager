@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Bell, Building2, Info, Mail, MessageSquare, Truck, XCircle } from 'lucide-react';
+import { ArrowLeft, Bell, Building2, Info, Mail, MessageSquare, PackageCheck, Truck, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useFormat } from '../lib/format';
@@ -26,9 +26,10 @@ const EVENT_ICONS: Record<NotificationEvent, typeof Truck> = {
     order_ready: Bell,
     delivery_completed: Truck,
     delivery_failed: XCircle,
+    pickup_completed: PackageCheck,
 };
 
-const EVENTS: NotificationEvent[] = ['order_ready', 'delivery_completed', 'delivery_failed'];
+const EVENTS: NotificationEvent[] = ['order_ready', 'delivery_completed', 'delivery_failed', 'pickup_completed'];
 
 export default function NotificationsPage() {
     const { user, activeAgencyId, agencies } = useAuth();

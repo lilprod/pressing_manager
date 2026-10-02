@@ -726,7 +726,7 @@ export interface KpiData extends KpiMetrics {
     by_agency?: KpiAgencyRow[];
 }
 
-export type NotificationEvent = 'order_ready' | 'delivery_completed' | 'delivery_failed';
+export type NotificationEvent = 'order_ready' | 'delivery_completed' | 'delivery_failed' | 'pickup_completed';
 
 export interface NotificationSetting {
     agency_id: number;

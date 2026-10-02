@@ -9,9 +9,11 @@ use App\Models\NotificationLog;
 use App\Models\NotificationSetting;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Service;
 use App\Notifications\DeliveryCompletedNotification;
 use App\Notifications\DeliveryFailedNotification;
 use App\Notifications\OrderReadyNotification;
+use App\Notifications\PickupCompletedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Notification;
@@ -156,6 +158,37 @@ class NotificationTest extends TestCase
         ])->assertOk();
 
         Notification::assertSentOnDemand(DeliveryFailedNotification::class);
+    }
+
+    /** Écran « Traiter le retrait » (CLAUDE.md §2 « 05 Retraits en agence ») :
+     * confirmer un retrait notifie désormais le client, même pattern que
+     * order_ready/delivery_completed — respecte les canaux activés par agence. */
+    public function test_confirming_a_pickup_triggers_its_notification(): void
+    {
+        $this->seedRbac();
+        Notification::fake();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->create(['agency_id' => $agency->id, 'email' => 'client@example.com']);
+        $order = Order::factory()->create(['agency_id' => $agency->id, 'client_id' => $client->id, 'status' => 'pret']);
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $item = OrderItem::factory()->create([
+            'order_id' => $order->id,
+            'agency_id' => $agency->id,
+            'service_id' => $service->id,
+            'quantity' => 1,
+            'unit_price' => 1000,
+            'status' => 'pret',
+        ]);
+
+        $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/pickups", [
+            'recipient_type' => 'client',
+            'recipient_name' => $client->first_name.' '.$client->last_name,
+            'condition_status' => 'conforme',
+            'items' => [['order_item_id' => $item->id, 'quantity' => 1]],
+        ])->assertCreated();
+
+        Notification::assertSentOnDemand(PickupCompletedNotification::class);
     }
 
     public function test_notification_settings_endpoint_returns_defaults_for_unconfigured_events(): void

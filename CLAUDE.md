@@ -1584,6 +1584,53 @@ avant tout code.
   l'écran opérationnel après un enregistrement sur cette même page (affiche l'état
   au chargement, comme le panneau équivalent du hub).
 
+**Licence / facturation — gap d'harmonisation tenant ↔ plateforme (constaté le
+2026-10-03, pas encore corrigé)** : audit demandé par l'utilisateur avant
+d'investir dans la facturation/paiement superadmin (« regarde ce qui est
+développé actuellement côté tenant, voir comment harmoniser avec le côté
+superadmin »). État des lieux complet et recommandation détaillée dans
+[Superadmin SaaS — État des lieux & plan d'action](https://claude.ai/artifact/GcB6NXP6m4Ac33fcy5xJSK)
+(§7 et l'addendum « Décision actée »). Résumé pour ce fichier :
+- **Constat** : `License`/`LicensePlan`/`LicensePayment` (tenant, antérieur au
+  pivot multi-tenant) restent **deployment-wide** — `License::current()` n'a
+  aucune colonne `pressing_id`, jamais touché par la migration de backfill du
+  2026-10-02. La permission tenant `licenses.manage` (rôle `admin`) laisse
+  n'importe quel manager de pressing créer ses propres `LicensePlan` (prix
+  inclus) et s'auto-renouveler via `POST /license/renew` — ce qui, dans le
+  modèle multi-tenant partagé actuel, bloque/débloque **tous les pressings du
+  déploiement à la fois**, au prix que le client fixe lui-même. En parallèle,
+  `pressings.license_expires_at`/`platform_plan_id` (côté plateforme, posés
+  lors du pivot) existent en base mais ne sont **jamais lus** par
+  `CheckPressingStatus` : deux systèmes de licence qui s'ignorent, un vrai trou
+  d'isolation cross-tenant sur l'axe précisément étanchéifié partout ailleurs
+  par le pivot (`User::canAccessAgency()`, `resolveAgencyFilter()`).
+- **Décision actée (utilisateur, 2026-10-03)** : pour la v1, la facturation
+  d'un pressing à Spark reste un **règlement cash/Mobile Money confirmé
+  manuellement** par Spark — pas d'intégration Stripe/Paddle pour cette
+  version, une phase distincte plus tard. Favorable : `LicensePayment.method`
+  est déjà l'enum `['espece', 'carte', 'flooz', 'tmoney']` — `flooz`/`tmoney`
+  déjà les bons opérateurs Mobile Money, rien à inventer sur le modèle de
+  paiement lui-même.
+- **Recommandation retenue, pas encore implémentée** : scoper `licenses` par
+  `pressing_id` (même pattern que `AppSetting::current(int $pressingId)`),
+  retirer `licenses.manage` du rôle tenant `admin`, fusionner
+  `license_plans`→`platform_plans` (prix/devise/durée), fusionner
+  `CheckLicenseStatus`/`CheckPressingStatus` en un seul garde qui lit
+  `pressing.license_expires_at`, déplacer le renouvellement/l'enregistrement
+  de paiement sur `PATCH /platform/pressings/{id}` (déjà gaté par
+  `licenses.manage` **plateforme**), créer la ligne `licenses` du pressing dans
+  la même transaction que `PressingController::store()`. Décision ouverte :
+  l'écran tenant `/license` disparaît-il entièrement ou reste-t-il en lecture
+  seule (statut + historique, sans bouton d'action) — seconde option
+  recommandée. **À traiter avant toute intégration PSP réelle**, et avant la
+  Phase 2 facturation du plan d'action (qui se réduit, avec la décision
+  cash/Mobile Money, à ce même chantier d'harmonisation — plus d'effort L
+  séparé pour Stripe).
+- **Ce qui ne bouge pas** : `SubscriptionPlan`/`CustomerSubscription` (le
+  pressing vend des abonnements à ses propres clients finaux) — déjà
+  correctement `pressing_id`-scopé depuis le 2026-10-02, aucun rapport avec ce
+  gap.
+
 ## Conventions établies dans ce projet (à respecter)
 
 - **Sidebar toujours sombre** (`AppLayout.tsx`, commit du 2026-10-01) : les deux

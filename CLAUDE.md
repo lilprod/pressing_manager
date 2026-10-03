@@ -1093,11 +1093,13 @@ l'utilisateur avant tout code) :
   de parser le jeton, donnant un faux sentiment de couverture).
 - **MFA obligatoire, TOTP maison** (`app/Services/TotpService.php`, RFC 6238/4226,
   HMAC-SHA1) : aucun package 2FA composer n'existait, cohérent avec le RBAC maison
-  du reste du projet — pas de nouvelle dépendance. QR d'enrôlement **non généré** :
-  secret affiché en clair pour saisie manuelle dans l'application d'authentification
-  (évite d'ajouter une dépendance de rendu QR juste pour cet écran ; `endroid/qr-code`
-  existe déjà pour les étiquettes articles mais n'a pas été réutilisé ici — rendu
-  d'image inutile face à une simple chaîne de texte à copier). Connexion en 2 étapes
+  du reste du projet — pas de nouvelle dépendance. **QR d'enrôlement** (ajouté
+  2026-10-02, demande utilisateur après la Phase 1) : `PlatformAuthController::login()`
+  renvoie désormais `qr_code_data_uri` à côté de `otpauth_uri`, généré en réutilisant
+  tel quel `App\Services\QrCodeGenerator::toPngDataUri()` (déjà la dépendance
+  `endroid/qr-code` pour les étiquettes articles) — aucune nouvelle dépendance,
+  backend uniquement. La clé secrète en texte reste affichée en repli (saisie
+  manuelle si le scan n'est pas possible). Connexion en 2 étapes
   (`/login` → `mfa_required` ou `mfa_setup_required` selon que le compte a déjà
   configuré sa MFA, puis `/login/verify`/`/login/setup`), verrouillage 15 min après
   5 échecs (texte exact de la maquette), 8 codes de récupération à usage unique

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\PlatformAuditLog;
 use App\Models\PlatformUser;
 use App\Models\PlatformUserRecoveryCode;
+use App\Services\QrCodeGenerator;
 use App\Services\TotpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,7 @@ class PlatformAuthController extends Controller
 {
     private const CHALLENGE_TTL_MINUTES = 5;
 
-    public function __construct(private readonly TotpService $totp) {}
+    public function __construct(private readonly TotpService $totp, private readonly QrCodeGenerator $qrCode) {}
 
     public function login(Request $request): JsonResponse
     {
@@ -55,11 +56,13 @@ class PlatformAuthController extends Controller
         if (! $user->hasMfaEnabled()) {
             $secret = $this->totp->generateSecret();
             $user->forceFill(['totp_secret' => $secret])->save();
+            $otpauthUri = $this->totp->provisioningUri($secret, $user->email);
 
             return response()->json([
                 'mfa_setup_required' => true,
                 'challenge' => $challenge,
-                'otpauth_uri' => $this->totp->provisioningUri($secret, $user->email),
+                'otpauth_uri' => $otpauthUri,
+                'qr_code_data_uri' => $this->qrCode->toPngDataUri($otpauthUri),
             ]);
         }
 

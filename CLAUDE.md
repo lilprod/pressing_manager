@@ -1204,6 +1204,32 @@ pleine largeur sous les aperçus.
   débordement). Aucun changement backend donc suite de tests backend
   inchangée (462/462). `tsc --noEmit` et `npm run build` propres, parité
   i18n stricte.
+- **Bug trouvé après coup par une capture annotée de l'utilisateur, pas par
+  la validation Playwright initiale** : l'aperçu « Facture » en mode Facture
+  A4 s'affichait comme un rectangle noir plein, sans contenu visible. Pas un
+  problème backend (`GET /invoices/{id}/pdf` confirmé 200,
+  `Content-Type: application/pdf`, vérifié par inspection réseau directe) ni
+  un artefact de capture d'écran headless (confirmé en reproduisant le même
+  rendu à largeur réelle) : le visualiseur PDF natif de Chrome, embarqué via
+  `<iframe src={blob:...}>` dans une colonne étroite (~420px, la barre
+  latérale sticky de cet écran), s'ouvrait avec son **panneau de vignettes
+  latéral déployé par défaut**, ne laissant pratiquement aucune largeur à la
+  zone de visualisation réelle de la page — d'où l'impression d'un bloc noir
+  plein alors qu'un PDF valide était bien chargé. Corrigé en ajoutant les
+  paramètres d'ouverture standards du visualiseur au fragment de l'URL du
+  blob : `#toolbar=0&navpanes=0&view=FitH` (masque la barre d'outils et le
+  panneau de navigation, ajuste la page à la largeur du cadre) — technique
+  déjà standardisée pour l'intégration de PDF en `<iframe>`, aucune nouvelle
+  dépendance. Second facteur, non structurel celui-là : le visualiseur met un
+  instant à s'initialiser (observé jusqu'à plusieurs secondes sur un rendu
+  automatisé à 390px) — normal pour un rendu PDF asynchrone, pas un bug,
+  mais noté comme piège de validation : une capture Playwright prise trop
+  tôt après le chargement peut encore montrer un état transitoire vide même
+  une fois le vrai bug corrigé. Revérifié par capture à 1440px et 390px avec
+  un délai suffisant : page rendue lisible, ajustée à la largeur de la
+  carte, aucun débordement. Changement purement frontend (un seul fichier,
+  `TicketFacturePage.tsx`) — suite de tests backend non concernée, `tsc
+  --noEmit` et `npm run build` propres.
 
 Les trois chantiers Dépôts identifiés par l'audit de conformité du
 2026-10-05 sont maintenant tous faits.

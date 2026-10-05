@@ -161,7 +161,11 @@ export default function TicketFacturePage() {
                 <section className={cx(card, 'space-y-3 p-5')}>
                     <h2 className="text-sm font-bold text-ink-900 dark:text-white">{t('documents.invoicePreview')}</h2>
                     {invoice && invoicePdfUrl ? (
-                        <iframe title={t('documents.invoicePreview')} src={invoicePdfUrl} className="h-[520px] w-full rounded-xl border border-ink-200 dark:border-ink-700" />
+                        <iframe
+                            title={t('documents.invoicePreview')}
+                            src={`${invoicePdfUrl}#toolbar=0&navpanes=0&view=FitH`}
+                            className="h-[520px] w-full rounded-xl border border-ink-200 dark:border-ink-700"
+                        />
                     ) : invoice ? (
                         <div className="flex h-[520px] items-center justify-center">
                             <Spinner className="h-6 w-6" />

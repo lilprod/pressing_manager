@@ -102,7 +102,7 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 03 Clients & fidélité | Nouveau/Modifier client | `pages/clients/ClientFormPage.tsx` (routes `/clients/new`, `/clients/:id/edit`) | **fait, renforcement livré** (2026-10-01) — mise en page à deux colonnes conforme aux nouvelles captures (contrôle de doublon temps réel, consentements SMS/e-mail, préférence de contact, ville/quartier, téléphone secondaire, code de parrainage, groupe de fidélité en lecture seule, agence de référence, « Enregistrer et créer un dépôt »), détail en §2 « Formulaire client enrichi » |
 | 03 Clients & fidélité | Fiche client (consultation) | `pages/clients/ClientDetailPage.tsx` (route `/clients/:id`) | **fait** (2026-10-01) — remplace l'ancien panneau latéral par un écran dédié, suite à la capture Figma fournie le 2026-10-01 montrant 4 KPI (détail en §2) |
 | 04 Atelier | Atelier en vue Kanban | `pages/atelier/AtelierBoard.tsx` (route `/atelier`, permission `orders.update_status`) | **fait** (2026-10-01) — 4 colonnes Kanban sur les statuts réels, capacité atelier, priorité, responsables Laveur/Classeur, panneau de dépôt avec chronologie et action « Passer à l'étape suivante » (détail complet en §2) |
-| 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/closures/new`, `/cash/closures/:id`) | **fait, renforcement livré** (2026-10-01) — rapprochement par moyen de paiement (espèces/mobile money/carte), checklist de clôture obligatoire, double contrôle sur mouvement sensible (seuil configurable), pièces justificatives, rapport PDF de clôture. Restent différés : distinction dépôt/solde sur `Payment`, vue « opérateurs de la journée », notification au contrôleur (aucun canal interne staff n'existe) — détail en §2 |
+| 06 Caisse | Centre de caisse, Nouveau mouvement, Clôture | `pages/cash/CashRegisterPage.tsx`, `pages/cash/CashMovementFormPage.tsx`, `pages/cash/CashClosureFormPage.tsx`, `pages/cash/CashClosureDetail.tsx`, `pages/cash/CashMovementDetailPage.tsx`, `pages/cash/CashJournalSection.tsx` (routes `/cash`, `/cash/movements/new`, `/cash/movements/:id`, `/cash/closures/new`, `/cash/closures/:id`) | **fait, renforcement complet livré** (2026-10-05) — KPI du jour, ventilation des encaissements, flux de caisse, journal de caisse unifié filtrable/exportable, panneaux latéraux « Double contrôle »/« Validation »/« Traçabilité »/« Opérateurs »/« Anomalies »/« Rapport » sur les 2 formulaires. Reste différé : distinction dépôt/solde sur `Payment` — détail complet en §2 |
 | 07 Articles & tarifs | Catalogue (liste) | `pages/ServicesPage.tsx` | **fait, renforcement livré** (2026-10-01) — tableau de bord (4 `StatCard` via `/services/stats`), badge mode de facturation + « Dès X FCFA/kg ». Restent différés : import Excel, onglets Catégories/Tarifs au kilo/Indisponibles/Historique, filtres avancés (détail §2) |
 | 07 Articles & tarifs | Création/édition article | `pages/services/ServiceFormPage.tsx` (routes `/services/new`, `/services/:id/edit`) | **fait, renforcement livré** (2026-10-01) — sélecteur Pièce/Kilo/Mixte, grilles de prix dégressives au kilo (`ServicePriceTier`), options `allow_discount`/`round_to_hundred`/`price_editable_at_counter`, historique des changements de prix (`ServicePriceHistory`). Intégré jusqu'au comptoir : `NewOrder.tsx` facture réellement au poids (résolution de palier + arrondi). Restent différés : états acceptés/rendus compatibles configurables, disponibilité par agence récapitulative, checklist de publication, historique des tarifs par agence (détail §2) |
 | 08 Rapports & bilans | Rapports et bilans | `pages/KpiPage.tsx` (route `/kpi`, libellé nav « Rapports & bilans ») | **fait** (2026-09-30) — filtres période + raccourcis, 4 KPI avec variation vs période précédente, tableau « Performance des agences », indicateurs opérationnels existants conservés (hors maquette mais déjà exposés par l'API), raccourcis vers les écrans détaillés. Histogramme CA / répartition paiements / synthèse fidélité / planification omis (§2) |
@@ -938,6 +938,168 @@ Figma fournies par l'utilisateur le 2026-09-30, renforcement livré le 2026-10-0
   `validated_by`/`validated_at` tracent la validation, mais pas de présentation
   chronologique dédiée façon « journal d'audit » à l'écran (differé, recoupe le même
   besoin que pour les Retraits et la Fiche dépôt).
+
+**06 Caisse — renforcement complet (KPI, graphiques, journal unifié, panneaux
+latéraux)** — fait le 2026-10-05, sur audit de conformité à 3 captures Figma fournies
+par l'utilisateur (« Centre de caisse », « Nouveau mouvement de caisse », « Clôture et
+rapprochement journalier »). Audit direct du code (pas supposé) a confirmé que les
+points déjà listés ci-dessus comme « fait » étaient bien réels, mais que chaque écran
+Figma montrait une bonne moitié de contenu absent du code (KPI en-tête, graphiques,
+un vrai journal filtrable, et surtout une **mise en page à deux colonnes** sur les 2
+formulaires avec des panneaux latéraux entiers). L'utilisateur a tranché via
+`AskUserQuestion` : construire le renforcement complet (pas une implémentation
+partielle). Plan détaillé en mode plan (2 agents d'exploration + 1 agent de
+conception) approuvé avant tout code, vu l'ampleur (nouveaux agrégats, décisions de
+modélisation réelles).
+
+- **`CashService` — nouvelles méthodes d'agrégation**, toutes réutilisant les
+  formules déjà standardisées ailleurs plutôt que d'en réinventer : `dailyStats()`
+  (recettes/dépenses **du jour calendaire**, distinct de `previewBalance()` qui
+  raisonne depuis la dernière clôture ; impayés = formule exacte
+  `InvoiceController`/`OrderController` ; dernière clôture ou `null`, jamais un
+  écart à 0 fabriqué), `paymentBreakdown()` (ventilation par moyen depuis la
+  dernière clôture, pourcentage calculé côté backend pour qu'il ne puisse jamais
+  diverger d'un arrondi frontend), `flowSeries()` (flux quotidien sur 14 jours,
+  calqué sur `MultiAgencyService::revenueSeries()`, trous comblés à 0),
+  `operatorsForDate()` (copie du patron `MultiAgencyService::teamPresent()` borné à
+  une date passée en paramètre plutôt qu'à « maintenant »), `closurePrecheck()`
+  (mêmes conditions **exactes** que les deux verrous réels de `closeRegister()` —
+  pas une estimation séparée qui pourrait diverger), `eligibleValidators()`
+  (collaborateurs de l'agence/pressing réellement habilités `payments.manage`,
+  jamais une liste figée).
+- **`app/Services/CashLedgerService.php`** (nouveau) — « Journal de caisse »
+  **unifié** : assemble `CashMovement`/`Payment`/`CashClosure` d'une agence en un
+  flux chronologique unique via `unionAll()` puis enveloppe (`fromSub`) pour les
+  filtres (`type`/`status`/`method`/`search`/dates). **Décision de conception
+  clé** : le filtre « mode de paiement » de la maquette n'a de sens réel que sur
+  les lignes `encaissement` (un `Payment` a un vrai `method`) ; les lignes
+  `mouvement` sont toujours en espèces par construction (`CashService` ne gère
+  que les espèces manuelles) — `method` y est donc fixé à `espece`, pas un choix
+  fabriqué. Filtrage agence/dates **avant** l'union (jamais après, contre toute
+  fuite cross-agence) ; `status`/`method`/`search` appliqués **après** l'union sur
+  les colonnes déjà normalisées (nécessaire car le statut des clôtures
+  — `conforme`/`ecart` — est dérivé de `variance`, pas une colonne brute
+  filtrable avant union).
+- **Export du journal** : `app/Services/CashLedgerExcelExporter.php` (copie
+  conforme du patron `KpiExcelExporter.php`, PhpSpreadsheet déjà une dépendance du
+  projet) + `resources/views/cash/ledger-pdf.blade.php` (calqué sur
+  `cash.closure-pdf.blade.php`, généré à la volée). Deux routes distinctes
+  `GET /cash/ledger/export/pdf` et `/excel` (pas une seule route paramétrée
+  `{kind}`, pour rester cohérent avec le patron déjà établi par
+  `KpiController::exportPdf()`/`exportExcel()`) — bornes `from`/`to`
+  **obligatoires** à l'export (422 sinon), pour ne jamais permettre un export sans
+  limite sur tout l'historique de l'agence.
+- **Nouvelle route `GET /cash/movements/{movement}`** (show, manquait) +
+  **`GET /cash/closures/precheck`**, **`/closures/operators`**,
+  **`/movements/eligible-validators`**, **`/stats`**, **`/payment-breakdown`**,
+  **`/flow-series`** — toutes gardées par le même `payments.manage` que
+  l'existant (pas de nouvelle permission). **Piège d'ordre de routes respecté** :
+  chaque route littérale (`eligible-validators`, `precheck`, `operators`)
+  déclarée **avant** sa route à paramètre correspondante
+  (`{movement}`/`{closure}`), sinon Laravel tente un model-binding sur le segment
+  littéral.
+- **Décisions de scope actées** (faute de donnée réelle correspondant exactement
+  à la maquette, pas des oublis) :
+  - **« Synchronisation hors ligne »** (écran Centre de caisse) : la file
+    IndexedDB (`useOnlineStatus()`/`useSyncQueue()`) ne couvre que les commandes
+    comptoir, n'est pas scopée par agence, et aucune écriture de caisse n'y
+    transite. Afficher des « dépôts en attente » façon maquette aurait été
+    trompeur ou fabriqué — la carte se limite à la pastille réelle En ligne/Hors
+    ligne + un texte honnête, sans liste ni bouton Synchroniser actif.
+  - **« Double contrôle requis » avec des approbateurs nommés** : aucune table
+    d'affectation de « validateurs désignés » n'existe, et `payments.manage` est
+    partagé par 3 rôles sans hiérarchie (`accueil`/`manager`/`admin`, confirmé
+    dans `PermissionSeeder.php`). La carte montre la règle réelle (seuil +
+    « tout collaborateur habilité peut valider ») et la liste réelle des
+    collaborateurs éligibles (`GET /cash/movements/eligible-validators`), avec
+    leur **nombre réel** — jamais forcé à un nombre fixe. Testé explicitement
+    (`test_eligible_validators_lists_only_real_users_with_the_payments_manage_permission`
+    vérifie que le compte n'est jamais figé à 2).
+  - **Statut « vérifié »/« en attente » des opérateurs** : dérivé honnêtement de
+    `Attendance.clock_out` (pointage terminé = « vérifié », encore en poste =
+    « en attente ») — pas de nouvelle colonne de validation RH.
+  - **« Rapport de clôture » avant la clôture elle-même** : impossible par
+    construction (le PDF n'est généré que dans la transaction
+    `closeRegister()`) — la carte montre un état désactivé/explicatif avant
+    clôture, et le vrai PDF de la **dernière** clôture existante sinon.
+  - **Distinction dépôt/solde sur `Payment`** : reste différée (contrainte déjà
+    actée ci-dessus) — la Synthèse détaillée de clôture affiche les totaux réels
+    sans cette ventilation.
+- **Frontend — nouveaux composants réutilisables** : `components/ui/SegmentedBar.tsx`
+  (barre segmentée horizontale CSS pure, aucune dépendance de graphique dans ce
+  projet — voir `RevenueBars.tsx` pour le même principe), `components/ui/CashFlowBars.tsx`
+  (histogramme à deux séries entrées/sorties, même technique que `RevenueBars.tsx`).
+  `pages/cash/CashJournalSection.tsx` (table filtrable/paginée/exportable, patron
+  `AuditLogsPage.tsx` copié : filtre card → liste à colonnes fixes dans
+  `overflow-x-auto` → `Pagination`). `pages/cash/CashMovementDetailPage.tsx`
+  (nouveau, route `/cash/movements/:id`, mirrors `CashClosureDetail.tsx` — la
+  carte « Traçabilité » y est réelle, construite depuis `created_at`/`created_by`/
+  `validated_at`/`validated_by` déjà en base, via le composant `Timeline` déjà
+  utilisé pour la chronologie atelier/audit d'`OrderDetail.tsx`).
+  `CashRegisterPage.tsx`/`CashMovementFormPage.tsx`/`CashClosureFormPage.tsx`
+  réécrits en profondeur (4 `StatCard` en en-tête — toujours
+  `grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-4`/`xl:grid-cols-4` pour les
+  montants FCFA, jamais `grid-cols-2` direct —, mise en page à deux colonnes avec
+  colonne latérale sticky sur les 2 formulaires).
+- **Bug réel trouvé et corrigé pendant la validation Playwright, pas par les
+  tests backend** (deux occurrences du même piège CSS Grid, nouveau dans ce
+  projet — jusqu'ici jamais rencontré car aucun contenu de ce type n'avait été
+  placé dans un conteneur `grid ... lg:grid-cols-N` sans classe `grid-cols-1` de
+  base) :
+  1. Les 4 `StatCard` de l'écran Clôture, initialement placées **à l'intérieur**
+     du conteneur deux-colonnes (`lg:grid-cols-[1fr_320px]`), se faisaient
+     tronquer même à 1440px — parce que leur ligne de 4 cartes héritait de la
+     largeur de la colonne gauche (plus étroite que la page entière), pas de la
+     page. **Corrigé** en sortant la rangée de `StatCard` du conteneur deux-
+     colonnes (pleine largeur, au-dessus), comme c'était déjà le cas sur l'écran
+     Centre de caisse.
+  2. Plus subtil : le conteneur `<div className="grid items-start gap-6
+     lg:grid-cols-2">` (et les deux variantes `lg:grid-cols-[1fr_320px]`) n'avait
+     **pas** de classe `grid-cols-1` de base — ce patron existe pourtant déjà
+     dans toute l'app (`ProfilePage.tsx`, `UsersPage.tsx`, `DeliveriesPage.tsx`,
+     etc.) sans jamais poser problème, car `lg:grid-cols-N` de Tailwind émet
+     `repeat(N, minmax(0, 1fr))` (largeur bornée), mais **en dessous de `lg`**,
+     sans classe de base, aucune `grid-template-columns` ne s'applique du tout :
+     la grille dimensionne alors sa piste implicite sur le **contenu max**, pas
+     sur le conteneur. La légende de `SegmentedBar` (`<ul className="flex
+     flex-wrap ...">`) en est l'exemple qui a révélé le bug : un conteneur
+     `flex-wrap` ne limite la largeur **visible** qu'une fois l'espace
+     contraint, mais pour le calcul du contenu max (`max-content`) que CSS Grid
+     utilise pour dimensionner une piste `auto` non contrainte, le navigateur
+     raisonne « comme si tout tenait sur une seule ligne » — ce qui poussait
+     toute la page à 676px de large à 390px de viewport (confirmé par
+     `document.documentElement.scrollWidth` via Playwright, pas seulement à
+     l'œil sur une capture). **Corrigé** en ajoutant `grid-cols-1` explicite en
+     base sur les 3 conteneurs deux-colonnes de ce chantier (`CashRegisterPage.tsx`,
+     `CashClosureFormPage.tsx`, `CashMovementFormPage.tsx`) — ce qui émet
+     `repeat(1, minmax(0, 1fr))`, une piste bornée au conteneur même avant `lg`.
+     **Les patrons `lg:grid-cols-[minmax(0,...)fr_...]` déjà utilisés ailleurs
+     dans l'app ne sont pas affectés** (aucun n'a encore combiné ce conteneur
+     avec un enfant `flex-wrap` au contenu large) mais le même correctif
+     (`grid-cols-1` de base) est la bonne pratique à appliquer d'emblée sur tout
+     futur écran combinant `grid lg:grid-cols-*` avec un enfant dont le contenu
+     ne tient pas naturellement sur une ligne en dessous de `lg`.
+  3. Troisième correctif mineur du même audit : les deux boutons d'export
+     (PDF/Excel) du Journal de caisse se chevauchaient à 390px (texte `whitespace-nowrap`
+     débordant visuellement de leur bouton rétréci) — leur conteneur `flex gap-2`
+     n'avait pas `flex-wrap` contrairement au patron déjà établi par
+     `KpiPage.tsx` (`flex flex-wrap items-center gap-2` pour ses propres boutons
+     d'export). Corrigé en ajoutant `flex-wrap`.
+- Tests : `tests/Feature/Cash/CashDashboardStatsTest.php` (6 — `stats`/
+  `payment-breakdown`/`flow-series`, trous comblés à 0, le paramètre `agency_id`
+  d'un utilisateur local est bien ignoré au profit de sa propre agence),
+  `tests/Feature/Cash/CashLedgerTest.php` (9 — union des 3 sources, chaque
+  filtre, isolation cross-agence, export PDF/Excel, 422 sans bornes de date),
+  `tests/Feature/Cash/CashMovementTraceabilityTest.php` (4 — show + 403 croisé
+  agence, validateurs éligibles réels, utilisateurs inactifs exclus),
+  `tests/Feature/Cash/CashClosurePrecheckTest.php` (5 — `precheck` strictement
+  identique aux verrous réels de `closeRegister()`, statut opérateur dérivé de
+  `clock_out`). Suite complète 415/415 après ajout (aucune régression). Vérifié
+  aussi par smoke test Playwright bout en bout (navigateur réel, données réelles
+  créées via les endpoints — pas fabriquées) sur les 3 écrans, à 1440px et 390px,
+  avec vérification explicite de l'absence de débordement horizontal
+  (`document.documentElement.scrollWidth === clientWidth`) suite aux deux bugs
+  CSS Grid trouvés en cours de route.
 
 **07 Articles & tarifs — Catalogue et fiche article** (captures Figma fournies par
 l'utilisateur le 2026-09-30, renforcement livré le 2026-10-01, pas de node Figma

@@ -214,6 +214,83 @@ export interface CashClosure {
     closed_at: string;
 }
 
+export interface CashStats {
+    date: string;
+    revenue_today: number;
+    expenses_today: number;
+    outstanding: number;
+    last_closure: { id: number; variance: number; closed_at: string } | null;
+    last_activity_at: string | null;
+}
+
+export interface CashPaymentBreakdown {
+    since: string | null;
+    total: number;
+    by_method: Record<'espece' | 'mobile_money' | 'carte', { amount: number; percent: number }>;
+}
+
+export interface CashFlowPoint {
+    date: string;
+    in: number;
+    out: number;
+    net: number;
+}
+
+export interface CashFlowSeries {
+    from: string;
+    to: string;
+    series: CashFlowPoint[];
+    in_total: number;
+    out_total: number;
+    net_total: number;
+}
+
+export type CashLedgerKind = 'mouvement' | 'encaissement' | 'cloture';
+
+export interface CashLedgerEntry {
+    date: string;
+    reference: string | null;
+    category: string;
+    agent_name: string | null;
+    amount: number;
+    direction: '+' | '-' | null;
+    status: string;
+    kind: CashLedgerKind;
+    method: string | null;
+    source_id: number;
+    movement_id: number | null;
+}
+
+export interface CashLedgerFilters {
+    type?: CashLedgerKind;
+    status?: string;
+    method?: string;
+    search?: string;
+    from?: string;
+    to?: string;
+}
+
+export interface CashEligibleValidators {
+    threshold: number;
+    validators: { id: number; name: string }[];
+    count: number;
+}
+
+export interface CashClosurePrecheck {
+    pending_movements_count: number;
+    already_closed: boolean;
+    last_closure: { id: number; business_date: string; variance: number } | null;
+}
+
+export type CashOperatorStatus = 'en_attente' | 'verifie';
+
+export interface CashClosureOperator {
+    user: { id: number; name: string } | null;
+    clock_in: string;
+    clock_out: string | null;
+    status: CashOperatorStatus;
+}
+
 export type ServiceCategory = 'nettoyage' | 'lavage' | 'repassage' | 'retouche' | 'teinture' | 'autre';
 export type ServiceBillingMode = 'piece' | 'kg' | 'mixte';
 export type ServicePriority = 'standard' | 'haute';

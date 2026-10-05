@@ -205,10 +205,20 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::get('/payments/{payment}', [PaymentController::class, 'show']);
 
     Route::get('/cash/summary', [CashController::class, 'summary']);
+    Route::get('/cash/stats', [CashController::class, 'stats']);
+    Route::get('/cash/payment-breakdown', [CashController::class, 'paymentBreakdown']);
+    Route::get('/cash/flow-series', [CashController::class, 'flowSeries']);
+    Route::get('/cash/ledger', [CashController::class, 'ledger']);
+    Route::get('/cash/ledger/export/pdf', [CashController::class, 'exportLedgerPdf']);
+    Route::get('/cash/ledger/export/excel', [CashController::class, 'exportLedgerExcel']);
+    Route::get('/cash/movements/eligible-validators', [CashController::class, 'eligibleValidators']);
     Route::get('/cash/movements', [CashController::class, 'indexMovements']);
     Route::post('/cash/movements', [CashController::class, 'storeMovement']);
     Route::post('/cash/movements/{movement}/validate', [CashController::class, 'validateMovement']);
     Route::get('/cash/movements/{movement}/proof', [CashController::class, 'movementProof']);
+    Route::get('/cash/movements/{movement}', [CashController::class, 'showMovement']);
+    Route::get('/cash/closures/precheck', [CashController::class, 'closurePrecheck']);
+    Route::get('/cash/closures/operators', [CashController::class, 'closureOperators']);
     Route::get('/cash/closures', [CashController::class, 'indexClosures']);
     Route::get('/cash/closures/{closure}', [CashController::class, 'showClosure']);
     Route::post('/cash/closures', [CashController::class, 'storeClosure']);

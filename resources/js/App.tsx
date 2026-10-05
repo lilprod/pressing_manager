@@ -42,6 +42,7 @@ import CashRegisterPage from './pages/cash/CashRegisterPage';
 import CashMovementFormPage from './pages/cash/CashMovementFormPage';
 import CashClosureFormPage from './pages/cash/CashClosureFormPage';
 import CashClosureDetail from './pages/cash/CashClosureDetail';
+import CashMovementDetailPage from './pages/cash/CashMovementDetailPage';
 import InvoicesOutstandingPage from './pages/InvoicesOutstandingPage';
 import SettingsPage from './pages/SettingsPage';
 import BrandingSettingsPage from './pages/settings/BrandingSettingsPage';
@@ -149,6 +150,7 @@ export default function App() {
                     <Route path="/services/:id/edit" element={<ServiceFormPage />} />
                     <Route path="/cash" element={<CashRegisterPage />} />
                     <Route path="/cash/movements/new" element={<CashMovementFormPage />} />
+                    <Route path="/cash/movements/:id" element={<CashMovementDetailPage />} />
                     <Route path="/cash/closures/new" element={<CashClosureFormPage />} />
                     <Route path="/cash/closures/:id" element={<CashClosureDetail />} />
                     <Route path="/invoices/outstanding" element={<InvoicesOutstandingPage />} />

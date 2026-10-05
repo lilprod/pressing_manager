@@ -3,6 +3,14 @@ const TOKEN_KEY = 'pm.token';
 /** Émis à chaque réponse 402 (licence en grâce/bloquée) pour que LicenseContext se resynchronise. */
 export const licenseEvents = new EventTarget();
 
+/**
+ * Émis à chaque réponse 401 (jeton absent/expiré/révoqué) pour qu'AuthContext efface la
+ * session et redirige vers /login — nécessaire depuis l'introduction de jetons à
+ * expiration réelle (voir CLAUDE.md « Se souvenir de moi ») : avant cela aucun jeton ne
+ * pouvait expirer en cours d'usage, donc ce cas ne se produisait jamais silencieusement.
+ */
+export const authEvents = new EventTarget();
+
 export class ApiError extends Error {
     status: number;
     errors?: Record<string, string[]>;
@@ -57,6 +65,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         if (response.status === 402) {
             licenseEvents.dispatchEvent(new Event('blocked'));
         }
+        if (response.status === 401) {
+            authEvents.dispatchEvent(new Event('expired'));
+        }
         throw new ApiError(response.status, message, data?.errors);
     }
 
@@ -82,6 +93,9 @@ async function requestForm<T>(path: string, formData: FormData): Promise<T> {
         if (response.status === 402) {
             licenseEvents.dispatchEvent(new Event('blocked'));
         }
+        if (response.status === 401) {
+            authEvents.dispatchEvent(new Event('expired'));
+        }
         throw new ApiError(response.status, message, data?.errors);
     }
 
@@ -100,6 +114,9 @@ export const api = {
             headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
         if (!response.ok) {
+            if (response.status === 401) {
+                authEvents.dispatchEvent(new Event('expired'));
+            }
             throw new ApiError(response.status, `Erreur ${response.status}`);
         }
         return response.blob();

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\Agency;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -51,14 +52,62 @@ class AuthController extends Controller
             ]);
         }
 
+        if (! empty($data['agency_id']) && ! $user->canAccessAgency((int) $data['agency_id'])) {
+            throw ValidationException::withMessages([
+                'agency_id' => ["Agence invalide pour ce compte."],
+            ]);
+        }
+
         $user->registerSuccessfulLogin();
 
-        $token = $user->createToken($data['device_name']);
+        // Nouveaux jetons désormais bornés dans le temps (voir CLAUDE.md « Se souvenir
+        // de moi ») : 30 jours si "remember" est coché, 12h sinon — jamais plus éternel
+        // pour un nouveau login. Les jetons déjà émis avant ce changement restent
+        // éternels (pas de migration de données, comportement forward-only).
+        $expiresAt = $request->boolean('remember') ? now()->addDays(30) : now()->addHours(12);
+        $token = $user->createToken($data['device_name'], ['*'], $expiresAt);
+
+        $resolvedAgencyId = $data['agency_id'] ?? $user->agency_id;
 
         return response()->json([
             'token' => $token->plainTextToken,
             'user' => $user->load('role.permissions', 'agency'),
+            'resolved_agency_id' => $resolvedAgencyId !== null ? (int) $resolvedAgencyId : null,
         ]);
+    }
+
+    /**
+     * Résout une adresse e-mail en agence(s) candidates, avant toute authentification —
+     * alimente le sélecteur d'agence de l'écran de connexion. Réponse volontairement
+     * neutre (jamais de 404/erreur distincte) pour ne jamais révéler si un e-mail existe
+     * (anti-énumération, même principe que le message générique de login). Projection
+     * minimale (id/name) : cette route est publique, jamais le modèle `Agency` complet.
+     */
+    public function agenciesForEmail(Request $request): JsonResponse
+    {
+        $request->validate(['email' => ['required', 'email']]);
+
+        $user = User::where('email', $request->string('email')->value())->where('is_active', true)->first();
+
+        if ($user === null) {
+            return response()->json(['type' => 'unknown', 'agencies' => []]);
+        }
+
+        if ($user->agency_id !== null) {
+            $agency = Agency::where('id', $user->agency_id)->first();
+
+            return response()->json([
+                'type' => 'local',
+                'agency' => $agency !== null ? ['id' => $agency->id, 'name' => $agency->name] : null,
+            ]);
+        }
+
+        $agencies = Agency::where('pressing_id', $user->pressing_id)
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return response()->json(['type' => 'global', 'agencies' => $agencies]);
     }
 
     public function logout(Request $request): JsonResponse

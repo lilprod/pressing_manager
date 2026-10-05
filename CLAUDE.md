@@ -2770,3 +2770,103 @@ vérifier les futures actions de renouvellement/impersonation).
   qu'en élargissant la permission partagée. Toujours lancer la suite complète après
   avoir touché un contrôleur déjà utilisé par un autre module, pas seulement les
   tests du module en cours.
+
+**01 Authentification — sélecteur d'agence, « se souvenir de moi », 401 global**
+— fait le 2026-10-05, deuxième passage sur l'audit de conformité du même jour
+(suite directe du verrouillage/bouton gold livré plus tôt) : l'utilisateur a
+demandé explicitement de compléter les trois écarts plus lourds restants. Plan
+détaillé en mode plan (2 agents d'exploration) approuvé avant tout code.
+- **Sélecteur d'agence à la connexion** : nouveau `POST /login/agencies`
+  (public, `throttle:20,1`, email seul) — réponse volontairement neutre
+  (anti-énumération, même principe que le message d'erreur générique de login) :
+  `{type:'unknown'}` si l'e-mail n'existe pas ou le compte est inactif,
+  `{type:'local', agency}` pour un utilisateur local (informatif seul, son
+  agence est fixée côté serveur), `{type:'global', agencies:[...]}` pour un
+  rôle global (toutes les agences actives de son pressing, projection minimale
+  `id`/`name` — jamais le modèle `Agency` complet sur une route publique).
+  `POST /login` gagne un `agency_id` optionnel, validé via `canAccessAgency()`
+  (méthode déjà existante, réutilisée telle quelle) → 422 si hors périmètre ou
+  si un utilisateur local tente de forcer une agence différente de la sienne.
+  La réponse de login renvoie `resolved_agency_id` ; `AuthContext.login()`
+  l'applique immédiatement comme agence de session (`setActiveAgencyId`) —
+  ferme vraiment le gap déjà documenté (« il faudrait une notion d'agence de
+  session »), pas seulement un sélecteur cosmétique. Frontend `Login.tsx` :
+  champ e-mail débounce 500ms (même patron que le contrôle de doublon temps
+  réel de `ClientForm.tsx`) → `POST /login/agencies` → agence fixe affichée en
+  texte (local), `<select>` révélé (global, pré-rempli depuis
+  `pm.lastLoginAgencyId` si l'agence mémorisée fait partie de la liste), rien
+  affiché si l'e-mail est inconnu (pas de select vide trompeur).
+- **« Se souvenir de moi »** : Sanctum supportait déjà `createToken(name,
+  abilities, expiresAt)` sans qu'aucun appel du code ne l'utilise — les 3
+  jetons émis dans l'app étaient jusqu'ici éternels. **Changement de
+  comportement assumé, forward-only** : tout nouveau login reçoit désormais un
+  jeton à expiration réelle — 12h par défaut, 30 jours si la case est cochée —
+  jamais plus éternel. Les jetons déjà émis avant cette passe restent éternels
+  (pas de migration de données). `LoginRequest` gagne `remember` (booléen
+  optionnel).
+- **Gap corrigé en marge, nécessaire avant d'introduire de vraies expirations** :
+  aucun gestionnaire 401 global n'existait côté frontend (confirmé par grep, 0
+  résultat) — logique, puisqu'aucun jeton ne pouvait expirer en cours d'usage
+  jusqu'ici. Corrigé en répliquant exactement le patron déjà utilisé pour les
+  402 de licence : nouvel `authEvents` (`EventTarget`) dans `lib/api.ts`,
+  `dispatchEvent(new Event('expired'))` sur tout 401 dans `request()`/
+  `requestForm()`/`blob()`, `AuthContext` écoute et nettoie son état local sans
+  réappeler `/logout` (le jeton est déjà invalide côté serveur) puis redirige
+  vers `/login`. Sans ce correctif, l'introduction de l'expiration par défaut à
+  12h aurait dégradé silencieusement l'expérience de **tout** utilisateur, pas
+  seulement ceux qui cochent la case.
+- Tests : `tests/Feature/Auth/LoginAgencyLookupTest.php` (4 — réponse neutre
+  inconnu/inactif, agence fixe d'un local, agences actives du bon pressing
+  uniquement pour un global) et extension de `LoginTest.php` (+4 — agence
+  valide acceptée, agence hors périmètre rejetée, agence différente rejetée
+  pour un local, jeton long si `remember`, jeton court sinon — jamais éternel).
+  Suite complète 480/480 après ajout (aucune régression). `tsc --noEmit` et
+  `npm run build` propres, parité i18n fr/en stricte. Vérifié par Playwright
+  bout en bout (navigateur réel) à 1440px et 390px : saisie de l'e-mail d'un
+  rôle global → sélecteur d'agence apparaît → connexion avec agence + « se
+  souvenir de moi » cochée → redirection réussie, aucun débordement horizontal.
+
+**01 Authentification — réinitialisation de mot de passe en libre-service** —
+fait le 2026-10-05, dans la continuité immédiate du chantier ci-dessus (même
+demande utilisateur groupée). Patron de jeton repris à l'identique du challenge
+MFA de `PlatformAuthController` (`Str::random(48)` + `Cache::put` à TTL 30 min),
+génération/hachage du mot de passe repris de `UserController::resetPassword()`.
+- **`POST /password/forgot`** (public, `throttle:6,1`) : réponse **toujours
+  générique** (« Si ce compte existe, un e-mail de réinitialisation a été
+  envoyé. »), que le compte existe ou non — anti-énumération. Si trouvé :
+  jeton en cache, nouvelle notification `PasswordResetNotification` (calquée
+  mot pour mot sur `UserInvitationNotification`, canal mail standard Laravel,
+  `config('mail.default')` = `log` en dev, infra réelle pas un stub).
+- **`POST /password/reset`** (public, `throttle:10,1`) : jeton résolu via
+  `Cache::get`, 422 générique si absent/expiré, sinon nouveau mot de passe
+  (validé par `App\Rules\PasswordPolicy`, réutilisée telle quelle — résolue
+  via le `pressing_id` de l'utilisateur ciblé par le jeton, calculé dans
+  `ResetPasswordRequest::rules()`), **lève aussi le verrouillage existant**
+  (`registerSuccessfulLogin()` — une réinitialisation réussie est une preuve
+  de possession du compte), jeton à usage unique (`Cache::forget`).
+- **Canal SMS volontairement absent** (pas grisé — un bouton grisé est une
+  promesse d'UI non tenue, convention déjà établie côté plateforme superadmin) :
+  aucune passerelle SMS réelle n'existe nulle part dans l'app, seul un envoi
+  simulé existe pour les notifications clients. E-mail uniquement pour la v1.
+- **Frontend** : `pages/ForgotPasswordPage.tsx` (route publique
+  `/forgot-password`, hors `ProtectedLayout`) et `pages/ResetPasswordPage.tsx`
+  (`/reset-password?token=...`, même patron que `ImpersonateBridge.tsx` pour
+  une route hors de l'arbre authentifié) — le jeton n'est jamais validé côté
+  client, seule la réponse de l'API tranche. Lien « Mot de passe oublié ? »
+  ajouté sur `Login.tsx`, à côté de la nouvelle case « Se souvenir de moi ».
+  Texte d'aide `login.assistance` mis à jour (ne redirige plus vers un
+  administrateur pour un mot de passe oublié, devenu inexact depuis ce
+  chantier — redevient un texte d'assistance générique).
+- Tests : `tests/Feature/Auth/PasswordResetTest.php` (6 — e-mail envoyé pour un
+  compte existant, réponse identique pour un e-mail inconnu, flux complet
+  forgot→reset→login avec un nouveau mot de passe, jeton invalide/expiré
+  rejeté, jeton à usage unique, un reset réussi lève un verrouillage existant).
+  Jeton de test fixé via `Str::createRandomStringsUsing()` plutôt que de lire
+  les internals du cache — plus robuste qu'une inspection par réflexion. Suite
+  complète 480/480 après ajout (aucune régression). Vérifié par un parcours
+  réel bout en bout non-HTTP : `POST /password/forgot` réel → jeton lu depuis
+  le mail `log` réellement écrit sur disque → `/reset-password?token=...`
+  ouvert dans un navigateur réel → nouveau mot de passe saisi → connexion
+  réussie avec ce nouveau mot de passe (confirmé par un second appel de
+  connexion réel, pas simulé) ; mot de passe de test restauré après coup pour
+  ne pas perturber l'environnement de développement partagé.

@@ -10,6 +10,8 @@ import ForcedPasswordChangeScreen from './components/ForcedPasswordChangeScreen'
 import LicenseBlockedScreen from './components/LicenseBlockedScreen';
 import SplashScreen from './components/SplashScreen';
 import Login from './pages/Login';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import ImpersonateBridge from './pages/ImpersonateBridge';
 import PlatformLoginPage from './pages/superadmin/PlatformLoginPage';
 import PlatformDashboardPage from './pages/superadmin/DashboardPage';
@@ -128,6 +130,8 @@ export default function App() {
                     </Route>
 
                     <Route path="/login" element={<Login />} />
+                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
                     <Route path="/impersonate" element={<ImpersonateBridge />} />
                     <Route element={<ProtectedLayout />}>
                     <Route path="/" element={<NewOrder />} />

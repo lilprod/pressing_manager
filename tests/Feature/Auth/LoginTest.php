@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\Agency;
+use App\Models\Pressing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\PersonalAccessToken;
 use Tests\Concerns\SeedsRbac;
 use Tests\TestCase;
 
@@ -112,5 +115,92 @@ class LoginTest extends TestCase
         ]);
 
         $response->assertStatus(423);
+    }
+
+    public function test_a_global_user_can_choose_an_agency_of_their_own_pressing_at_login(): void
+    {
+        $this->seedRbac();
+        $pressing = Pressing::factory()->create();
+        $agency = Agency::factory()->create(['pressing_id' => $pressing->id]);
+        $user = $this->makeUser('admin');
+        $user->forceFill(['pressing_id' => $pressing->id])->save();
+
+        $response = $this->postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'password',
+            'device_name' => 'phpunit',
+            'agency_id' => $agency->id,
+        ]);
+
+        $response->assertOk()->assertJsonPath('resolved_agency_id', $agency->id);
+    }
+
+    public function test_an_agency_outside_the_users_pressing_is_rejected_at_login(): void
+    {
+        $this->seedRbac();
+        $pressing = Pressing::factory()->create();
+        $user = $this->makeUser('admin');
+        $user->forceFill(['pressing_id' => $pressing->id])->save();
+        $foreignPressing = Pressing::factory()->create();
+        $foreignAgency = Agency::factory()->create(['pressing_id' => $foreignPressing->id]);
+
+        $response = $this->postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'password',
+            'device_name' => 'phpunit',
+            'agency_id' => $foreignAgency->id,
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_a_local_user_providing_a_different_agency_id_is_rejected_at_login(): void
+    {
+        $this->seedRbac();
+        $ownAgency = Agency::factory()->create();
+        $otherAgency = Agency::factory()->create(['pressing_id' => $ownAgency->pressing_id]);
+        $user = $this->makeUser('accueil', $ownAgency);
+
+        $response = $this->postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'password',
+            'device_name' => 'phpunit',
+            'agency_id' => $otherAgency->id,
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    public function test_remembering_the_session_issues_a_long_lived_token(): void
+    {
+        $this->seedRbac();
+        $user = $this->makeUser('accueil', Agency::factory()->create());
+
+        $this->postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'password',
+            'device_name' => 'phpunit',
+            'remember' => true,
+        ])->assertOk();
+
+        $token = PersonalAccessToken::where('tokenable_id', $user->id)->latest('id')->first();
+        $this->assertNotNull($token->expires_at);
+        $this->assertTrue($token->expires_at->isAfter(now()->addDays(29)));
+    }
+
+    public function test_a_default_login_issues_a_short_lived_token_not_an_eternal_one(): void
+    {
+        $this->seedRbac();
+        $user = $this->makeUser('accueil', Agency::factory()->create());
+
+        $this->postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'password',
+            'device_name' => 'phpunit',
+        ])->assertOk();
+
+        $token = PersonalAccessToken::where('tokenable_id', $user->id)->latest('id')->first();
+        $this->assertNotNull($token->expires_at);
+        $this->assertTrue($token->expires_at->isBefore(now()->addDays(1)));
     }
 }

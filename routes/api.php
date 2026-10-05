@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\PickupController;
 use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PaymentWebhookController;
+use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\PerformanceController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\Platform\PlatformAuthController;
@@ -52,6 +53,9 @@ use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
+Route::post('/login/agencies', [AuthController::class, 'agenciesForEmail'])->middleware('throttle:20,1');
+Route::post('/password/forgot', [PasswordResetController::class, 'forgot'])->middleware('throttle:6,1');
+Route::post('/password/reset', [PasswordResetController::class, 'reset'])->middleware('throttle:10,1');
 
 // Callbacks des opérateurs de paiement : pas d'authentification Sanctum (voir secret partagé dans le contrôleur).
 Route::post('/webhooks/payments/{method}', [PaymentWebhookController::class, 'handle']);

@@ -1,14 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, getToken, setToken } from '../lib/api';
+import { api, authEvents, getToken, setToken } from '../lib/api';
 import type { Agency, User } from '../types';
 
 const AGENCY_KEY = 'pm.selectedAgencyId';
+
+interface LoginOptions {
+    agencyId?: number | null;
+    remember?: boolean;
+}
 
 interface AuthContextValue {
     user: User | null;
     agencies: Agency[];
     loading: boolean;
-    login: (email: string, password: string) => Promise<void>;
+    login: (email: string, password: string, options?: LoginOptions) => Promise<void>;
     logout: () => Promise<void>;
     /** Recharge l'utilisateur courant (ex. après modification du profil ou changement de mot de passe). */
     refreshUser: () => Promise<void>;
@@ -59,11 +64,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loadSession();
     }, [loadSession]);
 
-    const login = useCallback(async (email: string, password: string) => {
-        const result = await api.post<{ token: string; user: User }>('/login', {
+    const login = useCallback(async (email: string, password: string, options?: LoginOptions) => {
+        const result = await api.post<{ token: string; user: User; resolved_agency_id: number | null }>('/login', {
             email,
             password,
             device_name: navigator.userAgent.slice(0, 100) || 'web',
+            agency_id: options?.agencyId ?? undefined,
+            remember: options?.remember ?? false,
         });
         setToken(result.token);
         setUser(result.user);
@@ -72,6 +79,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else {
             const list = await api.get<Agency[]>('/agencies');
             setAgencies(list);
+            // Ferme le gap « agence de session » : un rôle global qui a choisi une agence
+            // au login n'a pas besoin de rouvrir le sélecteur d'en-tête après coup.
+            if (result.resolved_agency_id !== null) {
+                setActiveAgencyIdState(result.resolved_agency_id);
+                localStorage.setItem(AGENCY_KEY, String(result.resolved_agency_id));
+            }
         }
     }, []);
 
@@ -84,6 +97,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(null);
         setUser(null);
         setAgencies([]);
+    }, []);
+
+    useEffect(() => {
+        // Jeton expiré/révoqué (401) : nettoyer côté client sans réappeler /logout (le
+        // jeton est déjà invalide côté serveur) puis rediriger — voir CLAUDE.md
+        // « Se souvenir de moi » pour pourquoi ce handler global n'existait pas avant.
+        const handler = () => {
+            setToken(null);
+            setUser(null);
+            setAgencies([]);
+            if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+            }
+        };
+        authEvents.addEventListener('expired', handler);
+        return () => authEvents.removeEventListener('expired', handler);
     }, []);
 
     const refreshUser = useCallback(async () => {

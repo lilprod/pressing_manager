@@ -63,6 +63,7 @@ const buttonVariants = {
         'border border-ink-200 bg-white text-ink-800 shadow-sm hover:border-ink-300 hover:bg-ink-50 dark:border-ink-700 dark:bg-ink-800 dark:text-ink-100 dark:hover:border-ink-600 dark:hover:bg-ink-700',
     ghost: 'text-ink-700 hover:bg-ink-100 hover:text-ink-900 dark:text-ink-200 dark:hover:bg-ink-800 dark:hover:text-white',
     success: 'bg-emerald-700 text-white shadow-sm hover:bg-emerald-800 dark:bg-emerald-400 dark:text-ink-950 dark:hover:bg-emerald-300',
+    accent: 'bg-accent-500 text-ink-950 shadow-sm hover:bg-accent-600 dark:bg-accent-400 dark:text-ink-950 dark:hover:bg-accent-300',
     danger: 'bg-red-700 text-white shadow-sm hover:bg-red-800 dark:bg-red-400 dark:text-ink-950 dark:hover:bg-red-300',
     dangerGhost: 'text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-400/10',
     link: 'h-auto px-0 text-brand-700 underline-offset-4 hover:underline dark:text-brand-300',

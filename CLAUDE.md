@@ -45,6 +45,24 @@ Maquette cible pour la refonte visuelle en cours :
   primaires. Échelle 50-950 générée par interpolation HSL, contrastes WCAG AA
   vérifiés (blanc/brand-600 = 10,1:1 ; sombre : 4,8:1).
 - **accent** (ancre `accent-500` = Luxury Gold `#C8A54B`) : CTA premium/sélectifs.
+  **Audit du 2026-10-05** : le token était bien extrait et appliqué, mais uniquement
+  sur des badges (`Pill tone="accent"`, `StatCard tone="accent"`) et des décors à
+  faible opacité (`Login.tsx`) — jamais sur un vrai bouton d'action, donc
+  quasi-invisible en navigation réelle malgré une dizaine d'usages dans le code.
+  Aucune variante `button('accent', …)` n'existait dans
+  `components/ui/styles.ts`. **Corrigé** : variante `accent` ajoutée
+  (`bg-accent-500 text-ink-950 hover:bg-accent-600` / `dark:bg-accent-400
+  dark:hover:bg-accent-300`, contraste texte/fond vérifié ≥ 6:1 dans les deux
+  modes — voir calculs dans l'historique de session, pas recalculé ici). Câblée
+  sur le premier cas réellement justifié trouvé (pas de CTA générique recoloré
+  au hasard) : la pastille de sélection d'un type de traitement dans
+  `NewOrder.tsx` passe en gold **uniquement** quand le traitement choisi est
+  réellement premium (`treatment_type.price_ratio > 1`, ex. Express ×1,5) —
+  cohérent avec le sens déjà établi de « gold = Express/premium » ailleurs dans
+  l'app (toggle Express, pastille priorité Atelier). Les autres usages déjà
+  en place (VIP, fidélité, abonnement premium, rôle système…) restent des
+  badges informatifs, pas des CTA — pas de changement nécessaire là, un badge
+  n'est pas un bouton.
 - **ink** = échelle neutre alignée sur le `slate` standard Tailwind (les tokens
   "Neutral" Figma sont littéralement les valeurs slate officielles).
 - Police : **Inter** partout (remplace Figtree + Plus Jakarta Sans).

@@ -710,6 +710,7 @@ export default function NewOrder() {
                                                             <div className="flex flex-wrap gap-1.5">
                                                                 {treatmentTypes.map((treatment) => {
                                                                     const checked = line.treatment_type_id === treatment.id;
+                                                                    const premium = treatment.price_ratio > 1;
                                                                     return (
                                                                         <button
                                                                             key={treatment.id}
@@ -718,9 +719,11 @@ export default function NewOrder() {
                                                                             onClick={() => setLineTreatmentType(line.service_id, treatment.id)}
                                                                             className={cx(
                                                                                 'inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold transition duration-150',
-                                                                                checked
-                                                                                    ? 'bg-brand-700 text-white dark:bg-brand-400 dark:text-ink-950'
-                                                                                    : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-100 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
+                                                                                checked && premium
+                                                                                    ? 'bg-accent-500 text-ink-950 dark:bg-accent-400 dark:text-ink-950'
+                                                                                    : checked
+                                                                                      ? 'bg-brand-700 text-white dark:bg-brand-400 dark:text-ink-950'
+                                                                                      : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-100 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
                                                                             )}
                                                                         >
                                                                             {treatment.name}

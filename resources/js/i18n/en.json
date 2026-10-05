@@ -1415,12 +1415,15 @@
     "documents.title": "Ticket and invoice",
     "documents.subtitle": "Preview, print or share the order's documents.",
     "documents.format": "Document format",
+    "documents.format.hint": "Choose the layout before printing.",
     "documents.format.ticket": "Ticket",
     "documents.format.invoice": "A4 invoice",
-    "documents.print": "Print",
+    "documents.format.invoiceHint": "A4 · archived PDF",
+    "documents.actions": "Actions",
+    "documents.print": "Print now",
     "documents.download": "Download PDF",
     "documents.openInvoice": "Open PDF",
-    "documents.send": "Send by email",
+    "documents.send": "Send to client",
     "documents.sendTo": "Send to client",
     "documents.noEmail": "This client has no email address on file — sending by email is unavailable.",
     "documents.sendSuccess": "Document sent by email to {email}.",
@@ -1431,6 +1434,8 @@
     "documents.ticketPreview": "Deposit ticket",
     "documents.invoicePreview": "Invoice",
     "documents.copies": "Copies",
+    "documents.offline.title": "Offline printing",
     "documents.offline.pending": "This deposit is not yet synced (created offline). Local number: {uuid}. The ticket can still be printed — the final number will appear once synced.",
-    "documents.offline.conflict": "A sync conflict was detected on this deposit. Check the data before printing or sending a document."
+    "documents.offline.conflict": "A sync conflict was detected on this deposit. Check the data before printing or sending a document.",
+    "documents.offline.localQueue": "Local queue: {count} document(s) pending"
 }

@@ -1138,8 +1138,75 @@ sticky existant.
   jamais durablement le bouton de soumission — convention déjà établie dans
   ce fichier, toujours respectée).
 
-Ce module (02 Dépôts) a maintenant un seul chantier restant : réagencement de
-**Ticket et facture**.
+**Ticket et facture — réagencement (cartes Actions/Format/Envoi/Hors connexion)**
+— fait le 2026-10-05, dernier des trois chantiers restants identifiés par
+l'audit de conformité « 02 Dépôts & POS » du même jour. Capture `Ticket_Facture.PNG`
+(dossier Drive, même lot que l'audit) montre un **layout à 3 colonnes** (aperçu
+ticket / aperçu facture / barre latérale à 3 cartes empilées « Format du
+document », « Actions », « Impression hors connexion ») — l'ancien
+`TicketFacturePage.tsx` avait les mêmes informations mais **éparpillées** :
+boutons Télécharger/Imprimer dans l'en-tête de page, toggle format + copies
+en ligne flottante au-dessus des aperçus, bouton Envoyer seul dans une section
+pleine largeur sous les aperçus.
+- **Aucun changement backend** — uniquement un réagencement, toutes les
+  données et actions existaient déjà (téléchargement, impression, envoi
+  e-mail, détection hors-ligne).
+- **Grille 3 colonnes** `grid-cols-1 lg:grid-cols-[1fr_1fr_320px]` (aperçu
+  ticket, aperçu facture, barre latérale `lg:sticky lg:top-6`) — même patron
+  que les écrans Caisse (`CashMovementFormPage.tsx`/`CashClosureFormPage.tsx`,
+  `lg:grid-cols-[1fr_320px]`), `grid-cols-1` de base posé d'emblée pour éviter
+  le piège déjà documenté dans ce fichier (grille sans colonne de base qui
+  dimensionne sur le contenu max en dessous de `lg`).
+- **Carte « Format du document »** : toggle Ticket/Facture A4 (inchangé) +
+  Exemplaires (éditable, inchangé, visible seulement en mode Ticket) + une
+  ligne d'information statique « A4 · PDF archivé » en mode Facture — texte
+  descriptif vrai (le PDF de facture est réellement généré et stocké par
+  `InvoiceService` à la création, jamais régénéré), pas une donnée fabriquée.
+  **Sélecteur « Imprimante » toujours explicitement omis** — décision déjà
+  actée au premier passage de cet écran (2026-10-01) : aucun registre de
+  périphériques n'existe côté backend, le fabriquer inventerait une donnée ;
+  réaffirmée ici après relecture de la capture.
+- **Carte « Actions »** : les 3 actions (Imprimer maintenant / Télécharger le
+  PDF / Envoyer au client) regroupées dans une seule carte plutôt
+  qu'éparpillées entre l'en-tête de page et une section séparée — mêmes
+  gardes `disabled` qu'avant (désactivées en mode Facture tant qu'aucune
+  facture n'existe). Bloc « Envoi client » (nom + e-mail) affiché sous les
+  boutons quand le client a une adresse, sinon l'alerte `noEmail` existante.
+  **Envoi WhatsApp toujours explicitement omis** — la capture affiche une
+  icône WhatsApp à côté du nom client, mais aucune intégration WhatsApp
+  n'existe dans l'application (décision déjà actée pour cet écran le
+  2026-10-01) ; le bloc « Envoi client » reste un encart informatif (nom +
+  e-mail), jamais un second bouton d'envoi qui n'enverrait nulle part.
+- **Carte « Impression hors connexion »** : **reste conditionnelle**
+  (`order.sync_status !== 'synced'`), décision délibérément **reconduite**
+  plutôt qu'alignée sur la capture qui la montre en permanence avec
+  « Toujours disponible sur POS-01» — cette formulation est précisément le
+  genre de statut générique fabriqué que ce fichier a déjà explicitement
+  écarté pour cet écran le 2026-10-01 (« omise pour le cas normal plutôt que
+  d'afficher un faux "Toujours disponible" »). Enrichie quand elle s'affiche :
+  réutilise le hook existant `useSyncQueue()` (déjà utilisé par
+  `DashboardPage.tsx`/`OrdersList.tsx`, aucune nouvelle donnée) pour une
+  ligne « File locale : N document(s) en attente » — honnête (reflète la
+  vraie file IndexedDB de l'appareil), pas un chiffre inventé.
+- **Libellés alignés sur la capture** (`documents.print` → « Imprimer
+  maintenant » au lieu de « Imprimer », clé utilisée uniquement sur cet
+  écran donc sans effet de bord) ; nouvelles clés `documents.actions`,
+  `documents.format.hint`, `documents.format.invoiceHint`,
+  `documents.offline.title`, `documents.offline.localQueue` (fr/en, parité
+  stricte vérifiée).
+- Vérifié par Playwright à 1440px et 390px (`scrollWidth === clientWidth`
+  aux deux largeurs) : aperçus + 2 cartes visibles pour un dépôt synchronisé
+  normal ; 3e carte « Impression hors connexion » vérifiée séparément en
+  basculant temporairement `sync_status` d'un dépôt de test sur `pending`
+  (via tinker, revert immédiat après capture) — s'affiche bien en ambre avec
+  le numéro local et la file locale réelle, puis bascule du format Ticket →
+  Facture A4 confirmée (ligne « A4 · PDF archivé » affichée, aucun
+  débordement). Aucun changement backend donc suite de tests backend
+  inchangée (462/462). `tsc --noEmit` et `npm run build` propres, parité
+  i18n stricte.
+
+Les trois chantiers Dépôts identifiés par l'audit de conformité du
+2026-10-05 sont maintenant tous faits.
 
 **03 Clients — Fiche client et formulaires** (captures Figma fournies le 2026-10-01,
 pas de node exact) — écarts additionnels à ceux déjà notés :

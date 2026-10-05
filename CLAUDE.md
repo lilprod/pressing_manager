@@ -902,6 +902,104 @@ pagination numérotée, export** — fait le 2026-10-05 :
   `StatCard` en une colonne, tableau défilant dans sa carte sans déborder la
   page).
 
+**Fiche dépôt (`OrderDetail.tsx`) — carte Client, historique des paiements,
+Modifier/Annuler le dépôt** — fait le 2026-10-05, deuxième chantier de l'audit
+de conformité Dépôts du même jour (suite directe de `OrdersList.tsx` ci-dessus,
+même décision utilisateur : « Oui, construire les deux » pour Modifier/Annuler,
+« Tout construire maintenant » pour le reste) :
+- **Carte Client** (panneau latéral, avant `InvoicePanel`) : avatar, nom,
+  téléphone, « Client depuis le {date} » (neutre, aucune donnée de genre client
+  n'existe), points de fidélité et palier (réutilise les badges déjà affichés
+  ailleurs), et un bloc « Solde client (autres dépôts) » — nouveau
+  `other_balance_due` sur `OrderController::show()`, **même formule exacte**
+  que `ClientController::show()` → `balance_due` (factures impayées du client
+  en `emise`/`partiellement_payee`) mais **excluant explicitement la facture du
+  dépôt courant** (déjà montrée séparément par la StatCard « Reste à payer »)
+  pour ne jamais compter le même impayé deux fois à l'écran.
+- **Carte « Synchronisation » (4e StatCard envisagée)** : **décision inverse**
+  de l'audit initial — en examinant le code, `orders.sync_status` ne reçoit en
+  pratique **jamais** d'autre valeur que `'synced'` (posée une seule fois à la
+  création, aucun chemin de code ne la fait jamais évoluer vers `pending`/
+  `conflict` pour une commande persistée). Une 4e carte sur ce champ aurait
+  techniquement lu une « vraie » colonne mais aurait été constante et donc
+  trompeuse (toujours « Synchronisé », jamais informative) — **non construite**,
+  correction honnête d'un jugement d'audit initial trop optimiste. La fiche
+  dépôt garde ses 3 cartes (Statut commercial / État atelier / Reste à payer).
+- **Historique des paiements** (`InvoicePanel.tsx`) : remplace l'ancien état
+  « dernier paiement » (un seul, écrasé à chaque nouveau paiement partiel) par
+  la liste complète et persistante de `invoice.payments` (triée desc par
+  `paid_at`) — méthode, montant, date, et l'opérateur qui a encaissé
+  (`payment.receiver.name`, affiché seulement si présent). **Piège Eloquent
+  évité avant qu'il ne se produise** : c'était le tout premier chargement de
+  cette relation dans la base de code (confirmé par grep, zéro usage
+  antérieur) ; le nom naturel `receivedBy()` serait entré en collision avec la
+  colonne brute `payments.received_by` une fois eager-chargé (`toArray()`
+  écrase silencieusement la colonne par l'objet relation, piège déjà documenté
+  dans ce fichier) — renommée `Payment::receiver()` avant le premier chargement,
+  jamais le bug lui-même. « Ventilation du total » (sous-total/remise/TVA/
+  total) : déjà correctement affichée par `InvoicePanel.tsx`, aucun nouveau
+  travail requis (vérifié, pas supposé) — une ventilation façon « Express
+  +30 % / points utilisés » n'est pas honnêtement reconstructible après coup
+  puisque `unit_price` est figé à la création et le ratio de traitement peut
+  changer depuis (principe d'immuabilité déjà acté dans ce fichier).
+- **Modifier le dépôt** (`PATCH /orders/{id}`, `UpdateOrderRequest`,
+  permission `orders.manage`) : **volontairement limité** à `notes`/
+  `promised_at`/`is_express` — jamais les articles, prix ou remise (figés dès
+  la création, cohérent avec l'immuabilité déjà actée partout ailleurs dans ce
+  fichier ; les rouvrir aurait exigé de refaire tourner tout le pipeline de
+  tarification/TVA/facture après coup, hors scope). Rejeté (422) sur un dépôt
+  `livre` ou `annule` (`NOT_EDITABLE_STATUSES` côté front, même règle testée
+  côté backend). Modale légère (overlay `fixed inset-0 bg-black/40`, patron
+  déjà utilisé par `RenewLicenseModal` côté superadmin — pas un nouveau
+  composant `Modal` partagé inventé pour deux usages).
+- **Annuler le dépôt** (`POST /orders/{id}/cancel`, `CancelOrderRequest`,
+  motif optionnel) : statut → `annule`, motif concaténé dans `notes`. Rejeté
+  (422) si déjà `livre`/`annule`, ou si un `Payment` `status=complete` existe
+  déjà sur la facture (annuler un dépôt déjà réglé serait annuler de l'argent
+  réellement encaissé — bloqué, pas de remboursement automatique fabriqué).
+  Si une facture `emise`/`partiellement_payee` existe sans paiement complet,
+  elle passe à `annulee` dans la même transaction.
+  **Deux bugs latents trouvés et corrigés avant d'écrire le moindre test**
+  (`'annule'` n'avait jamais été atteint en pratique avant cette passe — grep
+  confirmé — donc rien n'avait jamais exercé ces chemins) :
+  1. `OrderItemStatusTransitioner::transition()` n'avait aucune garde contre le
+     statut `annule` de la commande parente — une transition d'article après
+     coup aurait fait recalculer `OrderStatusSynchronizer::sync()` et aurait
+     silencieusement **ressuscité** une commande annulée vers un statut en
+     cours. Ajouté une garde explicite (rejet) en tête de `transition()`.
+  2. Même lacune sur `PickupService::process()` (aucune vérification du statut
+     de la commande avant de traiter un retrait) — corrigée symétriquement.
+  Les deux corrections sont couvertes par des tests de régression dédiés
+  (`test_no_item_status_transition_is_possible_on_a_cancelled_order`,
+  `test_no_pickup_can_be_processed_on_a_cancelled_order`).
+- **Boutons d'en-tête** : « Modifier le dépôt » (`button('secondary')`,
+  icône crayon) et « Annuler le dépôt » (`button('danger')`, icône Ban) ajoutés
+  à côté des boutons existants (Imprimer/Ticket et facture/Suivre l'atelier),
+  tous deux masqués ensemble dès que le statut n'est plus modifiable — jamais
+  affichés sur un dépôt déjà livré ou annulé.
+- Tests : `tests/Feature/Orders/OrderDetailEnrichmentTest.php` (4 — solde client
+  hors dépôt courant, cas à zéro, exposition de `receiver` sans collision de
+  colonne sur l'endpoint commande et sur l'endpoint facture),
+  `tests/Feature/Orders/OrderUpdateCancelTest.php` (13 — mise à jour des 3
+  champs autorisés, rejet sur dépôt livré/annulé, gating permission/agence,
+  annulation sans facture, annulation avec facture impayée qui bascule
+  `annulee`, rejet si paiement déjà complet, rejet si déjà livré/annulé, gating
+  permission, + les 2 tests de régression ci-dessus). Suite complète 454/454
+  après ajout (aucune régression). `tsc --noEmit` et `npm run build` propres,
+  parité i18n fr/en stricte. Vérifié par Playwright bout en bout, **parcours
+  réel complet** (pas seulement HTTP) à 1440px et 390px : connexion → ouverture
+  d'un dépôt → carte Client et solde affichés correctement → « Modifier le
+  dépôt » → note modifiée → enregistrée et reflétée à l'écran sans rechargement
+  → sur un second dépôt, « Annuler le dépôt » → motif saisi → confirmé → statut
+  `annule` en base et à l'écran, boutons Modifier/Annuler/Suivre l'atelier
+  correctement disparus, aucun débordement horizontal à 390px
+  (`document.documentElement.scrollWidth === clientWidth`).
+- **Reste à faire sur ce module** (tableau Articles restylé pour se rapprocher
+  de la capture « Dépôt DEP-240928 » — en-têtes de colonnes, badges d'état par
+  ligne) avant de passer au chantier suivant (refonte du flux Nouveau dépôt
+  avec paiement intégré à la création, puis réagencement Ticket et facture),
+  chacun avec son propre arrêt de validation.
+
 **03 Clients — Fiche client et formulaires** (captures Figma fournies le 2026-10-01,
 pas de node exact) — écarts additionnels à ceux déjà notés :
 - ~~Fiche client : 4 KPI (valeur vie client, dépôts réalisés, panier moyen, solde à

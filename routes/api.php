@@ -176,6 +176,8 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::get('/orders/export', [OrderController::class, 'export']);
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
+    Route::patch('/orders/{order}', [OrderController::class, 'update']);
+    Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel']);
     Route::post('/orders/{order}/invoice', [InvoiceController::class, 'storeForOrder']);
     Route::get('/orders/{order}/audit-logs', [AuditLogController::class, 'forOrder']);
     Route::get('/orders/{order}/ticket-pdf', [DocumentController::class, 'ticketPdf']);

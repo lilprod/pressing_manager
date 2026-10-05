@@ -38,7 +38,14 @@ class Payment extends Model
         return $this->belongsTo(Client::class);
     }
 
-    public function receivedBy(): BelongsTo
+    /**
+     * Nommée `receiver` (pas `receivedBy`) : chargée pour la première fois par la
+     * fiche dépôt (historique des paiements) — une relation `receivedBy()` sur un
+     * modèle qui a déjà une colonne `received_by` écraserait silencieusement la
+     * valeur brute de la colonne dans le JSON (piège déjà documenté dans
+     * CLAUDE.md pour Order::createdBy()/CashMovement/CashClosure).
+     */
+    public function receiver(): BelongsTo
     {
         return $this->belongsTo(User::class, 'received_by');
     }

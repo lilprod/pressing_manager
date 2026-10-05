@@ -1,8 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Banknote, CalendarDays, ClipboardCheck, Clock, FileQuestion, Phone, Printer, ScrollText, StickyNote, Workflow, Zap } from 'lucide-react';
+import {
+    ArrowLeft,
+    ArrowUpRight,
+    Award,
+    Ban,
+    Banknote,
+    CalendarDays,
+    ClipboardCheck,
+    Clock,
+    FileQuestion,
+    Pencil,
+    Phone,
+    Printer,
+    ScrollText,
+    StickyNote,
+    Star,
+    Workflow,
+    X,
+    Zap,
+} from 'lucide-react';
 import { useI18n } from '../../contexts/I18nContext';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { useFormat } from '../../lib/format';
 import { auditLogLabel } from '../../lib/auditLog';
 import OrderItemRow from '../../components/OrderItemRow';
@@ -11,22 +30,44 @@ import PrintableLabel from '../../components/PrintableLabel';
 import InvoicePanel from '../../components/InvoicePanel';
 import { Avatar } from '../../components/ui/PageHeader';
 import StatusBadge, { Pill, statusTone } from '../../components/ui/StatusBadge';
-import { EmptyState, LoadingState } from '../../components/ui/Feedback';
+import { Alert, EmptyState, LoadingState, Spinner } from '../../components/ui/Feedback';
 import { StatCard } from '../../components/ui/Metrics';
 import { Timeline, type TimelineEntry } from '../../components/ui/Timeline';
-import { button, card, cardPadded, cx, sectionTitle, textLink } from '../../components/ui/styles';
+import { button, card, cardPadded, cx, input, label as labelClass, sectionTitle, textLink } from '../../components/ui/styles';
 import type { AuditLog, Order, OrderItem } from '../../types';
 
 type PrintTarget = { kind: 'ticket' } | { kind: 'label'; item: OrderItem; dataUri: string } | null;
 
+/** Même utilitaire que RhPage.tsx (pas d'extraction pour 2 lignes) : valeur locale
+ * pour un <input type="datetime-local"> à partir d'un ISO serveur (UTC). */
+function toLocalDatetimeInputValue(iso: string): string {
+    const date = new Date(iso);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+const NOT_EDITABLE_STATUSES = ['livre', 'annule'];
+
 export default function OrderDetail() {
     const { id } = useParams<{ id: string }>();
     const { t } = useI18n();
-    const { money, dateTime } = useFormat();
+    const { money, date, dateTime } = useFormat();
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
     const [printTarget, setPrintTarget] = useState<PrintTarget>(null);
     const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+
+    const [editing, setEditing] = useState(false);
+    const [editNotes, setEditNotes] = useState('');
+    const [editPromisedAt, setEditPromisedAt] = useState('');
+    const [editExpress, setEditExpress] = useState(false);
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [editError, setEditError] = useState<string | null>(null);
+
+    const [cancelling, setCancelling] = useState(false);
+    const [cancelReason, setCancelReason] = useState('');
+    const [cancelBusy, setCancelBusy] = useState(false);
+    const [cancelError, setCancelError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!id) return;
@@ -91,6 +132,52 @@ export default function OrderDetail() {
     async function printLabel(item: OrderItem) {
         const { data_uri } = await api.get<{ qr_code: string; data_uri: string }>(`/order-items/${item.id}/qr-code`);
         setPrintTarget({ kind: 'label', item, dataUri: data_uri });
+    }
+
+    function openEdit() {
+        if (!order) return;
+        setEditNotes(order.notes ?? '');
+        setEditPromisedAt(order.promised_at ? toLocalDatetimeInputValue(order.promised_at) : '');
+        setEditExpress(order.is_express);
+        setEditError(null);
+        setEditing(true);
+    }
+
+    async function saveEdit() {
+        if (!order) return;
+        setSavingEdit(true);
+        setEditError(null);
+        try {
+            const updated = await api.patch<Order>(`/orders/${order.id}`, {
+                notes: editNotes.trim() || null,
+                promised_at: editPromisedAt ? new Date(editPromisedAt).toISOString() : null,
+                is_express: editExpress,
+            });
+            setOrder(updated);
+            setEditing(false);
+        } catch (err) {
+            setEditError(err instanceof ApiError ? err.message : t('common.error'));
+        } finally {
+            setSavingEdit(false);
+        }
+    }
+
+    async function confirmCancel() {
+        if (!order) return;
+        setCancelBusy(true);
+        setCancelError(null);
+        try {
+            const updated = await api.post<Order>(`/orders/${order.id}/cancel`, {
+                reason: cancelReason.trim() || undefined,
+            });
+            setOrder(updated);
+            setCancelling(false);
+            setCancelReason('');
+        } catch (err) {
+            setCancelError(err instanceof ApiError ? err.message : t('common.error'));
+        } finally {
+            setCancelBusy(false);
+        }
     }
 
     const backLink = (
@@ -190,6 +277,26 @@ export default function OrderDetail() {
                                     {t('order.followWorkshop')}
                                 </Link>
                             )}
+                            {!NOT_EDITABLE_STATUSES.includes(order.status) && (
+                                <>
+                                    <button type="button" onClick={openEdit} className={button('secondary')}>
+                                        <Pencil aria-hidden="true" className="h-4 w-4" />
+                                        {t('order.edit.action')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCancelReason('');
+                                            setCancelError(null);
+                                            setCancelling(true);
+                                        }}
+                                        className={button('danger')}
+                                    >
+                                        <Ban aria-hidden="true" className="h-4 w-4" />
+                                        {t('order.cancel.action')}
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -226,7 +333,55 @@ export default function OrderDetail() {
                     </ul>
                 </section>
 
-                <div className="lg:sticky lg:top-20">
+                <div className="space-y-6 lg:sticky lg:top-20">
+                    {order.client && (
+                        <section aria-labelledby="client-card-heading" className={cx(cardPadded, 'space-y-4')}>
+                            <div className="flex items-center justify-between gap-2">
+                                <h2 id="client-card-heading" className={sectionTitle}>
+                                    {t('order.client')}
+                                </h2>
+                                <Link to={`/clients/${order.client_id}`} className={cx(textLink, 'inline-flex items-center gap-1 text-xs')}>
+                                    {t('order.openClient')}
+                                    <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+                                </Link>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <Avatar firstName={order.client.first_name} lastName={order.client.last_name} size="md" />
+                                <div className="min-w-0">
+                                    <p className="truncate font-semibold text-ink-900 dark:text-ink-50">
+                                        {order.client.first_name} {order.client.last_name}
+                                    </p>
+                                    <p className="truncate text-xs text-ink-600 dark:text-ink-350">
+                                        {order.client.phone} · {t('order.clientSince', { date: date(order.client.created_at) })}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Pill tone="accent" icon={Award}>
+                                    {t('client.pointsCount', { count: order.client.loyalty_points })}
+                                </Pill>
+                                {order.client.loyalty_tier_name && (
+                                    <Pill tone="amber" icon={Star}>
+                                        {order.client.loyalty_tier_name}
+                                    </Pill>
+                                )}
+                            </div>
+                            <div className="border-t border-ink-200/80 pt-3 dark:border-ink-800">
+                                <p className="text-xs font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">
+                                    {t('order.clientBalance.title')}
+                                </p>
+                                <p
+                                    className={cx(
+                                        'font-display text-lg font-bold tabular-nums',
+                                        order.client.other_balance_due ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300',
+                                    )}
+                                >
+                                    {order.client.other_balance_due ? money(order.client.other_balance_due) : t('order.clientBalance.none')}
+                                </p>
+                            </div>
+                        </section>
+                    )}
+
                     <InvoicePanel order={order} />
                 </div>
             </div>
@@ -251,6 +406,107 @@ export default function OrderDetail() {
 
             {printTarget?.kind === 'ticket' && <PrintableTicket order={order} />}
             {printTarget?.kind === 'label' && <PrintableLabel item={printTarget.item} dataUri={printTarget.dataUri} />}
+
+            {editing && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+                    <section className={cx(card, 'w-full max-w-md space-y-4 p-6')}>
+                        <div className="flex items-center justify-between">
+                            <h2 className="font-display text-lg font-bold text-ink-900 dark:text-white">{t('order.edit.title')}</h2>
+                            <button
+                                type="button"
+                                onClick={() => setEditing(false)}
+                                aria-label={t('common.close')}
+                                className="text-ink-500 hover:text-ink-700 dark:text-ink-400"
+                            >
+                                <X aria-hidden="true" className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        {editError && <Alert tone="error">{editError}</Alert>}
+
+                        <label className="block">
+                            <span className={labelClass}>{t('order.edit.notes')}</span>
+                            <textarea
+                                value={editNotes}
+                                onChange={(e) => setEditNotes(e.target.value)}
+                                rows={3}
+                                className={cx(input, 'w-full')}
+                            />
+                        </label>
+
+                        <label className="block">
+                            <span className={labelClass}>{t('order.edit.promisedAt')}</span>
+                            <input
+                                type="datetime-local"
+                                value={editPromisedAt}
+                                onChange={(e) => setEditPromisedAt(e.target.value)}
+                                className={cx(input, 'w-full')}
+                            />
+                        </label>
+
+                        <label className="flex items-center gap-2 text-sm text-ink-700 dark:text-ink-300">
+                            <input
+                                type="checkbox"
+                                checked={editExpress}
+                                onChange={(e) => setEditExpress(e.target.checked)}
+                                className="h-4 w-4 rounded border-ink-300 text-brand-600 focus:ring-brand-500 dark:border-ink-600"
+                            />
+                            {t('order.edit.express')}
+                        </label>
+
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button type="button" onClick={() => setEditing(false)} className={button('secondary')}>
+                                {t('common.cancel')}
+                            </button>
+                            <button type="button" onClick={saveEdit} disabled={savingEdit} className={button('primary')}>
+                                {savingEdit && <Spinner />}
+                                {t('common.save')}
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            )}
+
+            {cancelling && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+                    <section className={cx(card, 'w-full max-w-md space-y-4 p-6')}>
+                        <div className="flex items-center justify-between">
+                            <h2 className="font-display text-lg font-bold text-ink-900 dark:text-white">{t('order.cancel.title')}</h2>
+                            <button
+                                type="button"
+                                onClick={() => setCancelling(false)}
+                                aria-label={t('common.close')}
+                                className="text-ink-500 hover:text-ink-700 dark:text-ink-400"
+                            >
+                                <X aria-hidden="true" className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        <Alert tone="warning">{t('order.cancel.warning')}</Alert>
+                        {cancelError && <Alert tone="error">{cancelError}</Alert>}
+
+                        <label className="block">
+                            <span className={labelClass}>{t('order.cancel.reason')}</span>
+                            <textarea
+                                value={cancelReason}
+                                onChange={(e) => setCancelReason(e.target.value)}
+                                rows={3}
+                                className={cx(input, 'w-full')}
+                            />
+                        </label>
+
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button type="button" onClick={() => setCancelling(false)} className={button('secondary')}>
+                                {t('common.close')}
+                            </button>
+                            <button type="button" onClick={confirmCancel} disabled={cancelBusy} className={button('danger')}>
+                                {cancelBusy && <Spinner />}
+                                {t('order.cancel.confirm')}
+                            </button>
+                        </div>
+                    </section>
+                </div>
+            )}
         </div>
     );
 }

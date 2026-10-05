@@ -48,6 +48,15 @@ class OrderItemStatusTransitioner
             $this->assertQualityCheckConsistency($from, $to, $context['quality_check_result'] ?? null);
         }
 
+        // Un dépôt annulé (« Annuler le dépôt », fiche dépôt) est un état terminal : sans
+        // cette garde, une transition d'article resterait possible et
+        // OrderStatusSynchronizer recalculerait silencieusement orders.status depuis les
+        // articles à la transition suivante, annulant de facto l'annulation.
+        $order = $item->order()->first();
+        if ($order->status === 'annule') {
+            throw new InvalidStatusTransitionException($from, $to, "Ce dépôt est annulé, aucune transition d'article n'est plus possible.");
+        }
+
         $item = DB::transaction(function () use ($item, $from, $to, $actor, $context) {
             $item->status = $to;
 
@@ -79,7 +88,7 @@ class OrderItemStatusTransitioner
             return $item;
         });
 
-        $this->statusSync->sync($item->order()->first());
+        $this->statusSync->sync($order);
 
         if ($to === 'pret') {
             $this->notifyIfOrderReady($item);

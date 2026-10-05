@@ -3,7 +3,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { api, ApiError } from '../lib/api';
 import type { Invoice, Order, Payment, PaymentMethod } from '../types';
-import { CircleCheck, FileDown, FilePlus2, HandCoins, Receipt } from 'lucide-react';
+
+const PAYMENT_METHOD_LABEL_KEYS: Record<PaymentMethod, string> = {
+    espece: 'payment.cash',
+    carte: 'payment.card',
+    flooz: 'payment.flooz',
+    tmoney: 'payment.tmoney',
+};
+import { CircleCheck, FileDown, FilePlus2, HandCoins, History, Receipt } from 'lucide-react';
 import { useFormat } from '../lib/format';
 import PaymentMethodPicker from './PaymentMethodPicker';
 import PaymentReferenceField from './PaymentReferenceField';
@@ -13,7 +20,7 @@ import { button, card, cx, input, label, sectionTitle } from './ui/styles';
 
 export default function InvoicePanel({ order }: { order: Order }) {
     const { t } = useI18n();
-    const { money } = useFormat();
+    const { money, dateTime } = useFormat();
     const { user } = useAuth();
     // L'API exige l'agence pour un rôle global et la refuse pour un rôle d'agence.
     const agencyScope = user?.agency_id === null ? { agency_id: order.agency_id } : {};
@@ -23,7 +30,6 @@ export default function InvoicePanel({ order }: { order: Order }) {
     const [method, setMethod] = useState<PaymentMethod>('espece');
     const [amount, setAmount] = useState<number>(order.total_amount);
     const [reference, setReference] = useState('');
-    const [lastPayment, setLastPayment] = useState<Payment | null>(null);
 
     const referenceRequired = method !== 'espece';
     const referenceMissing = referenceRequired && reference.trim() === '';
@@ -55,23 +61,23 @@ export default function InvoicePanel({ order }: { order: Order }) {
         setBusy(true);
         setError(null);
         try {
-            const payment =
-                method === 'espece'
-                    ? await api.post<Payment>('/payments/cash', {
-                          ...agencyScope,
-                          client_id: order.client_id,
-                          invoice_id: invoice.id,
-                          amount,
-                      })
-                    : await api.post<Payment>('/payments/manual', {
-                          ...agencyScope,
-                          client_id: order.client_id,
-                          invoice_id: invoice.id,
-                          amount,
-                          method,
-                          reference: reference.trim(),
-                      });
-            setLastPayment(payment);
+            if (method === 'espece') {
+                await api.post<Payment>('/payments/cash', {
+                    ...agencyScope,
+                    client_id: order.client_id,
+                    invoice_id: invoice.id,
+                    amount,
+                });
+            } else {
+                await api.post<Payment>('/payments/manual', {
+                    ...agencyScope,
+                    client_id: order.client_id,
+                    invoice_id: invoice.id,
+                    amount,
+                    method,
+                    reference: reference.trim(),
+                });
+            }
             setReference('');
             const refreshed = await api.get<Invoice>(`/invoices/${invoice.id}`);
             setInvoice(refreshed);
@@ -178,15 +184,34 @@ export default function InvoicePanel({ order }: { order: Order }) {
                             </div>
                         )}
 
-                        {lastPayment && (
-                            <div
-                                role="status"
-                                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink-200 px-3.5 py-3 text-sm dark:border-ink-700"
-                            >
-                                <span className="inline-flex items-center gap-2 font-medium text-ink-800 dark:text-ink-100">
-                                    {money(lastPayment.amount)}
-                                </span>
-                                <StatusBadge kind="payment" status={lastPayment.status} />
+                        {invoice.payments && invoice.payments.length > 0 && (
+                            <div className="space-y-2.5 border-t border-ink-200/80 pt-4 dark:border-ink-800">
+                                <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">
+                                    <History aria-hidden="true" className="h-3.5 w-3.5" />
+                                    {t('invoice.paymentHistory')}
+                                </h3>
+                                <ul className="space-y-2">
+                                    {[...invoice.payments]
+                                        .sort((a, b) => new Date(b.paid_at ?? 0).getTime() - new Date(a.paid_at ?? 0).getTime())
+                                        .map((p) => (
+                                            <li
+                                                key={p.id}
+                                                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink-200 px-3.5 py-3 text-sm dark:border-ink-700"
+                                            >
+                                                <div className="min-w-0">
+                                                    <p className="inline-flex items-center gap-2 font-medium text-ink-800 dark:text-ink-100">
+                                                        {money(p.amount)}
+                                                        <span className="font-normal text-ink-500 dark:text-ink-400">{t(PAYMENT_METHOD_LABEL_KEYS[p.method])}</span>
+                                                    </p>
+                                                    <p className="truncate text-xs text-ink-500 dark:text-ink-400">
+                                                        {p.paid_at ? dateTime(p.paid_at) : '—'}
+                                                        {p.receiver && ` · ${t('invoice.receivedBy', { name: p.receiver.name })}`}
+                                                    </p>
+                                                </div>
+                                                <StatusBadge kind="payment" status={p.status} />
+                                            </li>
+                                        ))}
+                                </ul>
                             </div>
                         )}
                     </div>

@@ -52,6 +52,10 @@ class PickupService
         return DB::transaction(function () use ($order, $data, $actor) {
             $order->loadMissing('items', 'invoice.payments', 'client');
 
+            if ($order->status === 'annule') {
+                throw new HttpException(422, 'Ce dépôt est annulé, aucun retrait ne peut être traité.');
+            }
+
             $lines = $this->resolveLines($order, $data['items']);
 
             $balanceDue = $this->balanceDue($order);

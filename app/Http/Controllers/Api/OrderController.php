@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Http\Requests\Order\CancelOrderRequest;
 use App\Http\Requests\Order\StoreOrderRequest;
+use App\Http\Requests\Order\UpdateOrderRequest;
 use App\Models\Agency;
 use App\Models\AgencySetting;
 use App\Models\Client;
@@ -329,16 +331,94 @@ class OrderController extends ApiController
 
         $order->load(
             'items.service', 'items.treatmentType', 'items.intakeConditions', 'items.statusHistories.actor',
-            'client', 'invoice.payments', 'agency', 'pickups.items.orderItem', 'pickups.processor', 'creator',
+            'client', 'invoice.payments.receiver', 'agency', 'pickups.items.orderItem', 'pickups.processor', 'creator',
             'washer', 'sorter',
         );
-        $order->setAttribute('balance_due', $this->balanceDue($order));
+        $balanceDue = $this->balanceDue($order);
+        $order->setAttribute('balance_due', $balanceDue);
         // Codes dépôt (« Paramètres opérationnels ») : couche d'affichage uniquement,
         // appliquée ici (fiche dépôt + ticket imprimé) — pas sur les listes paginées,
         // pour éviter un N+1 sur AgencySetting à chaque ligne (voir CLAUDE.md).
         $order->setAttribute('order_number_formatted', $order->agency->formatOrderNumber($order->order_number));
 
+        // Carte « Client » de la fiche dépôt : solde dû sur les AUTRES dépôts du
+        // client (la carte « Reste à payer » couvre déjà celui-ci) — même formule
+        // que ClientController::show(), jamais une estimation séparée.
+        $clientTotalBalanceDue = (int) Invoice::where('client_id', $order->client_id)
+            ->whereIn('status', ['emise', 'partiellement_payee'])
+            ->withSum(['payments as paid_amount' => fn ($query) => $query->where('status', 'complete')], 'amount')
+            ->get()
+            ->sum(fn (Invoice $invoice) => max(0, $invoice->total_amount - (int) ($invoice->paid_amount ?? 0)));
+        $order->client->setAttribute('other_balance_due', max(0, $clientTotalBalanceDue - $balanceDue));
+
         return response()->json($order);
+    }
+
+    /**
+     * « Modifier le dépôt » (fiche dépôt) — volontairement limité aux champs sans
+     * impact tarifaire. Les articles/prix/remise restent figés une fois le dépôt
+     * créé (même garantie que pour une facture déjà émise : rouvrir le calcul du
+     * total exigerait de rejouer toute la logique de tarification/paliers/
+     * traitements de store(), hors scope de cette passe). Bloqué une fois le
+     * dépôt livré ou annulé — plus rien à modifier à ce stade.
+     */
+    public function update(UpdateOrderRequest $request, Order $order): JsonResponse
+    {
+        $this->authorizeAgency($request->user(), $order->agency_id);
+
+        if (in_array($order->status, ['livre', 'annule'], true)) {
+            throw new HttpException(422, "Ce dépôt est {$order->status} : il n'est plus modifiable.");
+        }
+
+        $order->fill($request->validated());
+        $order->save();
+
+        return $this->show($request, $order);
+    }
+
+    /**
+     * « Annuler le dépôt » (fiche dépôt) — statut terminal jamais utilisé jusqu'ici
+     * (confirmé par lecture de code, aucune autre route ne positionne 'annule').
+     * Bloqué si déjà livré/annulé, ou si un paiement a déjà été encaissé (un
+     * remboursement est un flux distinct, non construit). La facture associée,
+     * si elle existe et n'a reçu aucun paiement, est annulée avec le dépôt pour
+     * rester cohérente plutôt que de laisser une facture orpheline. Le motif,
+     * optionnel, est ajouté aux notes plutôt que de créer une colonne dédiée pour
+     * un seul champ — la trace acteur/horodatage est de toute façon déjà assurée
+     * par Auditable (Order a déjà ce trait).
+     */
+    public function cancel(CancelOrderRequest $request, Order $order): JsonResponse
+    {
+        $this->authorizeAgency($request->user(), $order->agency_id);
+
+        if (in_array($order->status, ['livre', 'annule'], true)) {
+            throw new HttpException(422, "Ce dépôt est déjà {$order->status}.");
+        }
+
+        $order->loadMissing('invoice.payments');
+        $hasCompletedPayment = $order->invoice->contains(
+            fn (Invoice $invoice) => $invoice->payments->contains(fn ($payment) => $payment->status === 'complete')
+        );
+        if ($hasCompletedPayment) {
+            throw new HttpException(422, 'Un paiement a déjà été encaissé sur ce dépôt : l\'annulation directe n\'est pas possible.');
+        }
+
+        $reason = $request->validated()['reason'] ?? null;
+
+        DB::transaction(function () use ($order, $reason) {
+            $order->status = 'annule';
+            if ($reason) {
+                $order->notes = trim(($order->notes ? $order->notes."\n" : '')."Annulation : {$reason}");
+            }
+            $order->save();
+
+            foreach ($order->invoice as $invoice) {
+                $invoice->status = 'annulee';
+                $invoice->save();
+            }
+        });
+
+        return $this->show($request, $order);
     }
 
     private function balanceDue(Order $order): int

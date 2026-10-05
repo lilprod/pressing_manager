@@ -129,8 +129,12 @@ export interface Client {
     is_active: boolean;
     sms_consent: boolean;
     email_consent: boolean;
+    created_at: string;
     updated_at: string;
     agency?: { id: number; name: string };
+    // Présent sur GET /orders/{id} (carte « Client » de la fiche dépôt) : solde dû
+    // sur les AUTRES dépôts du client (celui-ci est déjà couvert par order.balance_due).
+    other_balance_due?: number;
 }
 
 export interface ClientDetail extends Client {
@@ -572,6 +576,8 @@ export interface Payment {
     status: 'en_attente' | 'complete' | 'echoue' | 'rembourse';
     external_reference: string | null;
     paid_at: string | null;
+    // Présent sur GET /orders/{id} (historique des paiements, fiche dépôt).
+    receiver?: { id: number; name: string } | null;
 }
 
 export type LicenseStatus = 'active' | 'grace_period' | 'expired';

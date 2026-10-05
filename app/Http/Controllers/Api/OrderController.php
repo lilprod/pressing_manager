@@ -13,6 +13,7 @@ use App\Models\OrderSyncLog;
 use App\Models\Payment;
 use App\Models\TreatmentType;
 use App\Services\OrderNumberGenerator;
+use App\Services\OrdersExcelExporter;
 use App\Services\QrCodeGenerator;
 use App\Services\ServicePricingService;
 use App\Services\SubscriptionService;
@@ -20,6 +21,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use OpenApi\Attributes as OA;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class OrderController extends ApiController
@@ -29,22 +31,100 @@ class OrderController extends ApiController
         private readonly QrCodeGenerator $qrCodes,
         private readonly SubscriptionService $subscriptions,
         private readonly ServicePricingService $pricing,
+        private readonly OrdersExcelExporter $exporter,
     ) {}
 
     public function index(Request $request): JsonResponse
     {
-        $agencyId = $this->resolveAgencyFilter($request, $request->user());
-
-        $orders = Order::query()
-            ->with('client', 'items')
-            ->whereIn('agency_id', $agencyId)
-            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
-            ->when($request->filled('client_id'), fn ($query) => $query->where('client_id', $request->integer('client_id')))
-            ->when($request->boolean('ready_today'), fn ($query) => $query->whereDate('promised_at', now()->toDateString()))
+        $orders = $this->filteredOrdersQuery($request)
             ->latest()
             ->paginate($request->integer('per_page', 20));
 
+        $orders->getCollection()->transform(fn (Order $order) => $this->decorateForList($order));
+
         return response()->json($orders);
+    }
+
+    /** Export Excel de la liste des dépôts — mêmes filtres que index(), jamais paginé. */
+    public function export(Request $request): StreamedResponse
+    {
+        $orders = $this->filteredOrdersQuery($request)->latest()->get()
+            ->map(fn (Order $order) => $this->decorateForList($order));
+
+        $agencyId = $this->resolveAgencyFilter($request, $request->user());
+        $agencyLabel = count($agencyId) === 1 ? (Agency::find($agencyId[0])?->name ?? '—') : 'Toutes agences';
+
+        return $this->exporter->download($orders, $agencyLabel);
+    }
+
+    /** Filtres communs à index() et export() — jamais divergents entre les deux. */
+    private function filteredOrdersQuery(Request $request)
+    {
+        $agencyId = $this->resolveAgencyFilter($request, $request->user());
+        $search = trim((string) $request->string('search'));
+
+        return Order::query()
+            ->with('client', 'items.treatmentType', 'invoice.payments')
+            ->whereIn('agency_id', $agencyId)
+            // État atelier (pipeline de production), distinct du statut commercial ci-dessous.
+            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
+            // Statut commercial (facturation) : "non_facture" = aucune facture émise pour ce dépôt.
+            ->when($request->filled('invoice_status'), function ($query) use ($request) {
+                $invoiceStatus = $request->string('invoice_status')->value();
+                if ($invoiceStatus === 'non_facture') {
+                    $query->doesntHave('invoice');
+                } else {
+                    $query->whereHas('invoice', fn ($q) => $q->where('status', $invoiceStatus));
+                }
+            })
+            ->when($request->filled('client_id'), fn ($query) => $query->where('client_id', $request->integer('client_id')))
+            ->when($request->boolean('ready_today'), fn ($query) => $query->whereDate('promised_at', now()->toDateString()))
+            // Période du dépôt (created_at) : "today"/"week"/"month" — absent ou "all" = aucune borne.
+            ->when($request->filled('period'), function ($query) use ($request) {
+                $period = $request->string('period')->value();
+                match ($period) {
+                    'today' => $query->whereDate('created_at', now()->toDateString()),
+                    'week' => $query->where('created_at', '>=', now()->startOfWeek()),
+                    'month' => $query->where('created_at', '>=', now()->startOfMonth()),
+                    default => null,
+                };
+            })
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    if (ctype_digit($search)) {
+                        $q->orWhere('order_number', (int) $search);
+                    }
+                    $q->orWhereHas('client', function ($clientQuery) use ($search) {
+                        $clientQuery->where('first_name', 'ilike', "%{$search}%")
+                            ->orWhere('last_name', 'ilike', "%{$search}%")
+                            ->orWhere('phone', 'ilike', "%{$search}%");
+                    });
+                });
+            });
+    }
+
+    /**
+     * Agrégats calculés par dépôt pour la liste (jamais fabriqués) : solde (même
+     * formule que balanceDue() ci-dessous), prestation dominante (nom du traitement
+     * si uniforme sur toutes les lignes, sinon absente plutôt que devinée), et
+     * volume (pièces et/ou poids selon le mode de facturation réel des lignes).
+     */
+    private function decorateForList(Order $order): Order
+    {
+        $invoice = $order->invoice->first();
+        $paidAmount = $invoice ? (int) $invoice->payments->where('status', 'complete')->sum('amount') : 0;
+        $order->setAttribute('paid_amount', $invoice ? $paidAmount : null);
+        $order->setAttribute('balance_due', $invoice ? max(0, $invoice->total_amount - $paidAmount) : null);
+
+        $treatmentNames = $order->items->pluck('treatmentType.name')->filter()->unique();
+        $order->setAttribute('treatment_name', $treatmentNames->count() === 1 ? $treatmentNames->first() : null);
+
+        $pieces = (int) $order->items->whereNull('weight_kg')->sum('quantity');
+        $weightKg = (float) $order->items->whereNotNull('weight_kg')->sum('weight_kg');
+        $order->setAttribute('pieces_count', $pieces > 0 ? $pieces : null);
+        $order->setAttribute('weight_kg_total', $weightKg > 0 ? $weightKg : null);
+
+        return $order;
     }
 
     /** KPI de la liste des dépôts, calculés uniquement à partir de données réelles. */

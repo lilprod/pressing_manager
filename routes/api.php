@@ -173,6 +173,7 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
 
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/stats', [OrderController::class, 'stats']);
+    Route::get('/orders/export', [OrderController::class, 'export']);
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::post('/orders/{order}/invoice', [InvoiceController::class, 'storeForOrder']);

@@ -442,8 +442,15 @@ export interface Order {
     invoice?: Invoice[];
     pickups?: OrderPickup[];
     creator?: { id: number; name: string } | null;
-    // Présent sur GET /orders/{id} et sur les réponses de /pickups (Centre de retrait).
+    // Présent sur GET /orders/{id} et sur les réponses de /pickups (Centre de retrait)
+    // et GET /orders (liste) depuis le renforcement « Gestion des dépôts ».
     balance_due?: number;
+    // Présents uniquement sur GET /orders (liste) — null si non calculable honnêtement
+    // (pas de facture, aucune ligne au poids, traitements hétérogènes…), jamais à 0 par défaut.
+    paid_amount?: number | null;
+    treatment_name?: string | null;
+    pieces_count?: number | null;
+    weight_kg_total?: number | null;
     pieces_remaining?: number;
     notification_status?: 'sent' | 'simulated' | 'failed' | null;
     priority?: OrderPriority;

@@ -809,6 +809,99 @@ explicitement — **hors scope**, non touché.
   carte » est vide, activé dès qu'une valeur est saisie ; aucun débordement
   horizontal (`document.documentElement.scrollWidth === clientWidth`).
 
+**02 Dépôts & POS — audit de conformité 2026-10-05 (5 captures)** — cinq captures
+fournies par l'utilisateur (Gestion des dépôts, Dépôt DEP-240928, Ticket et
+facture, Nouveau dépôt, Retour en ligne et synchronisation), demande explicite
+« même exercice de conformité ». Audit complet (lecture directe du code des 4
+écrans + `OrderController`), rapport structuré soumis à l'utilisateur via
+`AskUserQuestion` vu le volume d'écarts réels trouvés (contrairement aux audits
+précédents de ce projet, ce module avait divergé plus largement de la maquette) —
+trois décisions actées : refondre le flux comptoir (paiement intégré à la
+création), construire Modifier/Annuler le dépôt, et traiter le reste (liste +
+enrichissements fiche dépôt + réagencement Ticket et facture) en une seule
+passe avec arrêt après chaque écran. Cette passe couvre le premier chantier
+(liste des dépôts) ; les autres restent à enchaîner.
+
+**Gestion des dépôts (`OrdersList.tsx`) — recherche, filtres, colonnes Payé/Reste,
+pagination numérotée, export** — fait le 2026-10-05 :
+- **Backend** (`OrderController::index()`/nouveau `export()`, refactorés autour
+  d'une méthode privée `filteredOrdersQuery()` commune pour que liste et export
+  ne divergent jamais) :
+  - `search` : correspond au nom/prénom/téléphone du client (`ilike`, même
+    convention que `ClientController::index()`) ou au `order_number` brut si le
+    terme est numérique. **Limite assumée** : ne recherche pas le code formaté
+    affiché à l'écran (`DEP-240928`, préfixe/suffixe par agence calculé à la
+    volée par `Agency::formatOrderNumber()`) — le reproduire au niveau SQL pour
+    chaque agence aurait été disproportionné pour un champ de recherche ; un
+    terme numérique matche le numéro brut.
+  - `invoice_status` (nouveau filtre « Statut commercial », distinct du filtre
+    `status` existant qui reste l'état atelier) : `non_facture` (`doesntHave`)
+    ou une vraie valeur de `Invoice.status`.
+  - `period` (`today`/`week`/`month`, sur `created_at`) — **décision de
+    simplification** : la capture semblait montrer à la fois un sélecteur
+    « Période » et des chips « Jour/Semaine/Mois » potentiellement redondants
+    (résolution insuffisante pour trancher avec certitude) ; un seul filtre
+    période construit plutôt que de deviner une distinction non lisible.
+  - **Agrégats par ligne, calculés une fois par requête (pas de N+1)** —
+    `invoice.payments` et `items.treatmentType` eager-chargés, puis décorés en
+    mémoire (`decorateForList()`) : `paid_amount`/`balance_due` (même formule que
+    `OrderController::show()`/`PickupController`, `null` — pas `0` — si aucune
+    facture, pour ne jamais afficher un faux « 0 FCFA payé »), `treatment_name`
+    (nom du traitement **uniquement si uniforme** sur toutes les lignes du
+    dépôt — `null` sinon, jamais une valeur devinée/moyennée), `pieces_count`/
+    `weight_kg_total` (somme séparée des lignes à la pièce vs au kilo — un
+    dépôt peut légitimement avoir les deux en mode `mixte`).
+  - `GET /orders/export` (nouveau, mêmes filtres, jamais paginé) →
+    `OrdersExcelExporter` (nouveau, copie conforme du patron
+    `CashLedgerExcelExporter`/`KpiExcelExporter`, PhpSpreadsheet déjà une
+    dépendance — aucune nouvelle dépendance).
+- **Pagination numérotée** : généralisée dans le composant partagé
+  `components/ui/Pagination.tsx` (1 → 2 → 3 … avec ellipses, fenêtre de 7 pages
+  max autour de la page courante) plutôt que construite seulement pour cet
+  écran — bénéficie du même coup aux **15 autres écrans** qui consomment déjà ce
+  composant (`AuditLogsPage`, `UsersPage`, `ClientsList`, `PickupsList`,
+  `CashJournalSection`…), sans toucher leur code (même interface
+  `meta`/`onPageChange`).
+- **Frontend `OrdersList.tsx`** : carte de filtres (recherche débouncée 300ms,
+  trois `<select>` Période/Statut commercial/État atelier — ce dernier remplace
+  les anciens boutons-pastilles pour s'aligner sur la maquette — + bascule
+  « À retirer aujourd'hui » conservée telle quelle, + lien « Effacer » dès qu'un
+  filtre est actif), ligne résultats (« N dépôt(s) · Dernière actualisation il y
+  a X » — horodatage purement client, rafraîchi par un timer local, pas un
+  nouvel appel réseau), bouton Exporter, tableau étendu (colonnes PRESTATION
+  — pastille traitement si connu sinon repli Express/Standard —, ARTICLES
+  — pièces et/ou kg —, PAYÉ, RESTE — rouge si > 0, vert si soldé).
+- **Décision de scope actée, pas un oubli** : colonne SYNCHRO par ligne et
+  bouton « Colonnes » configurables — déjà explicitement hors-scope depuis
+  l'audit du 2026-10-01 (aucune donnée de sync par dépôt dans la liste, feature
+  de personnalisation de colonnes non prioritaire), confirmé inchangé ici.
+- **Bug CSS trouvé et corrigé par capture Playwright, pas visible dans le code**
+  (nouveau sous-cas du piège déjà documenté « conteneur trop étroit pour son
+  contenu ») : les en-têtes de colonnes « CLIENT » et « PRESTATION » se
+  chevauchaient visuellement à 1440px (texte « CLIENTSTATION » collé) — la
+  colonne client (`flex-1 min-w-0`) se faisait écraser à une largeur quasi nulle
+  par les 8 colonnes à largeur fixe désormais présentes (2 de plus
+  qu'avant : PAYÉ/RESTE), dont la somme dépassait le `min-w-[960px]` du
+  conteneur scrollable. Corrigé en portant ce minimum à `min-w-[1280px]` et en
+  donnant à la colonne client un plancher explicite (`min-w-[160px] flex-1` au
+  lieu de `min-w-0 flex-1`) côté en-tête et côté lignes, pour qu'elle ne puisse
+  plus jamais s'effondrer sous une largeur lisible — le tableau défile
+  horizontalement dans sa carte au lieu d'écraser son contenu, cohérent avec la
+  convention déjà établie (`ServicesPage.tsx`, `PickupProcessPage.tsx`).
+- Tests : `tests/Feature/Orders/OrderListTest.php` (13 — recherche nom/téléphone/
+  numéro, filtre statut commercial seul et combiné à l'état atelier, agrégats
+  payé/reste avec et sans facture, prestation uniforme vs mixte, pièces vs
+  poids, période, export respecte les filtres, isolation inter-agences de la
+  recherche). Suite complète 437/437 après ajout (aucune régression — y compris
+  sur les 15 écrans qui partagent `Pagination.tsx`, revérifiés par la suite
+  existante). `tsc --noEmit` et `npm run build` propres, parité i18n fr/en
+  stricte. Vérifié par Playwright bout en bout (navigateur réel, données créées
+  via tinker) à 1440px (recherche, filtre « Statut commercial »=Non facturé,
+  pagination 2 pages avec changement de contenu confirmé au clic) et 390px
+  (`document.documentElement.scrollWidth === clientWidth`, grilles de
+  `StatCard` en une colonne, tableau défilant dans sa carte sans déborder la
+  page).
+
 **03 Clients — Fiche client et formulaires** (captures Figma fournies le 2026-10-01,
 pas de node exact) — écarts additionnels à ceux déjà notés :
 - ~~Fiche client : 4 KPI (valeur vie client, dépôts réalisés, panier moyen, solde à

@@ -1112,6 +1112,31 @@ sticky existant.
   qu'elle est saisie. Comparaison visuelle directe à `Nv_Depot.PNG` : panneau
   de paiement conforme (tuiles de moyen de paiement, montant, référence,
   TOTAL TTC déjà visible au-dessus).
+- **Bug trouvé après coup par une capture annotée de l'utilisateur** (pas par
+  le smoke Playwright initial, qui n'avait vérifié que l'absence de
+  débordement de page, `scrollWidth === clientWidth`, sans zoomer sur le
+  panneau lui-même) : `PaymentMethodPicker` était monté avec `layout="wide"`
+  (grille 4 colonnes) dans le panier sticky de `NewOrder.tsx`, alors que les
+  deux autres écrans qui le montent dans un panneau latéral tout aussi étroit
+  (`PickupProcessPage.tsx`, `InvoicePanel.tsx`) utilisent déjà `layout="compact"`
+  (grille 2×2) pour cette raison précise — convention existante, pas suivie ici
+  par erreur. Résultat à 4 colonnes dans une colonne ~420px : le libellé
+  « T-Money » se retrouvait contraint à 81px de large, forcé de passer à la
+  ligne (« T-\nMoney »), ce qui donnait une impression de débordement/
+  tassement du panneau et rendait le champ « Montant » juste en dessous plus
+  difficile à lire. Mesure Playwright confirmant qu'il ne s'agissait pas d'un
+  vrai débordement de boîte (`scrollHeight === clientHeight` sur le libellé,
+  aucun `scrollWidth` de page dépassé) — un problème de densité/lisibilité,
+  pas de clipping. Corrigé en alignant sur la convention déjà établie :
+  `layout="compact"`. **Piège de validation noté pour la suite** : un
+  `scrollWidth === clientWidth` global ne suffit pas à détecter un
+  tassement visuel interne à un composant — comparer aussi à une capture
+  réelle (ou zoomer sur la zone concernée) quand plusieurs tuiles/libellés
+  sont impliqués. Rebuild (`npm run build`) + `tsc --noEmit` propres,
+  revérifié par capture Playwright à 1440px et 390px (y compris au scroll
+  maximal mobile, pour confirmer que la barre sticky bas de page ne masque
+  jamais durablement le bouton de soumission — convention déjà établie dans
+  ce fichier, toujours respectée).
 
 Ce module (02 Dépôts) a maintenant un seul chantier restant : réagencement de
 **Ticket et facture**.

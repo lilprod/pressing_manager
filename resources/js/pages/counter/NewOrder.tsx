@@ -871,7 +871,7 @@ export default function NewOrder() {
 
                             {payNow && (
                                 <div className="space-y-3 rounded-xl border border-ink-200 bg-ink-50/60 p-3.5 dark:border-ink-700 dark:bg-ink-950/40">
-                                    <PaymentMethodPicker name="new-order-payment-method" value={paymentMethod} onChange={setPaymentMethod} layout="wide" />
+                                    <PaymentMethodPicker name="new-order-payment-method" value={paymentMethod} onChange={setPaymentMethod} layout="compact" />
                                     <label className="block">
                                         <span className={label}>
                                             {paymentMethod === 'espece' ? t('order.payment.amountReceived') : t('order.payment.amount')}

@@ -62,7 +62,15 @@ Maquette cible pour la refonte visuelle en cours :
   l'app (toggle Express, pastille priorité Atelier). Les autres usages déjà
   en place (VIP, fidélité, abonnement premium, rôle système…) restent des
   badges informatifs, pas des CTA — pas de changement nécessaire là, un badge
-  n'est pas un bouton.
+  n'est pas un bouton. **Complément (même jour, captures annotées par
+  l'utilisateur)** : les captures « Nouveau mouvement de caisse » et
+  « Clôture et rapprochement journalier » montrent le bouton de soumission
+  final (« Enregistrer le mouvement », « Clôturer la caisse ») en gold, pas
+  en vert — ces deux CTA étaient encore en `button('primary', …)`. Passés en
+  `button('accent', …)` (`CashMovementFormPage.tsx`, `CashClosureFormPage.tsx`).
+  Décision : couleur uniquement, pas de reconstruction du bandeau pied de
+  page sombre pleine largeur montré sur ces captures (changement de mise en
+  page distinct, non demandé ici).
 - **ink** = échelle neutre alignée sur le `slate` standard Tailwind (les tokens
   "Neutral" Figma sont littéralement les valeurs slate officielles).
 - Police : **Inter** partout (remplace Figtree + Plus Jakarta Sans).

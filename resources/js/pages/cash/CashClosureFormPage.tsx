@@ -299,7 +299,7 @@ export default function CashClosureFormPage() {
                                 <Link to="/cash" className={button('ghost', 'md')}>
                                     {t('common.cancel')}
                                 </Link>
-                                <button type="button" onClick={() => void handleSubmit()} disabled={!canSubmit || busy} className={button('primary', 'md')}>
+                                <button type="button" onClick={() => void handleSubmit()} disabled={!canSubmit || busy} className={button('accent', 'md')}>
                                     {busy ? <Spinner className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4" />}
                                     {t('cash.closureForm.submit')}
                                 </button>

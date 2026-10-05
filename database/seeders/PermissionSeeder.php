@@ -14,7 +14,6 @@ class PermissionSeeder extends Seeder
         ['slug' => 'orders.update_status', 'name' => 'Changer le statut des articles', 'group' => 'orders'],
         ['slug' => 'invoices.manage', 'name' => 'Gérer les factures', 'group' => 'billing'],
         ['slug' => 'payments.manage', 'name' => 'Encaisser les paiements', 'group' => 'billing'],
-        ['slug' => 'licenses.manage', 'name' => 'Gérer la licence logicielle', 'group' => 'admin'],
         ['slug' => 'subscriptions.manage', 'name' => 'Gérer les abonnements clients', 'group' => 'billing'],
         ['slug' => 'reports.view', 'name' => 'Consulter les rapports', 'group' => 'reports'],
         ['slug' => 'agencies.manage', 'name' => 'Gérer les agences', 'group' => 'admin'],
@@ -31,7 +30,7 @@ class PermissionSeeder extends Seeder
 
     /** Rôle => permissions accordées. */
     public const ROLE_PERMISSIONS = [
-        'admin' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'licenses.manage', 'subscriptions.manage', 'reports.view', 'agencies.manage', 'users.manage', 'stocks.manage', 'deliveries.manage', 'deliveries.fulfill', 'hr.manage', 'hr.clock', 'notifications.manage', 'services.manage', 'audit.view'],
+        'admin' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'subscriptions.manage', 'reports.view', 'agencies.manage', 'users.manage', 'stocks.manage', 'deliveries.manage', 'deliveries.fulfill', 'hr.manage', 'hr.clock', 'notifications.manage', 'services.manage', 'audit.view'],
         'manager' => ['clients.manage', 'orders.manage', 'orders.update_status', 'invoices.manage', 'payments.manage', 'subscriptions.manage', 'reports.view', 'users.manage', 'stocks.manage', 'deliveries.manage', 'deliveries.fulfill', 'hr.manage', 'hr.clock', 'notifications.manage', 'services.manage', 'audit.view'],
         'accueil' => ['clients.manage', 'orders.manage', 'invoices.manage', 'payments.manage', 'subscriptions.manage', 'deliveries.manage', 'hr.clock'],
         'technicien' => ['orders.update_status', 'hr.clock'],

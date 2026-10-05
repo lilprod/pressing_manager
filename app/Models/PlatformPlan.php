@@ -7,12 +7,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PlatformPlan extends Model
 {
-    protected $fillable = ['slug', 'name', 'is_active'];
+    protected $fillable = ['slug', 'name', 'is_active', 'price', 'currency', 'duration_days'];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'price' => 'integer',
+            'duration_days' => 'integer',
         ];
     }
 

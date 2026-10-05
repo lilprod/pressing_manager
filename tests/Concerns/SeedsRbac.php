@@ -3,7 +3,6 @@
 namespace Tests\Concerns;
 
 use App\Models\Agency;
-use App\Models\License;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\PermissionSeeder;
@@ -15,16 +14,10 @@ trait SeedsRbac
     {
         $this->seed(RoleSeeder::class);
         $this->seed(PermissionSeeder::class);
-        // Requis par le middleware CheckLicenseStatus sur toutes les routes protégées.
-        if (License::query()->doesntExist()) {
-            License::create([
-                'plan' => 'annuel',
-                'starts_at' => now(),
-                'expires_at' => now()->addYear(),
-                'grace_period_days' => 7,
-                'status' => 'active',
-            ]);
-        }
+        // Plus besoin de pré-créer une licence ici : `License::current($pressingId)`
+        // (lue par `CheckPressingStatus`) l'auto-crée par pressing au premier accès,
+        // depuis l'harmonisation licence/plateforme (voir CLAUDE.md) — une licence
+        // globale pré-créée sans pressing_id n'aurait plus de sens.
     }
 
     protected function makeUser(string $roleSlug, ?Agency $agency = null): User

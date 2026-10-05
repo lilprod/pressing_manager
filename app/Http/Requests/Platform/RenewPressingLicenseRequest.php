@@ -1,11 +1,10 @@
 <?php
 
-namespace App\Http\Requests\License;
+namespace App\Http\Requests\Platform;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
-class RenewLicenseRequest extends FormRequest
+class RenewPressingLicenseRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -15,8 +14,8 @@ class RenewLicenseRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'plan' => ['required', Rule::exists('license_plans', 'slug')->where('is_active', true)],
-            'method' => ['required', Rule::in(['espece', 'carte', 'flooz', 'tmoney'])],
+            'platform_plan_id' => ['required', 'integer', 'exists:platform_plans,id'],
+            'method' => ['required', 'string', 'in:espece,carte,flooz,tmoney'],
             'external_reference' => ['nullable', 'string', 'max:255'],
         ];
     }

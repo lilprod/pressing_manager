@@ -241,7 +241,7 @@ export default function SettingsPage() {
             icon: KeyRound,
             title: t('nav.license'),
             detail: t('settingsHub.card.license'),
-            allowed: hasPermission(user, 'licenses.manage'),
+            allowed: true, // lecture seule depuis l'harmonisation licence/plateforme, voir CLAUDE.md
         },
     ];
 

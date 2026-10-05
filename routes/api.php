@@ -16,7 +16,6 @@ use App\Http\Controllers\Api\IntakeConditionController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\LicenseController;
-use App\Http\Controllers\Api\LicensePlanController;
 use App\Http\Controllers\Api\LoyaltyTierController;
 use App\Http\Controllers\Api\TreatmentTypeController;
 use App\Http\Controllers\Api\MultiAgencyController;
@@ -30,9 +29,12 @@ use App\Http\Controllers\Api\PaymentWebhookController;
 use App\Http\Controllers\Api\PerformanceController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\Platform\PlatformAuthController;
+use App\Http\Controllers\Api\Platform\PlatformAuditLogController;
 use App\Http\Controllers\Api\Platform\PlatformDashboardController;
 use App\Http\Controllers\Api\Platform\PlatformPlanController;
+use App\Http\Controllers\Api\Platform\PlatformProfileController;
 use App\Http\Controllers\Api\Platform\PlatformRoleController;
+use App\Http\Controllers\Api\Platform\PlatformSettingController;
 use App\Http\Controllers\Api\Platform\PlatformUserController;
 use App\Http\Controllers\Api\Platform\PressingController as PlatformPressingController;
 use App\Http\Controllers\Api\Platform\PressingReportController;
@@ -60,6 +62,11 @@ Route::get('/settings', [SettingsController::class, 'show']);
 Route::get('/settings/logo', [SettingsController::class, 'logo']);
 Route::get('/settings/favicon', [SettingsController::class, 'favicon']);
 
+// Identité de la console superadmin (logo/nom/couleurs), publique pour l'écran de
+// connexion plateforme — même raisonnement que les routes tenant ci-dessus.
+Route::get('/platform/settings/logo', [\App\Http\Controllers\Api\Platform\PlatformSettingController::class, 'logo']);
+Route::get('/platform/settings/favicon', [\App\Http\Controllers\Api\Platform\PlatformSettingController::class, 'favicon']);
+
 // Console superadmin plateforme (Spark) : royaume d'authentification séparé du tenant
 // (guard `platform`, voir config/auth.php) — voir docs/ARCHITECTURE.md pour le pourquoi
 // de la séparation (chaque pressing tourne sur son propre déploiement isolé).
@@ -74,18 +81,33 @@ Route::prefix('platform')->group(function () {
     Route::middleware('auth:platform')->group(function () {
         Route::post('/logout', [PlatformAuthController::class, 'logout']);
         Route::get('/me', [PlatformAuthController::class, 'me']);
+        Route::patch('/me', [PlatformProfileController::class, 'update']);
+        Route::patch('/me/password', [PlatformProfileController::class, 'changePassword']);
+        Route::get('/users/{platformUser}/photo', [PlatformProfileController::class, 'photo']);
 
         Route::get('/dashboard', [PlatformDashboardController::class, 'show']);
+        Route::get('/audit-logs', [PlatformAuditLogController::class, 'index']);
 
+        Route::get('/settings', [PlatformSettingController::class, 'show']);
+        Route::patch('/settings', [PlatformSettingController::class, 'update']);
+
+        Route::get('/plans/manage', [PlatformPlanController::class, 'manage']);
+        Route::post('/plans', [PlatformPlanController::class, 'store']);
+        Route::patch('/plans/{platformPlan}', [PlatformPlanController::class, 'update']);
         Route::get('/plans', [PlatformPlanController::class, 'index']);
         Route::get('/roles', [PlatformRoleController::class, 'index']);
+        Route::post('/roles', [PlatformRoleController::class, 'store']);
+        Route::patch('/roles/{platformRole}', [PlatformRoleController::class, 'update']);
 
         Route::get('/users/stats', [PlatformUserController::class, 'stats']);
         Route::get('/users', [PlatformUserController::class, 'index']);
         Route::post('/users', [PlatformUserController::class, 'store']);
         Route::patch('/users/{platformUser}', [PlatformUserController::class, 'update']);
+        Route::post('/users/{platformUser}/reset-password', [PlatformUserController::class, 'resetPassword']);
         Route::get('/users/{platformUser}/activity', [PlatformUserController::class, 'activity']);
 
+        Route::post('/pressings/{pressing}/renew', [PlatformPressingController::class, 'renew']);
+        Route::post('/pressings/{pressing}/impersonate', [PlatformPressingController::class, 'impersonate']);
         Route::get('/pressings', [PlatformPressingController::class, 'index']);
         Route::post('/pressings', [PlatformPressingController::class, 'store']);
         Route::get('/pressings/{pressing}', [PlatformPressingController::class, 'show']);
@@ -96,7 +118,7 @@ Route::prefix('platform')->group(function () {
     });
 });
 
-Route::middleware(['auth:sanctum', 'license', 'pressing'])->group(function () {
+Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
 
@@ -122,15 +144,10 @@ Route::middleware(['auth:sanctum', 'license', 'pressing'])->group(function () {
     Route::get('/settings/versions', [SettingsController::class, 'versions']);
     Route::post('/settings/versions/{version}/restore', [SettingsController::class, 'restoreVersion']);
 
+    // Lecture seule (statut + historique) — gestion/renouvellement désormais exclusivement
+    // côté plateforme, voir CLAUDE.md « Licence / facturation — gap d'harmonisation ».
     Route::get('/license', [LicenseController::class, 'show']);
     Route::get('/license/history', [LicenseController::class, 'history']);
-    Route::get('/license/plans', [LicenseController::class, 'plans']);
-    Route::post('/license/renew', [LicenseController::class, 'renew']);
-
-    Route::get('/license-plans', [LicensePlanController::class, 'index']);
-    Route::post('/license-plans', [LicensePlanController::class, 'store']);
-    Route::patch('/license-plans/{licensePlan}', [LicensePlanController::class, 'update']);
-    Route::delete('/license-plans/{licensePlan}', [LicensePlanController::class, 'destroy']);
 
     Route::get('/clients/stats', [ClientController::class, 'stats']);
     Route::apiResource('clients', ClientController::class)->except(['destroy'])->parameters(['clients' => 'client']);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Building2, Clock, Copy, Mail, Pencil, Power, ShieldAlert, ShieldCheck, UserPlus, UsersRound, X } from 'lucide-react';
+import { Building2, Clock, Copy, KeyRound, Mail, Pencil, Power, ShieldAlert, ShieldCheck, UserPlus, UsersRound, X } from 'lucide-react';
 import { useSuperadminAuth } from '../../contexts/SuperadminAuthContext';
 import { useFormat } from '../../lib/format';
 import { platformApi, PlatformApiError } from '../../lib/platformApi';
@@ -118,6 +118,19 @@ export default function UsersPage() {
             await platformApi.patch(`/users/${target.id}`, { is_active: !target.is_active });
             reload();
             loadStats();
+        } catch (err) {
+            setError(err instanceof PlatformApiError ? err.message : 'Une erreur est survenue.');
+        }
+    }
+
+    async function resetPassword(target: PlatformUser) {
+        if (!window.confirm(`Réinitialiser le mot de passe de ${target.name} ? Un nouveau mot de passe temporaire sera généré.`)) {
+            return;
+        }
+        setError(null);
+        try {
+            const result = await platformApi.post<{ temporary_password: string }>(`/users/${target.id}/reset-password`);
+            setTemporaryPassword({ email: target.email, password: result.temporary_password });
         } catch (err) {
             setError(err instanceof PlatformApiError ? err.message : 'Une erreur est survenue.');
         }
@@ -279,6 +292,15 @@ export default function UsersPage() {
                                                             title="Modifier"
                                                         >
                                                             <Pencil aria-hidden="true" className="h-4 w-4" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => void resetPassword(u)}
+                                                            className={cx(iconButton, 'h-8 w-8')}
+                                                            aria-label={`Réinitialiser le mot de passe de ${u.name}`}
+                                                            title="Réinitialiser le mot de passe"
+                                                        >
+                                                            <KeyRound aria-hidden="true" className="h-4 w-4" />
                                                         </button>
                                                         {!isMe && (
                                                             <button
@@ -566,7 +588,7 @@ function UserPanel({
 
                 {!editing && (
                     <p className="rounded-xl bg-ink-50 px-3 py-2.5 text-xs text-ink-600 dark:bg-ink-950/50 dark:text-ink-350">
-                        Un mot de passe temporaire sera généré et affiché une seule fois — aucune invitation par e-mail n'est envoyée.
+                        Un mot de passe temporaire sera généré et affiché une seule fois, et une invitation sera envoyée par e-mail à l'adresse indiquée.
                     </p>
                 )}
 

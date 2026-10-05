@@ -513,16 +513,6 @@ export interface LicensePayment {
     new_expires_at: string;
 }
 
-export type LicensePlanSlug = string;
-
-export interface LicensePlan {
-    id: number;
-    slug: string;
-    name: string;
-    days: number;
-    price: number;
-    is_active: boolean;
-}
 
 export interface SubscriptionPlan {
     id: number;
@@ -843,7 +833,27 @@ export interface PlatformPlan {
     id: number;
     slug: string;
     name: string;
+    // Nullable : les plans cosmétiques seedés avant l'introduction du prix (Phase 2)
+    // restent sans prix et sont désactivés automatiquement (voir la migration de
+    // fusion avec license_plans) — tout nouveau plan créé via l'API a toujours un prix.
+    price: number | null;
+    currency: string;
+    duration_days: number | null;
     is_active: boolean;
+}
+
+export interface PlatformSetting {
+    id: number;
+    app_name: string;
+    logo_path: string | null;
+    favicon_path: string | null;
+    primary_color: string | null;
+    secondary_color: string | null;
+    support_email: string | null;
+    support_phone: string | null;
+    legal_entity_name: string | null;
+    logo_url: string | null;
+    favicon_url: string | null;
 }
 
 export interface Pressing {
@@ -887,10 +897,13 @@ export interface PlatformUser {
     id: number;
     name: string;
     email: string;
+    phone: string | null;
+    photo_path: string | null;
     platform_role_id: number;
     platform_role?: PlatformRole;
     pressings?: Pressing[];
     is_active: boolean;
+    must_change_password: boolean;
     totp_enabled_at: string | null;
     last_login_at: string | null;
 }

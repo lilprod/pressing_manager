@@ -11,33 +11,35 @@ class SendLicenseReminders extends Command
 {
     protected $signature = 'licenses:send-reminders';
 
-    protected $description = "Notifie les administrateurs à J-7, J-1 et J0 avant l'expiration de la licence";
+    protected $description = "Notifie les administrateurs de chaque pressing à J-7, J-1 et J0 avant l'expiration de sa licence";
 
+    /**
+     * Depuis l'harmonisation licence/plateforme (voir CLAUDE.md), chaque pressing a
+     * sa propre ligne `licenses` — la commande parcourt désormais toutes les licences,
+     * pas une seule ligne deployment-wide.
+     */
     public function handle(): int
     {
-        $license = License::current();
+        $notified = 0;
 
-        if ($license === null) {
-            $this->info('Aucune licence configurée.');
+        License::query()->get()->each(function (License $license) use (&$notified) {
+            $daysRemaining = (int) now()->startOfDay()->diffInDays($license->expires_at->copy()->startOfDay(), false);
 
-            return self::SUCCESS;
-        }
+            if (! in_array($daysRemaining, config('licensing.reminder_days'), true)) {
+                return;
+            }
 
-        $daysRemaining = (int) now()->startOfDay()->diffInDays($license->expires_at->copy()->startOfDay(), false);
+            $admins = User::where('pressing_id', $license->pressing_id)
+                ->whereHas('role', fn ($query) => $query->where('slug', 'admin'))
+                ->get();
 
-        if (! in_array($daysRemaining, config('licensing.reminder_days'), true)) {
-            $this->info("Pas de rappel dû aujourd'hui (J-{$daysRemaining}).");
+            foreach ($admins as $admin) {
+                $admin->notify(new LicenseExpiringNotification($license, $daysRemaining));
+                $notified++;
+            }
+        });
 
-            return self::SUCCESS;
-        }
-
-        $admins = User::whereHas('role', fn ($query) => $query->where('slug', 'admin'))->get();
-
-        foreach ($admins as $admin) {
-            $admin->notify(new LicenseExpiringNotification($license, $daysRemaining));
-        }
-
-        $this->info("Rappel envoyé à {$admins->count()} administrateur(s) (J-{$daysRemaining}).");
+        $this->info("Rappel(s) envoyé(s) : {$notified}.");
 
         return self::SUCCESS;
     }

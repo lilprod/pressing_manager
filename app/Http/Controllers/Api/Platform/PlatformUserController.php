@@ -75,6 +75,11 @@ class PlatformUserController extends PlatformApiController
 
         $user->pressings()->sync($data['pressing_ids'] ?? []);
 
+        // Invitation par e-mail en complément de l'affichage à l'écran (jamais en
+        // remplacement — voir CLAUDE.md « Licence / facturation — gap d'harmonisation »
+        // §4, Phase 4).
+        $user->notify(new \App\Notifications\PlatformUserInvitationNotification($temporaryPassword));
+
         return response()->json(
             $user->fresh(['platformRole', 'pressings'])->toArray() + ['temporary_password' => $temporaryPassword],
             201
@@ -103,6 +108,29 @@ class PlatformUserController extends PlatformApiController
         }
 
         return response()->json($platformUser->fresh(['platformRole', 'pressings']));
+    }
+
+    /**
+     * Réinitialisation admin (Phase 0, continuité de compte) — mirrors le mot de passe
+     * temporaire affiché une seule fois à la création (UserController tenant a le même
+     * patron). Avant cette méthode, un platform_user qui perdait son mot de passe était
+     * définitivement bloqué : aucun champ `password` n'était accepté par UpdatePlatformUserRequest.
+     */
+    public function resetPassword(Request $request, PlatformUser $platformUser): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'platform_users.manage');
+
+        $temporaryPassword = Str::password(12);
+
+        $platformUser->update([
+            'password' => Hash::make($temporaryPassword),
+            'must_change_password' => true,
+        ]);
+
+        $platformUser->notify(new \App\Notifications\PlatformUserInvitationNotification($temporaryPassword));
+        $this->logActivity($request->user(), $platformUser, 'platform_user.password_reset', []);
+
+        return response()->json(['temporary_password' => $temporaryPassword]);
     }
 
     public function activity(Request $request, PlatformUser $platformUser): JsonResponse

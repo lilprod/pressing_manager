@@ -123,6 +123,12 @@ class UserController extends ApiController
             $user->update(['photo_path' => $request->file('photo')->store("users/{$user->id}", ['disk' => config('filesystems.default')])]);
         }
 
+        // Invitation par e-mail en complément de l'affichage à l'écran (jamais en
+        // remplacement — voir CLAUDE.md) : aucune passerelle SMS réelle n'existe, mais
+        // l'e-mail est un canal réel ici (Notification + mail, même mécanisme que
+        // LicenseExpiringNotification).
+        $user->notify(new \App\Notifications\UserInvitationNotification($temporaryPassword));
+
         return response()->json([
             ...$user->load('role', 'agency')->toArray(),
             'temporary_password' => $temporaryPassword,
@@ -176,6 +182,8 @@ class UserController extends ApiController
             'must_change_password' => true,
             'password_changed_at' => null,
         ]);
+
+        $user->notify(new \App\Notifications\UserInvitationNotification($temporaryPassword));
 
         return response()->json(['temporary_password' => $temporaryPassword]);
     }

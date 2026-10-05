@@ -2,32 +2,25 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Requests\License\RenewLicenseRequest;
 use App\Models\License;
-use App\Models\LicensePlan;
-use App\Services\LicenseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
+/**
+ * Lecture seule côté tenant depuis l'harmonisation licence/plateforme (voir CLAUDE.md
+ * « Licence / facturation — gap d'harmonisation ») : le renouvellement et la gestion
+ * des plans sont désormais des actions plateforme exclusives (Spark), jamais une
+ * permission tenant — un manager de pressing ne peut plus fixer son propre prix ni
+ * débloquer (ou bloquer) les autres pressings du déploiement partagé en renouvelant
+ * une ligne qui leur était auparavant commune. Visible sans permission particulière :
+ * un statut + un historique de paiements ne sont pas sensibles et aucune action n'y
+ * est plus rattachée.
+ */
 class LicenseController extends ApiController
 {
-    public function __construct(private readonly LicenseService $licenses) {}
-
-    /**
-     * Statut courant, consultable par n'importe quel utilisateur authentifié
-     * (le frontend en a besoin pour afficher le bandeau/écran de blocage),
-     * quel que soit le statut de la licence (voir CheckLicenseStatus).
-     */
-    public function show(): JsonResponse
+    public function show(Request $request): JsonResponse
     {
-        $license = License::current();
-
-        if ($license === null) {
-            throw new HttpException(404, 'Aucune licence configurée.');
-        }
-
-        $license->refreshStatus();
+        $license = License::current($request->user()->pressing_id)->refreshStatus();
 
         return response()->json([
             ...$license->toArray(),
@@ -38,33 +31,8 @@ class LicenseController extends ApiController
 
     public function history(Request $request): JsonResponse
     {
-        $this->authorizePermission($request->user(), 'licenses.manage');
+        $license = License::current($request->user()->pressing_id);
 
-        $license = License::current();
-
-        return response()->json($license?->payments()->latest('paid_at')->get() ?? []);
-    }
-
-    public function renew(RenewLicenseRequest $request): JsonResponse
-    {
-        $license = License::current();
-
-        if ($license === null) {
-            throw new HttpException(404, 'Aucune licence configurée.');
-        }
-
-        $data = $request->validated();
-        $payment = $this->licenses->renew($license, $data['plan'], $data['method'], $data['external_reference'] ?? null);
-
-        return response()->json([
-            'license' => $license->fresh(),
-            'payment' => $payment,
-        ], 201);
-    }
-
-    /** Plans actifs proposés au renouvellement (voir LicensePlanController::index pour la liste complète, admin). */
-    public function plans(): JsonResponse
-    {
-        return response()->json(LicensePlan::where('is_active', true)->orderBy('days')->get());
+        return response()->json($license->payments()->latest('paid_at')->get());
     }
 }

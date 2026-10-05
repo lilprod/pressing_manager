@@ -226,7 +226,7 @@
     "license.graceBanner": "Licence expirée : période de grâce en lecture seule jusqu'au {date}. Veuillez la renouveler.",
     "license.blockedTitle": "Application bloquée",
     "license.blockedMessage": "La licence logicielle a expiré et la période de grâce est terminée. Un renouvellement est nécessaire pour continuer.",
-    "license.blockedNoPermission": "Contactez un administrateur pour renouveler la licence.",
+    "license.blockedNoPermission": "Contactez votre administrateur Spark pour renouveler la licence — le renouvellement n'est plus géré depuis cette application.",
     "license.renew": "Renouveler la licence",
     "license.plan": "Plan",
     "license.history": "Historique des paiements",

@@ -29,7 +29,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const loadSession = useCallback(async () => {
-        if (!getToken()) {
+        // `/impersonate` ne fait que déposer un jeton puis rediriger (voir `ImpersonateBridge.tsx`) :
+        // si ce provider tentait aussi `GET /me` ici, la navigation qui suit annulerait cette requête
+        // en plein vol, et le `catch` ci-dessous effacerait le jeton qui vient d'être posé avant même
+        // que la page de destination ne se charge.
+        if (!getToken() || window.location.pathname === '/impersonate') {
             setLoading(false);
             return;
         }

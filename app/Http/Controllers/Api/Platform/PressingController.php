@@ -2,18 +2,24 @@
 
 namespace App\Http\Controllers\Api\Platform;
 
+use App\Http\Requests\Platform\RenewPressingLicenseRequest;
 use App\Http\Requests\Platform\StorePressingRequest;
 use App\Http\Requests\Platform\UpdatePressingRequest;
 use App\Models\Agency;
+use App\Models\License;
+use App\Models\PlatformAuditLog;
+use App\Models\PlatformPlan;
 use App\Models\Pressing;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\LicenseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class PressingController extends PlatformApiController
 {
@@ -97,6 +103,13 @@ class PressingController extends PlatformApiController
                 'must_change_password' => true,
             ]);
 
+            // Essai de 30 jours — valeur par défaut documentée (CLAUDE.md), pas une
+            // fabrication côté affichage. Avant cette ligne, un pressing nouvellement
+            // provisionné n'avait aucune licence tant qu'une n'était pas auto-créée au
+            // premier accès ; la créer ici permet de l'afficher dans la réponse.
+            $license = License::current($pressing->id);
+            $pressing->update(['license_expires_at' => $license->expires_at]);
+
             return [$pressing, $reportToken];
         });
 
@@ -167,5 +180,73 @@ class PressingController extends PlatformApiController
         $this->authorizePressing($request->user(), $pressing->id);
 
         return response()->json(['report_token' => $pressing->generateReportToken()]);
+    }
+
+    /**
+     * Renouvellement confirmé par Spark (v1 : règlement cash/Mobile Money déjà perçu,
+     * voir CLAUDE.md « Licence / facturation — gap d'harmonisation ») — seule action
+     * qui prolonge `licenses.expires_at`, désormais exclusivement côté plateforme.
+     */
+    public function renew(RenewPressingLicenseRequest $request, Pressing $pressing): JsonResponse
+    {
+        $this->authorizePressing($request->user(), $pressing->id);
+
+        $plan = PlatformPlan::findOrFail($request->validated('platform_plan_id'));
+        $license = License::current($pressing->id);
+
+        $payment = app(LicenseService::class)->renew(
+            $license,
+            $plan,
+            $request->validated('method'),
+            $request->validated('external_reference')
+        );
+
+        return response()->json([
+            'license' => $license->fresh(),
+            'payment' => $payment,
+        ], 201);
+    }
+
+    /**
+     * Impersonation support (Phase 4) : connecte le superadmin « en tant que » le
+     * compte manager bootstrap du pressing, pour diagnostiquer un problème sans
+     * demander les identifiants du client. Action la plus sensible de la console —
+     * permission dédiée (`pressings.impersonate`, superadmin uniquement par défaut),
+     * tracée dans le journal d'audit plateforme. Le jeton émis n'a pas d'expiration
+     * dédiée (même mécanisme qu'un jeton de connexion ordinaire) — à révoquer
+     * manuellement si besoin via la déconnexion du compte impersonné.
+     */
+    public function impersonate(Request $request, Pressing $pressing): JsonResponse
+    {
+        $actor = $request->user();
+        $this->authorizePermission($actor, 'pressings.impersonate');
+        $this->authorizePressing($actor, $pressing->id);
+
+        $tenantUser = User::where('pressing_id', $pressing->id)
+            ->whereNull('agency_id')
+            ->whereHas('role', fn ($query) => $query->where('slug', 'admin'))
+            ->where('is_active', true)
+            ->oldest('id')
+            ->first();
+
+        if ($tenantUser === null) {
+            throw new HttpException(404, "Aucun compte administrateur global actif n'a été trouvé pour ce pressing.");
+        }
+
+        $token = $tenantUser->createToken('platform-impersonation:'.$actor->id);
+
+        PlatformAuditLog::create([
+            'platform_user_id' => $actor->id,
+            'action' => 'pressing.impersonated',
+            'auditable_type' => Pressing::class,
+            'auditable_id' => $pressing->id,
+            'new_values' => ['tenant_user_id' => $tenantUser->id, 'tenant_user_email' => $tenantUser->email],
+        ]);
+
+        return response()->json([
+            'token' => $token->plainTextToken,
+            'tenant_user' => ['id' => $tenantUser->id, 'name' => $tenantUser->name, 'email' => $tenantUser->email],
+            'pressing' => ['id' => $pressing->id, 'name' => $pressing->name, 'code' => $pressing->code],
+        ]);
     }
 }

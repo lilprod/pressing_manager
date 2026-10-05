@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class License extends Model
 {
-    protected $fillable = ['plan', 'starts_at', 'expires_at', 'grace_period_days', 'status'];
+    protected $fillable = ['pressing_id', 'plan', 'starts_at', 'expires_at', 'grace_period_days', 'status'];
 
     protected function casts(): array
     {
@@ -22,12 +22,26 @@ class License extends Model
         return $this->hasMany(LicensePayment::class);
     }
 
-    /**
-     * Licence courante du déploiement (modèle mono-client : une seule ligne "active").
-     */
-    public static function current(): ?self
+    public function pressing(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
-        return static::orderByDesc('expires_at')->first();
+        return $this->belongsTo(Pressing::class);
+    }
+
+    /**
+     * Licence du pressing (une ligne par pressing depuis le pivot multi-tenant +
+     * harmonisation plateforme, voir CLAUDE.md) — auto-crée un essai de 30 jours si
+     * le pressing n'en a encore aucune (mirrors `AppSetting::current($pressingId)`).
+     */
+    public static function current(int $pressingId): self
+    {
+        return static::query()->where('pressing_id', $pressingId)->first() ?? static::create([
+            'pressing_id' => $pressingId,
+            'plan' => 'essai',
+            'starts_at' => now(),
+            'expires_at' => now()->addDays(30),
+            'grace_period_days' => 7,
+            'status' => 'active',
+        ])->refresh();
     }
 
     /**

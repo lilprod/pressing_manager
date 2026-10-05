@@ -79,6 +79,11 @@ class Pressing extends Model
         return $this->hasOne(AppSetting::class);
     }
 
+    public function license(): HasOne
+    {
+        return $this->hasOne(License::class);
+    }
+
     /** Un abonnement est « à renouveler » dans les 30 jours — même fenêtre que le reste de l'app. */
     public function isRenewalDueSoon(): bool
     {

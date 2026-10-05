@@ -24,7 +24,10 @@ class PlatformUser extends Authenticatable
 
     private const LOCKOUT_MINUTES = 15;
 
-    protected $fillable = ['name', 'email', 'password', 'is_active', 'totp_secret', 'totp_enabled_at', 'platform_role_id'];
+    protected $fillable = [
+        'name', 'email', 'password', 'is_active', 'totp_secret', 'totp_enabled_at', 'platform_role_id',
+        'photo_path', 'phone', 'must_change_password',
+    ];
 
     protected $hidden = ['password', 'totp_secret', 'remember_token'];
 
@@ -37,6 +40,7 @@ class PlatformUser extends Authenticatable
             'locked_until' => 'datetime',
             'last_login_at' => 'datetime',
             'is_active' => 'boolean',
+            'must_change_password' => 'boolean',
         ];
     }
 

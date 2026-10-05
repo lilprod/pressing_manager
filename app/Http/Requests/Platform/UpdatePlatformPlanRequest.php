@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Requests\License;
+namespace App\Http\Requests\Platform;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateLicensePlanRequest extends FormRequest
+class UpdatePlatformPlanRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -15,8 +15,9 @@ class UpdateLicensePlanRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'days' => ['sometimes', 'required', 'integer', 'min:1'],
             'price' => ['sometimes', 'required', 'integer', 'min:0'],
+            'duration_days' => ['sometimes', 'required', 'integer', 'min:1'],
+            'currency' => ['nullable', 'string', 'size:3'],
             'is_active' => ['boolean'],
         ];
     }

@@ -1,16 +1,19 @@
 import { Lock, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
-import { hasPermission } from '../lib/permissions';
-import LicenseRenewalForm from './LicenseRenewalForm';
 import BrandMark from './BrandMark';
 import { Alert } from './ui/Feedback';
 import { button, card } from './ui/styles';
 
+/**
+ * Depuis l'harmonisation licence/plateforme (voir CLAUDE.md « Licence / facturation
+ * — gap d'harmonisation »), le renouvellement n'est plus une action tenant : il n'y
+ * a donc plus de formulaire de renouvellement ici, quel que soit le rôle de
+ * l'utilisateur — seul un message pointant vers Spark.
+ */
 export default function LicenseBlockedScreen() {
-    const { user, logout } = useAuth();
+    const { logout } = useAuth();
     const { t } = useI18n();
-    const canRenew = hasPermission(user, 'licenses.manage');
 
     return (
         <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-ink-50 px-4 py-10 dark:bg-ink-950">
@@ -36,7 +39,7 @@ export default function LicenseBlockedScreen() {
                     </div>
 
                     <div className="space-y-5 p-6">
-                        {canRenew ? <LicenseRenewalForm /> : <Alert tone="info">{t('license.blockedNoPermission')}</Alert>}
+                        <Alert tone="info">{t('license.blockedNoPermission')}</Alert>
 
                         <button type="button" onClick={() => void logout()} className={button('ghost', 'md', 'w-full')}>
                             <LogOut aria-hidden="true" className="h-4 w-4" />

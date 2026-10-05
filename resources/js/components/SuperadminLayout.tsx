@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Building2, LayoutDashboard, LogOut, UsersRound } from 'lucide-react';
+import { Building2, LayoutDashboard, Layers, LogOut, ScrollText, Settings, ShieldHalf, UsersRound } from 'lucide-react';
 import { useSuperadminAuth } from '../contexts/SuperadminAuthContext';
 import { BrandLogo } from './BrandMark';
 import { Avatar } from './ui/PageHeader';
@@ -53,13 +53,31 @@ export default function SuperadminLayout() {
                         <UsersRound aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
                         <span className="truncate">Utilisateurs transverses</span>
                     </NavLink>
+                    <NavLink to="/superadmin/roles" className={navLinkClass}>
+                        <ShieldHalf aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
+                        <span className="truncate">Rôles</span>
+                    </NavLink>
+                    <NavLink to="/superadmin/plans" className={navLinkClass}>
+                        <Layers aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
+                        <span className="truncate">Plans</span>
+                    </NavLink>
+                    <NavLink to="/superadmin/audit-logs" className={navLinkClass}>
+                        <ScrollText aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
+                        <span className="truncate">Audit global</span>
+                    </NavLink>
+                    <NavLink to="/superadmin/settings" className={navLinkClass}>
+                        <Settings aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
+                        <span className="truncate">Paramètres</span>
+                    </NavLink>
                 </nav>
                 <div className="flex items-center gap-3 border-t border-white/10 px-2 pt-4">
-                    <Avatar firstName={user?.name} size="sm" />
-                    <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-white">{user?.name}</p>
-                        <p className="truncate text-xs text-brand-200/70">Superadmin</p>
-                    </div>
+                    <NavLink to="/superadmin/profile" className="flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1.5 hover:bg-white/10">
+                        <Avatar firstName={user?.name} size="sm" />
+                        <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-white">{user?.name}</p>
+                            <p className="truncate text-xs text-brand-200/70">{user?.platform_role?.name ?? 'Superadmin'}</p>
+                        </div>
+                    </NavLink>
                     <button type="button" onClick={() => void logout()} aria-label="Déconnexion" className={cx(iconButton, 'text-brand-100/70 hover:bg-white/10 hover:text-white')}>
                         <LogOut aria-hidden="true" className="h-[18px] w-[18px]" />
                     </button>

@@ -130,7 +130,6 @@ function useSidebarSections(onNavigate?: () => void) {
             {(hasPermission(user, 'invoices.manage') ||
                 hasPermission(user, 'reports.view') ||
                 hasPermission(user, 'notifications.manage') ||
-                hasPermission(user, 'licenses.manage') ||
                 hasPermission(user, 'agencies.manage') ||
                 hasPermission(user, 'audit.view')) && (
                 <NavSection label={t('nav.section.insights')}>
@@ -145,7 +144,10 @@ function useSidebarSections(onNavigate?: () => void) {
                     {hasPermission(user, 'audit.view') && (
                         <NavItem to="/audit-logs" icon={ScrollText} label={t('auditLogs.title')} onClick={onNavigate} />
                     )}
-                    {hasPermission(user, 'licenses.manage') && <NavItem to="/license" icon={KeyRound} label={t('nav.license')} onClick={onNavigate} />}
+                    {/* Visible sans permission dédiée depuis l'harmonisation licence/plateforme
+                       (voir CLAUDE.md) : écran lecture seule, l'ancienne permission
+                       licenses.manage n'existe plus côté tenant. */}
+                    <NavItem to="/license" icon={KeyRound} label={t('nav.license')} onClick={onNavigate} />
                     {hasPermission(user, 'agencies.manage') && (
                         <NavItem to="/settings" icon={SettingsIcon} label={t('settings.title')} onClick={onNavigate} />
                     )}

@@ -226,7 +226,7 @@
     "license.graceBanner": "License expired: read-only grace period until {date}. Please renew it.",
     "license.blockedTitle": "Application locked",
     "license.blockedMessage": "The software license has expired and the grace period is over. Renewal is required to continue.",
-    "license.blockedNoPermission": "Contact an administrator to renew the license.",
+    "license.blockedNoPermission": "Contact your Spark administrator to renew the license — renewal is no longer managed from this application.",
     "license.renew": "Renew license",
     "license.plan": "Plan",
     "license.history": "Payment history",

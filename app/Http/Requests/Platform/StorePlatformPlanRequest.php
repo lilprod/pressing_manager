@@ -1,10 +1,11 @@
 <?php
 
-namespace App\Http\Requests\License;
+namespace App\Http\Requests\Platform;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
-class StoreLicensePlanRequest extends FormRequest
+class StorePlatformPlanRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -15,8 +16,9 @@ class StoreLicensePlanRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'days' => ['required', 'integer', 'min:1'],
             'price' => ['required', 'integer', 'min:0'],
+            'duration_days' => ['required', 'integer', 'min:1'],
+            'currency' => ['nullable', 'string', 'size:3'],
             'is_active' => ['boolean'],
         ];
     }

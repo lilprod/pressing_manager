@@ -10,11 +10,17 @@ import ForcedPasswordChangeScreen from './components/ForcedPasswordChangeScreen'
 import LicenseBlockedScreen from './components/LicenseBlockedScreen';
 import SplashScreen from './components/SplashScreen';
 import Login from './pages/Login';
+import ImpersonateBridge from './pages/ImpersonateBridge';
 import PlatformLoginPage from './pages/superadmin/PlatformLoginPage';
 import PlatformDashboardPage from './pages/superadmin/DashboardPage';
 import PressingsPage from './pages/superadmin/PressingsPage';
 import PressingFormPage from './pages/superadmin/PressingFormPage';
 import PlatformUsersPage from './pages/superadmin/UsersPage';
+import PlatformProfilePage from './pages/superadmin/ProfilePage';
+import PlatformSettingsPage from './pages/superadmin/PlatformSettingsPage';
+import PlatformAuditLogsPage from './pages/superadmin/AuditLogsPage';
+import PlatformRolesPage from './pages/superadmin/RolesPage';
+import PlatformPlansPage from './pages/superadmin/PlansPage';
 import NewOrder from './pages/counter/NewOrder';
 import OrdersList from './pages/counter/OrdersList';
 import OrderDetail from './pages/counter/OrderDetail';
@@ -113,9 +119,15 @@ export default function App() {
                         <Route path="pressings/new" element={<PressingFormPage />} />
                         <Route path="pressings/:id/edit" element={<PressingFormPage />} />
                         <Route path="users" element={<PlatformUsersPage />} />
+                        <Route path="roles" element={<PlatformRolesPage />} />
+                        <Route path="plans" element={<PlatformPlansPage />} />
+                        <Route path="audit-logs" element={<PlatformAuditLogsPage />} />
+                        <Route path="settings" element={<PlatformSettingsPage />} />
+                        <Route path="profile" element={<PlatformProfilePage />} />
                     </Route>
 
                     <Route path="/login" element={<Login />} />
+                    <Route path="/impersonate" element={<ImpersonateBridge />} />
                     <Route element={<ProtectedLayout />}>
                     <Route path="/" element={<NewOrder />} />
                     <Route path="/orders" element={<OrdersList />} />

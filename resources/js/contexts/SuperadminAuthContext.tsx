@@ -13,6 +13,7 @@ interface SuperadminAuthContextValue {
     verifyMfa: (challenge: string, code: string) => Promise<void>;
     confirmMfaSetup: (challenge: string, code: string) => Promise<{ recoveryCodes: string[] }>;
     logout: () => Promise<void>;
+    refresh: () => Promise<void>;
 }
 
 const SuperadminAuthContext = createContext<SuperadminAuthContextValue | null>(null);
@@ -56,6 +57,12 @@ export function SuperadminAuthProvider({ children }: { children: ReactNode }) {
         return { recoveryCodes: result.recovery_codes };
     }, []);
 
+    const refresh = useCallback(async () => {
+        if (!getPlatformToken()) return;
+        const fresh = await platformApi.get<PlatformUser>('/me');
+        setUser(fresh);
+    }, []);
+
     const logout = useCallback(async () => {
         try {
             await platformApi.post('/logout');
@@ -67,8 +74,8 @@ export function SuperadminAuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const value = useMemo(
-        () => ({ user, loading, requestLogin, verifyMfa, confirmMfaSetup, logout }),
-        [user, loading, requestLogin, verifyMfa, confirmMfaSetup, logout],
+        () => ({ user, loading, requestLogin, verifyMfa, confirmMfaSetup, logout, refresh }),
+        [user, loading, requestLogin, verifyMfa, confirmMfaSetup, logout, refresh],
     );
 
     return <SuperadminAuthContext.Provider value={value}>{children}</SuperadminAuthContext.Provider>;

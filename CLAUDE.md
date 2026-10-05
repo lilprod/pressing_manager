@@ -1587,7 +1587,8 @@ avant tout code.
   au chargement, comme le panneau équivalent du hub).
 
 **Licence / facturation — gap d'harmonisation tenant ↔ plateforme (constaté le
-2026-10-03, pas encore corrigé)** : audit demandé par l'utilisateur avant
+2026-10-03, corrigé le 2026-10-05 — voir « Superadmin SaaS Phases 0-4 »
+ci-dessous)** : audit demandé par l'utilisateur avant
 d'investir dans la facturation/paiement superadmin (« regarde ce qui est
 développé actuellement côté tenant, voir comment harmoniser avec le côté
 superadmin »). État des lieux complet et recommandation détaillée dans
@@ -1632,6 +1633,220 @@ superadmin »). État des lieux complet et recommandation détaillée dans
   pressing vend des abonnements à ses propres clients finaux) — déjà
   correctement `pressing_id`-scopé depuis le 2026-10-02, aucun rapport avec ce
   gap.
+
+**Superadmin SaaS Phases 0-4 (continuité de compte, paramètres plateforme,
+observabilité, harmonisation licence/facturation, opérations cross-tenant)** —
+fait le 2026-10-05, sur demande utilisateur explicite (« Phase 0 à 4 selon
+l'ordre de priorité de la recommandation »), avec une seule contrainte de
+cadence tranchée via `AskUserQuestion` : **tout enchaîner, une seule validation
+utilisateur à la fin** (dérogation explicite à la discipline habituelle « un
+chantier → stop », comme déjà fait une fois pour le trio Hub/Branding/
+Opérationnel). Plan détaillé = celui déjà documenté dans
+[Superadmin SaaS — État des lieux & plan d'action](https://claude.ai/artifact/GcB6NXP6m4Ac33fcy5xJSK),
+exécuté dans l'ordre recommandé (0 → 1 → 3 → 2 → 4, l'observabilité passant
+avant l'harmonisation licence pour disposer d'un journal d'audit sur lequel
+vérifier les futures actions de renouvellement/impersonation).
+
+- **Phase 0 — Continuité de compte (`platform_users`)** : photo de profil,
+  téléphone, `must_change_password` ajoutés à `platform_users` (mêmes colonnes
+  que le modèle tenant `User`, même usage). `PATCH /platform/me` (identité +
+  photo), `PATCH /platform/me/password` (`current_password:platform` — guard
+  explicite, sans quoi la règle de validation testerait le mauvais guard),
+  réinitialisation de mot de passe par un superadmin
+  (`POST /platform/users/{id}/reset-password`, mot de passe temporaire affiché
+  une seule fois, même convention que côté tenant). Nouvel écran
+  `pages/superadmin/ProfilePage.tsx`.
+- **Phase 1 — Paramètres plateforme (`platform_settings`)** : premier
+  singleton de branding **de la console Spark elle-même** (nom de
+  l'application, logo/favicon, couleurs, contacts support, raison sociale) —
+  distinct de `AppSetting` (branding d'un pressing tenant). `current()` sans
+  dimension pressing (c'est la console elle-même, pas un tenant). Édition
+  réservée au rôle `superadmin` (`$this->user()->isSuperadmin()`) — un
+  `admin_transverse`/`auditeur_transverse` peut le consulter (logo affiché
+  dans sa propre sidebar) mais pas le modifier. Nouvel écran
+  `pages/superadmin/PlatformSettingsPage.tsx` (champs désactivés avec alerte
+  informative pour un non-superadmin).
+- **Phase 3 — Observabilité (`PlatformAuditLogController`)** : le mécanisme
+  `PlatformAuditLog`/`PlatformAuditable` existait déjà depuis la Phase 1 du
+  chantier Plateforme (2026-10-02) mais, comme `AuditLog` côté tenant avant le
+  2026-10-01, **sans aucun endpoint pour le lire** — même angle mort, même
+  correctif. `GET /platform/audit-logs` (type `pressing`/`platform_user`,
+  filtré par période), gating `reports.view`, scoping identique à
+  `PlatformDashboardController` (`admin_transverse` affecté à des pressings
+  précis ne voit jamais les entrées `platform_user` concernant d'autres
+  membres du personnel Spark — seulement les entrées `pressing` de ses
+  pressings affectés). Nouvel écran `pages/superadmin/AuditLogsPage.tsx`.
+- **Phase 2 — Harmonisation licence/plateforme** (le chantier le plus
+  structurant des cinq, correctif direct du trou d'isolation documenté
+  ci-dessus) :
+  - **`licenses` devient réellement par pressing** : migration
+    `add_pressing_id_to_licenses_table` — colonne `pressing_id`
+    (nullable→remplie→NOT NULL+unique), backfill : la licence globale unique
+    existante est rattachée au pressing `LEGACY` (ou le plus ancien pressing
+    si `LEGACY` n'existe pas), tout pressing sans licence reçoit un essai de
+    30 jours, toute licence orpheline (aucun pressing du tout) est supprimée.
+    `License::current()` devient `License::current(int $pressingId)` — même
+    pattern que `AppSetting::current($pressingId)`, auto-création d'un essai
+    de 30 jours si absent.
+  - **Fusion des deux gardes** : `CheckLicenseStatus` (ancien, deployment-wide)
+    **supprimé**, sa logique absorbée dans `CheckPressingStatus` (devenu le
+    seul garde du groupe `['auth:sanctum', 'pressing']` — l'alias `'license'`
+    retiré de `bootstrap/app.php`) : vérifie `pressing.status === 'suspended'`
+    PUIS `License::current($pressing_id)->refreshStatus()` (expiré → 402 sur
+    tout, période de grâce → 402 sur les écritures seulement). Les deux
+    conditions qui s'ignoraient avant cette passe sont désormais un seul
+    contrôle cohérent.
+  - **Pricing déplacé sur `platform_plans`** : `price`/`currency`/
+    `duration_days` ajoutés (migration de backfill depuis l'ancienne table
+    `license_plans`, par correspondance de `slug` — table legacy laissée en
+    base, non destructive, les données y sont déjà copiées). **Bug découvert
+    par capture Playwright, pas par les tests** : les 6 plans cosmétiques
+    seedés en Phase 1 (starter/essentiel/pro/business/growth/enterprise)
+    n'avaient pas d'équivalent dans `license_plans` → restaient `price = null`
+    tout en étant `is_active = true` → `PlansPage.tsx`/le sélecteur de
+    renouvellement plantaient sur `.toLocaleString()` d'une valeur null.
+    Corrigé par la migration elle-même (`whereNull('price')->update(['is_active'
+    => false])`) plutôt que côté frontend uniquement, pour que l'API
+    `GET /plans` (actifs, utilisée par le sélecteur de renouvellement) ne
+    propose jamais un plan sans prix réel ; rendu aussi null-safe côté
+    frontend par prudence (`PlansPage.tsx`, modale de renouvellement de
+    `PressingsPage.tsx`).
+  - **`licenses.manage` retiré du rôle tenant `admin`** (migration dédiée,
+    supprime la permission des tables `permissions`/`role_permission` côté
+    tenant — elle n'a plus de sens une fois le renouvellement déplacé côté
+    plateforme) : un manager de pressing ne peut plus créer ses propres plans
+    ni s'auto-renouveler. `LicensePlanController`/les routes `/license/plans`,
+    `/license/renew`, `/license-plans*` **supprimés** côté tenant.
+    `LicenseController` devient **lecture seule** (`show()`/`history()`,
+    aucune permission — informatif, visible à tout utilisateur tenant, cohérent
+    avec la recommandation retenue). Frontend : `LicensePage.tsx` et
+    `LicenseBlockedScreen.tsx` réécrits sans formulaire de renouvellement,
+    `LicenseRenewalForm.tsx` supprimé, carte « Licence » du hub et nav
+    toujours visibles pour tous (plus de gating `licenses.manage`) puisque
+    c'est maintenant un écran purement informatif.
+  - **Renouvellement déplacé côté plateforme** : `POST
+    /platform/pressings/{id}/renew` (`RenewPressingLicenseRequest`, gaté
+    `licenses.manage` **plateforme** — la permission plateforme, pas la
+    permission tenant supprimée ci-dessus), `LicenseService::renew()`
+    réécrit pour accepter un `PlatformPlan` (au lieu de l'ancien
+    `LicensePlan`) et synchroniser `pressings.license_expires_at`
+    (dénormalisé, lu par le dashboard superadmin) à chaque renouvellement.
+    Nouveau bouton « Enregistrer un paiement » sur `PressingsPage.tsx`
+    (modale : plan, méthode espece/carte/flooz/tmoney, référence externe —
+    conforme à la décision actée « paiement cash/Mobile Money confirmé
+    manuellement par Spark », pas d'intégration PSP).
+  - **Licence créée à la provision d'un pressing** : `PressingController::store()`
+    (superadmin) crée désormais une licence (essai 30 jours) dans la même
+    transaction que Pressing + Agence + manager bootstrap, et pose
+    `pressings.license_expires_at` immédiatement — avant cette passe un
+    pressing fraîchement créé n'avait aucune licence tant que
+    `License::current()` n'était pas appelé une première fois.
+  - **Bug de cross-contamination de guard découvert en écrivant les tests**,
+    pas en production (tests uniquement, mais révélateur d'un piège Laravel
+    général) : `Auth::shouldUse($guard)` — ce que fait `actingAs($user,
+    $guard)` — **mute `config('auth.defaults.guard')` pour le reste du
+    test/de la requête**. Un test qui enchaîne `actingAs($superadmin,
+    'platform')` PUIS `actingAs($admin)` **sans préciser `'web'`** authentifie
+    le second utilisateur contre le guard `platform` au lieu du guard par
+    défaut dont dépend la vérification stateful de Sanctum → 401 inattendu.
+    Lu le code source de `Illuminate\Auth\AuthManager` pour confirmer avant de
+    corriger (pas supposé). Corrigé en passant systématiquement
+    `actingAs($admin, 'web')` explicite pour toute assertion tenant qui suit
+    un `actingAs` plateforme dans le même test — commenté inline comme piège à
+    ne pas répéter.
+  - Tests : `LicenseEnforcementTest` entièrement réécrit (isolation
+    cross-pressing, renouvellement via la plateforme restaure l'accès, un
+    admin tenant ne peut plus renouveler lui-même → 404),
+    `ReminderCommandsTest` adapté au nouveau `License::current($pressingId)`,
+    `LicensePlanManagementTest` supprimé (fonctionnalité intentionnellement
+    retirée), nouveaux `PlatformPlanManagementTest`,
+    `PressingImpersonationTest` (voir Phase 4).
+- **Phase 4 — Opérations cross-tenant avancées** :
+  - **Gestion des rôles plateforme** : `PlatformRoleController::store()`/
+    `update()` (création de rôle custom `is_system=false` ; sur un rôle
+    système, le nom reste éditable mais les permissions sont immuables — 409
+    explicite plutôt qu'un échec silencieux). Écran `pages/superadmin/RolesPage.tsx`.
+  - **Gestion des plans plateforme** (CRUD complet, pas seulement la lecture
+    de la Phase 2) : `PlatformPlanController::store()`/`update()`, gaté
+    `licenses.manage` plateforme. Écran `pages/superadmin/PlansPage.tsx`.
+  - **Invitations par e-mail** (fermait un gap documenté des deux côtés,
+    tenant et plateforme, depuis les chantiers précédents — « un mot de passe
+    temporaire est affiché à l'admin » devient **affiché ET envoyé par
+    e-mail**) : `UserInvitationNotification`/`PlatformUserInvitationNotification`
+    (canal mail standard Laravel, driver `config('mail.default')` = `log` en
+    dev — infrastructure réelle, même mécanisme que `LicenseExpiringNotification`
+    déjà existante, pas de nouvelle dépendance). Déclenchées à la création
+    d'un compte et à une réinitialisation de mot de passe, des deux côtés
+    (`UserController`/`PlatformUserController`). Le mot de passe temporaire
+    reste aussi affiché une fois à l'écran (ceinture et bretelles — l'e-mail
+    peut échouer/tomber en spam).
+  - **Impersonation (« Se connecter en tant que »)** : `POST
+    /platform/pressings/{id}/impersonate`, gaté par une nouvelle permission
+    plateforme dédiée `pressings.impersonate` (accordée au rôle `superadmin`
+    uniquement — volontairement pas `admin_transverse`, agir *en tant que* le
+    personnel d'un pressing est plus sensible que simplement le configurer).
+    Trouve le compte manager bootstrap du pressing (`agency_id` null, rôle
+    `admin`, actif, le plus ancien), émet un vrai jeton Sanctum tenant
+    (`$tenantUser->createToken('platform-impersonation:'.$actor->id)`),
+    journalise `pressing.impersonated` dans `PlatformAuditLog`. Pont frontend
+    dédié `pages/ImpersonateBridge.tsx` (route `/impersonate?token=...`, hors
+    de `ProtectedLayout`) : dépose le jeton dans `pm.token` puis redirige vers
+    `/dashboard` — ouvert dans un nouvel onglet depuis `PressingsPage.tsx`
+    (bouton « Se connecter en tant que »), ne touche jamais `pm.platform.token`
+    (stockage séparé, la session superadmin reste active dans l'onglet
+    d'origine).
+    **Bug découvert et corrigé pendant la validation Playwright, pas par les
+    tests backend** (ceux-ci couvraient déjà l'émission et la validité du
+    jeton via un appel HTTP brut `Authorization: Bearer`, mais pas le parcours
+    navigateur réel) : la page `/impersonate` restait montée dans le même
+    arbre React que `AuthProvider` (qui enveloppe toute l'app dans
+    `main.tsx`) ; au montage, l'effet de `ImpersonateBridge` pose le jeton
+    PUIS déclenche `window.location.href = '/dashboard'`, mais l'effet de
+    `AuthProvider` (`loadSession()`) se déclenche **aussi** au même montage et,
+    voyant désormais un jeton disponible, lance son propre `GET /me` — requête
+    que la navigation qui suit immédiatement **annule en plein vol**. Le
+    `fetch` rejette alors avec `TypeError: Failed to fetch` (pas un 401), ce
+    qui tombait dans le `catch` de `loadSession()` et effaçait le jeton
+    (`setToken(null)`) **avant même que `/dashboard` ne se charge** — la
+    nouvelle page démarrait donc avec un `localStorage` déjà vidé et
+    redirigeait vers `/login`. Confirmé par instrumentation `console.log`
+    temporaire + écoute `page.on('console', …)` en Playwright (la version
+    précédente du script de diagnostic n'écoutait pas la console, d'où un
+    faux sentiment de ne rien pouvoir observer). **Corrigé** en faisant
+    sortir `loadSession()` tôt, sans appel réseau, quand
+    `window.location.pathname === '/impersonate'` — cette route ne fait que
+    déposer un jeton puis rediriger, `AuthProvider` n'a aucune raison d'y
+    tenter sa propre résolution de session. Alternative envisagée et
+    écartée : sortir `ImpersonateBridge` de l'arbre `AuthProvider` (aurait
+    exigé un second point de montage React, changement plus large pour un
+    gain équivalent). Vérifié par un test Playwright isolé (jeton connu
+    injecté directement sur `/impersonate`, capture de la console confirmant
+    l'absence de tentative `/me` concurrente) puis par le parcours complet
+    réel (connexion superadmin → clic « Enregistrer un paiement » → clic
+    « Se connecter en tant que » → nouvel onglet → tableau de bord tenant
+    pleinement chargé sous l'identité du manager, capture d'écran à l'appui).
+  - Tests : `PlatformRoleManagementTest` (4), `PlatformPlanManagementTest` (3),
+    `PressingImpersonationTest` (3, dont un test d'authentification HTTP brute
+    avec le jeton émis — preuve que le jeton fonctionne réellement, pas
+    seulement qu'il est bien formé).
+- **Hors scope de ces 5 phases** (décisions documentées, pas des oublis) :
+  intégration PSP réelle (Stripe/Paddle) — décision actée 2026-10-03 inchangée,
+  cash/Mobile Money confirmé manuellement reste le modèle v1 ; écran de gestion
+  fine des permissions plateforme (catalogue de 4 permissions fixe, pas
+  d'ajout/suppression de permission à la volée) ; provisionnement réel d'un
+  espace tenant distinct par pressing (toujours un seul déploiement partagé,
+  cf. pivot multi-tenant) ; préférences utilisateur plateforme (langue/thème —
+  la console reste français uniquement, décision Phase 1 du chantier
+  Plateforme inchangée) ; sessions actives/déconnexion à distance pour
+  `platform_users` (même gap que documenté côté tenant, non traité ici).
+- **Validation** : 391 tests backend passants (aucune régression), `tsc
+  --noEmit` et `npm run build` propres, parité i18n fr/en stricte (0 écart),
+  smoke test Playwright bout en bout (navigateur réel) couvrant les 5 phases :
+  changement de mot de passe/profil superadmin, paramètres plateforme (logo/
+  couleurs), les 7 écrans superadmin (profil/paramètres/rôles/plans/audit/
+  pressings/utilisateurs) à 1440px, ouverture de la modale de renouvellement,
+  et le parcours complet renouvellement → impersonation → tableau de bord
+  tenant chargé.
 
 ## Conventions établies dans ce projet (à respecter)
 

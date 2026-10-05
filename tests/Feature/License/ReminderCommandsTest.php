@@ -21,9 +21,11 @@ class ReminderCommandsTest extends TestCase
     public function test_license_reminder_notifies_admins_exactly_at_configured_thresholds(): void
     {
         $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $admin = $this->makeUser('admin', $agency);
+        $admin->update(['pressing_id' => $agency->pressing_id]);
+        License::current($agency->pressing_id)->update(['expires_at' => now()->addDays(7)->endOfDay()->subSeconds(1), 'grace_period_days' => 7]);
         Notification::fake();
-        License::query()->update(['expires_at' => now()->addDays(7)->endOfDay()->subSeconds(1), 'grace_period_days' => 7]);
-        $admin = $this->makeUser('admin');
 
         $this->artisan('licenses:send-reminders')->assertSuccessful();
 
@@ -33,9 +35,11 @@ class ReminderCommandsTest extends TestCase
     public function test_license_reminder_is_silent_outside_thresholds(): void
     {
         $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $admin = $this->makeUser('admin', $agency);
+        $admin->update(['pressing_id' => $agency->pressing_id]);
+        License::current($agency->pressing_id)->update(['expires_at' => now()->addDays(3), 'grace_period_days' => 7]);
         Notification::fake();
-        License::query()->update(['expires_at' => now()->addDays(3), 'grace_period_days' => 7]);
-        $this->makeUser('admin');
 
         $this->artisan('licenses:send-reminders')->assertSuccessful();
 

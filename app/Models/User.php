@@ -16,6 +16,10 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
+    private const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+
+    private const LOCKOUT_MINUTES = 15;
+
     /**
      * The attributes that are mass assignable.
      *
@@ -60,7 +64,30 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'must_change_password' => 'boolean',
             'password_changed_at' => 'datetime',
+            'locked_until' => 'datetime',
         ];
+    }
+
+    public function isLocked(): bool
+    {
+        return $this->locked_until !== null && $this->locked_until->isFuture();
+    }
+
+    public function registerFailedLogin(): void
+    {
+        $this->increment('failed_login_attempts');
+
+        if ($this->failed_login_attempts >= self::MAX_FAILED_LOGIN_ATTEMPTS) {
+            $this->forceFill(['locked_until' => now()->addMinutes(self::LOCKOUT_MINUTES)])->save();
+        }
+    }
+
+    public function registerSuccessfulLogin(): void
+    {
+        $this->forceFill([
+            'failed_login_attempts' => 0,
+            'locked_until' => null,
+        ])->save();
     }
 
     protected function photoUrl(): Attribute

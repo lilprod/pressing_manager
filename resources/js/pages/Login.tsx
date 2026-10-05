@@ -51,7 +51,11 @@ export default function Login() {
         try {
             await login(email, password);
         } catch (err) {
-            setError(err instanceof ApiError ? t('auth.loginError') : t('common.error'));
+            if (err instanceof ApiError && err.status === 423) {
+                setError(err.message);
+            } else {
+                setError(err instanceof ApiError ? t('auth.loginError') : t('common.error'));
+            }
         } finally {
             setSubmitting(false);
         }
@@ -175,7 +179,7 @@ export default function Login() {
                             </div>
                         </div>
 
-                        <button type="submit" disabled={submitting} className={button('primary', 'md', 'group w-full sm:w-auto')}>
+                        <button type="submit" disabled={submitting} className={button('accent', 'md', 'group w-full sm:w-auto')}>
                             {submitting ? (
                                 <>
                                     <Spinner className="h-4 w-4" />
@@ -189,12 +193,11 @@ export default function Login() {
                             )}
                         </button>
 
-                        {timeout ? (
-                            <Alert tone="info" icon={ShieldCheck}>
-                                <p className="font-semibold">{t('login.securityTitle')}</p>
-                                <p className="font-normal">{t('login.securityDetail', { minutes: timeout })}</p>
-                            </Alert>
-                        ) : null}
+                        <Alert tone="info" icon={ShieldCheck}>
+                            <p className="font-semibold">{t('login.securityTitle')}</p>
+                            <p className="font-normal">{t('login.lockoutDetail')}</p>
+                            {timeout ? <p className="font-normal">{t('login.securityDetail', { minutes: timeout })}</p> : null}
+                        </Alert>
 
                         <p className="border-t border-ink-200/80 pt-4 text-xs text-ink-600 dark:border-ink-800 dark:text-ink-350">{t('login.assistance')}</p>
                     </form>

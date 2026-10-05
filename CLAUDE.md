@@ -133,7 +133,7 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | Section Figma | Écran(s) | Page(s) actuelle(s) | État |
 |---|---|---|---|
 | 00 Vue d'ensemble | Dashboard SPARK PRESSING | `pages/DashboardPage.tsx` (route `/dashboard`, 1er lien de la sidebar, permission `reports.view`) | **fait** (2026-09-30) — écran distinct de `/kpi` (la maquette sépare section 00 et section 08). Uniquement des données existantes : `/kpi` période courante + précédente (variations), compteurs `/orders?status=…` (total paginé), `/cash/summary`, `/invoices` (`total_outstanding`), file hors ligne IndexedDB. Blocs sans agrégat backend omis (voir §2). `/` reste « Nouvelle commande » (flux comptoir inchangé). |
-| 01 Authentification | Authentification staff | `pages/Login.tsx` | **fait** (2026-09-30) — carte de connexion, pastille réseau réelle, alerte d'inactivité alimentée par `session_timeout_minutes` ; choix d'agence / « se souvenir de moi » / réinitialisation libre-service omis (§2) |
+| 01 Authentification | Authentification staff | `pages/Login.tsx` | **fait, renforcement livré** (2026-10-05) — carte de connexion, pastille réseau réelle, alerte d'inactivité alimentée par `session_timeout_minutes`, verrouillage réel après 5 échecs de connexion (15 min, aligné sur le mécanisme déjà construit côté plateforme superadmin), bouton de soumission en gold conforme à la capture ; choix d'agence / « se souvenir de moi » / réinitialisation libre-service toujours omis (§2) |
 | 02 Dépôts & POS | Gestion des dépôts (liste) | `pages/counter/OrdersList.tsx` | **fait** (commit `408e94e`), KPI en-tête ajoutés le 2026-10-01 (voir détail en §2) |
 | 02 Dépôts & POS | Nouveau dépôt (formulaire) | `pages/counter/NewOrder.tsx` | jugé déjà conforme le 2026-09-30 — hérite des tokens, structure (client→catalogue groupé par catégorie→panier sticky) déjà proche de Figma et plus riche (recherche live, remise fidélité auto, conditions de réception, file offline). Ne pas réécrire sans raison concrète. |
 | 03 Clients & fidélité | CRM clients (liste) | `pages/clients/ClientsList.tsx` | **fait** (commit `08a8922`), KPI en-tête ajoutés le 2026-10-01 (voir détail en §2) |
@@ -289,6 +289,64 @@ côté front : chaque élément a été **omis** et attend le backend décrit ic
   canal SMS réel (seul un envoi simulé existe dans `NotificationService`).
 - Visuel photo « Atelier premium » du panneau de marque : asset Figma non
   récupérable (quota MCP) — remplacé par le dégradé de marque existant.
+
+**01 Authentification — audit de conformité 2026-10-05 (2 captures mobiles,
+« 01 — Authentification » + « 08 — Rapports & bilans »)** — captures fournies
+par l'utilisateur via un carrousel Figma mobile, demande explicite « même
+exercice de conformité ». Lecture directe du code (`Login.tsx`,
+`AuthController::login()`, `KpiController`/`KpiPage.tsx`) avant tout
+jugement visuel, suivant la méthode déjà établie. Rapport soumis via
+`AskUserQuestion` vu le volume d'écarts (certains fabricables tout de suite,
+d'autres des chantiers backend conséquents déjà documentés) — l'utilisateur
+a tranché : bouton gold + verrouillage après échecs pour Login, rien de
+nouveau à construire pour Rapports (voir plus bas, section « 08 Rapports »).
+- **Déjà conforme** : disposition générale (panneau de marque à gauche,
+  carte de connexion à droite), champs e-mail/mot de passe avec icônes,
+  badge En ligne/Hors ligne, texte d'aide mot de passe, lien d'assistance.
+- **Bouton « Se connecter » en vert, capture le montre en gold** — même
+  principe déjà appliqué plusieurs fois ce jour-là (Caisse, Retraits,
+  Nouveau dépôt) : `button('accent', 'md', …)` au lieu de `button('primary', …)`.
+- **Verrouillage après échecs de connexion, fait** — la capture affiche un
+  encart « Connexion sécurisée / Après 5 échecs, l'accès est bloqué pendant
+  15 minutes », mais ce texte ne correspondait à **aucun mécanisme réel** :
+  l'encart affichait en fait l'avertissement de déconnexion par inactivité
+  (`session_timeout_minutes`, un concept différent — Module E, 2026-09-30),
+  et `AuthController::login()` n'avait aucune notion de blocage après
+  échecs. Plutôt que d'inventer ce mécanisme, **réutilisation directe** du
+  verrouillage déjà construit côté plateforme superadmin
+  (`PlatformUser::isLocked()`/`registerFailedLogin()`/`registerSuccessfulLogin()`,
+  5 échecs → 15 min, voir chantier Plateforme Phase 1) : mêmes noms de
+  méthode, mêmes constantes, portés sur le modèle tenant `User`. Migration
+  `add_login_lockout_fields_to_users_table` (`failed_login_attempts` tinyint
+  défaut 0, `locked_until` timestamp nullable). `AuthController::login()` :
+  vérifie `isLocked()` avant toute tentative (423 si verrouillé, même avec
+  le bon mot de passe), incrémente sur échec, réinitialise sur succès —
+  calqué ligne à ligne sur `PlatformAuthController::login()`. Encart
+  « Connexion sécurisée » du frontend corrigé pour afficher le **vrai**
+  texte de la politique de verrouillage (`login.lockoutDetail`, statique,
+  toujours affiché) au-dessus de l'avertissement d'inactivité existant
+  (toujours conditionnel à `session_timeout_minutes`, les deux étant des
+  faits réels distincts, aucune raison d'en masquer un pour l'autre).
+  `Login.tsx` distingue désormais une erreur 423 (message serveur affiché
+  tel quel, « Compte temporairement verrouillé… ») d'une erreur 422
+  (identifiants invalides, message générique) — même distinction déjà faite
+  côté `PlatformLoginPage.tsx`.
+- **Explicitement non traité, décision actée via `AskUserQuestion`** :
+  sélecteur d'agence à la connexion, « Se souvenir de moi », réinitialisation
+  libre-service en 3 étapes, texte/visuel du panneau de marque (hero/eyebrow/
+  engagements rafraîchis dans la nouvelle capture mais pas repris ici), photo
+  de fond du panneau gauche — tous des chantiers backend ou de contenu
+  distincts, laissés en l'état déjà documenté ci-dessus plutôt que traités
+  à la volée dans cette passe ciblée sur le verrouillage.
+- Tests : `tests/Feature/Auth/LoginTest.php` +3 (verrouillage après 5 échecs,
+  réinitialisation du compteur après succès, un compte déjà verrouillé est
+  rejeté même avec le bon mot de passe — mêmes trois scénarios déjà testés
+  côté plateforme). Suite complète 465/465 après ajout (aucune régression).
+  `tsc --noEmit` et `npm run build` propres, parité i18n fr/en stricte.
+  Vérifié par Playwright à 1440px et 390px (aucun débordement), et par un
+  parcours réel complet : 5 échecs de connexion réels puis une 6e tentative
+  avec le **bon** mot de passe → rejetée avec le message de verrouillage
+  affiché à l'écran (pas seulement vérifié en HTTP brut).
 
 **00 Vue d'ensemble** (node `1:13`)
 - Graphique « Revenus réseau » (courbe sur 7 dates + infobulle) : il faudrait

@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use OpenApi\Attributes as OA;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class AuthController extends Controller
 {
@@ -36,11 +37,21 @@ class AuthController extends Controller
 
         $user = User::where('email', $data['email'])->where('is_active', true)->first();
 
+        if ($user !== null && $user->isLocked()) {
+            throw new HttpException(423, 'Compte temporairement verrouillé après trop de tentatives. Réessayez plus tard.');
+        }
+
         if (! $user || ! Hash::check($data['password'], $user->password)) {
+            if ($user !== null) {
+                $user->registerFailedLogin();
+            }
+
             throw ValidationException::withMessages([
                 'email' => ["Identifiants invalides."],
             ]);
         }
+
+        $user->registerSuccessfulLogin();
 
         $token = $user->createToken($data['device_name']);
 

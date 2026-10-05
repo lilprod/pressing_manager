@@ -68,9 +68,21 @@ Maquette cible pour la refonte visuelle en cours :
   final (« Enregistrer le mouvement », « Clôturer la caisse ») en gold, pas
   en vert — ces deux CTA étaient encore en `button('primary', …)`. Passés en
   `button('accent', …)` (`CashMovementFormPage.tsx`, `CashClosureFormPage.tsx`).
-  Décision : couleur uniquement, pas de reconstruction du bandeau pied de
-  page sombre pleine largeur montré sur ces captures (changement de mise en
-  page distinct, non demandé ici).
+  Décision initiale : couleur uniquement, pas de reconstruction du bandeau
+  pied de page sombre pleine largeur montré sur ces captures (changement de
+  mise en page distinct, non demandé à ce moment-là). **Fait ensuite, sur
+  confirmation utilisateur** : nouveau composant partagé
+  `components/ui/ActionBar.tsx` (barre sticky `bottom-0`, toujours sombre —
+  même convention que la sidebar, pas de `dark:` conditionnels) avec statut
+  à gauche et actions à droite, câblé sur les deux écrans. Statut toujours
+  dérivé de données réelles déjà calculées dans chaque page, jamais
+  fabriqué : `CashMovementFormPage.tsx` affiche l'impact signé sur la caisse
+  (`type === 'entree' ? +montant : -montant`) ; `CashClosureFormPage.tsx`
+  affiche l'état réel de la checklist (`checklistComplete`). Vérifié par
+  Playwright que la barre sticky ne masque jamais durablement du contenu du
+  formulaire (capture au scroll maximal : tout le contenu réapparaît
+  au-dessus de la barre) et absence de débordement horizontal à 390px sur
+  les deux écrans.
 - **ink** = échelle neutre alignée sur le `slate` standard Tailwind (les tokens
   "Neutral" Figma sont littéralement les valeurs slate officielles).
 - Police : **Inter** partout (remplace Figtree + Plus Jakarta Sans).

@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
 import { useFormat } from '../../lib/format';
 import { api, ApiError } from '../../lib/api';
+import { ActionBar, actionBarGhostButton } from '../../components/ui/ActionBar';
 import { Alert, EmptyState, LoadingState, Spinner } from '../../components/ui/Feedback';
 import { Pill } from '../../components/ui/StatusBadge';
 import { StatCard } from '../../components/ui/Metrics';
@@ -295,15 +296,6 @@ export default function CashClosureFormPage() {
                                 {hasAnyVariance && <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{t('cash.closureForm.notesRequiredHint')}</p>}
                             </label>
 
-                            <div className="flex justify-end gap-2 border-t border-ink-200/80 pt-5 dark:border-ink-800">
-                                <Link to="/cash" className={button('ghost', 'md')}>
-                                    {t('common.cancel')}
-                                </Link>
-                                <button type="button" onClick={() => void handleSubmit()} disabled={!canSubmit || busy} className={button('accent', 'md')}>
-                                    {busy ? <Spinner className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4" />}
-                                    {t('cash.closureForm.submit')}
-                                </button>
-                            </div>
                         </section>
                     </div>
 
@@ -371,6 +363,16 @@ export default function CashClosureFormPage() {
                         </section>
                     </aside>
                     </div>
+
+                    <ActionBar status={checklistComplete ? t('cash.closureForm.footer.ready') : t('cash.closureForm.footer.notReady')}>
+                        <Link to="/cash" className={actionBarGhostButton}>
+                            {t('common.cancel')}
+                        </Link>
+                        <button type="button" onClick={() => void handleSubmit()} disabled={!canSubmit || busy} className={button('accent', 'md')}>
+                            {busy ? <Spinner className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4" />}
+                            {t('cash.closureForm.submit')}
+                        </button>
+                    </ActionBar>
                 </div>
             )}
         </div>

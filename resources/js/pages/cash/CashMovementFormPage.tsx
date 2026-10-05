@@ -4,6 +4,8 @@ import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, Check, Paperclip, ShieldChec
 import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
 import { api, ApiError } from '../../lib/api';
+import { useFormat } from '../../lib/format';
+import { ActionBar, actionBarGhostButton } from '../../components/ui/ActionBar';
 import { Alert, Spinner } from '../../components/ui/Feedback';
 import { Pill } from '../../components/ui/StatusBadge';
 import { button, card, cardPadded, cx, input, label, select, sectionTitle, textLink } from '../../components/ui/styles';
@@ -30,6 +32,7 @@ function CheckItem({ done, label: text }: { done: boolean; label: string }) {
 export default function CashMovementFormPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
+    const { money } = useFormat();
     const { user, activeAgencyId, agencies } = useAuth();
     const isGlobal = user?.agency_id === null;
     const fileInput = useRef<HTMLInputElement>(null);
@@ -94,6 +97,7 @@ export default function CashMovementFormPage() {
     const canSubmit = amountFilled && reasonFilled;
     const threshold = validators?.threshold ?? null;
     const isSensitive = threshold !== null && Number(amount || 0) >= threshold;
+    const signedAmount = amountFilled ? (type === 'entree' ? Number(amount) : -Number(amount)) : null;
 
     return (
         <div className="space-y-4">
@@ -200,16 +204,6 @@ export default function CashMovementFormPage() {
                     </div>
 
                     {isSensitive && <Alert tone="warning">{t('cash.movementForm.sensitiveWarning')}</Alert>}
-
-                    <div className="flex justify-end gap-2 border-t border-ink-200/80 pt-5 dark:border-ink-800">
-                        <Link to="/cash" className={button('ghost', 'md')}>
-                            {t('common.cancel')}
-                        </Link>
-                        <button type="button" onClick={() => void handleSubmit()} disabled={!canSubmit || busy} className={button('accent', 'md')}>
-                            {busy ? <Spinner className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4" />}
-                            {t('common.save')}
-                        </button>
-                    </div>
                 </section>
 
                 <aside className="space-y-4 lg:sticky lg:top-6">
@@ -259,6 +253,16 @@ export default function CashMovementFormPage() {
                     )}
                 </aside>
             </div>
+
+            <ActionBar status={signedAmount !== null ? t('cash.movementForm.footer.impact', { amount: money(signedAmount) }) : undefined}>
+                <Link to="/cash" className={actionBarGhostButton}>
+                    {t('common.cancel')}
+                </Link>
+                <button type="button" onClick={() => void handleSubmit()} disabled={!canSubmit || busy} className={button('accent', 'md')}>
+                    {busy ? <Spinner className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4" />}
+                    {t('common.save')}
+                </button>
+            </ActionBar>
         </div>
     );
 }

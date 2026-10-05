@@ -249,6 +249,43 @@ export interface CashFlowSeries {
     net_total: number;
 }
 
+export interface DailyReportMovement {
+    id: number;
+    type: 'entree' | 'sortie';
+    category: string | null;
+    amount: number;
+    creator: string | null;
+    occurred_at: string;
+}
+
+export interface DailyReportCashier {
+    user_id: number;
+    name: string;
+    amount: number;
+    transactions_count: number;
+    average_basket: number;
+    status: 'verifie' | 'en_attente' | null;
+}
+
+export interface DailyReport {
+    date: string;
+    stats: {
+        revenue_today: number;
+        outstanding: number;
+        transactions_count: number;
+        average_basket: number;
+        cash_variance: number | null;
+    };
+    payments_by_method: Record<'espece' | 'carte' | 'flooz' | 'tmoney', { amount: number; percent: number }>;
+    payments_by_hour: { hour: number; total: number }[];
+    movements: DailyReportMovement[];
+    movements_summary: { in_total: number; out_total: number; count: number };
+    settled_today: { count: number; amount: number };
+    unpaid_today: { count: number; amount: number };
+    discounts_today: number;
+    cashiers: DailyReportCashier[];
+}
+
 export type CashLedgerKind = 'mouvement' | 'encaissement' | 'cloture';
 
 export interface CashLedgerEntry {

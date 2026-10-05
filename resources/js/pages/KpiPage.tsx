@@ -12,6 +12,7 @@ import {
     FileSpreadsheet,
     Gem,
     MapPin,
+    Receipt,
     ReceiptText,
     UsersRound,
     type LucideIcon,
@@ -115,6 +116,13 @@ export default function KpiPage() {
         },
         { to: '/loyalty', icon: Gem, title: t('reports.links.loyalty'), text: t('reports.links.loyaltyText'), allowed: hasPermission(user, 'clients.manage') },
         { to: '/cash', icon: ArrowLeftRight, title: t('reports.links.movements'), text: t('reports.links.movementsText'), allowed: hasPermission(user, 'payments.manage') },
+        {
+            to: '/reports/daily',
+            icon: Receipt,
+            title: t('reports.links.daily'),
+            text: t('reports.links.dailyText'),
+            allowed: hasPermission(user, 'reports.view'),
+        },
     ].filter((s) => s.allowed);
 
     return (

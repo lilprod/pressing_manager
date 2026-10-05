@@ -39,6 +39,7 @@ use App\Http\Controllers\Api\Platform\PlatformSettingController;
 use App\Http\Controllers\Api\Platform\PlatformUserController;
 use App\Http\Controllers\Api\Platform\PressingController as PlatformPressingController;
 use App\Http\Controllers\Api\Platform\PressingReportController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ServiceController;
@@ -288,6 +289,9 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::get('/kpi', [KpiController::class, 'index']);
     Route::get('/kpi/export/pdf', [KpiController::class, 'exportPdf']);
     Route::get('/kpi/export/excel', [KpiController::class, 'exportExcel']);
+
+    Route::get('/reports/daily', [ReportController::class, 'daily']);
+    Route::get('/reports/daily/export/excel', [ReportController::class, 'exportExcel']);
 
     Route::get('/notification-settings', [NotificationSettingController::class, 'index']);
     Route::post('/notification-settings', [NotificationSettingController::class, 'store']);

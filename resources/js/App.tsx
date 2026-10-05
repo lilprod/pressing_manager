@@ -61,6 +61,7 @@ import StockPage from './pages/StockPage';
 import DeliveriesPage from './pages/DeliveriesPage';
 import RhPage from './pages/RhPage';
 import KpiPage from './pages/KpiPage';
+import DailyReportPage from './pages/reports/DailyReportPage';
 import DashboardPage from './pages/DashboardPage';
 import NotificationsPage from './pages/NotificationsPage';
 import AuditLogsPage from './pages/AuditLogsPage';
@@ -163,6 +164,7 @@ export default function App() {
                     <Route path="/hr" element={<RhPage />} />
                     <Route path="/dashboard" element={<DashboardPage />} />
                     <Route path="/kpi" element={<KpiPage />} />
+                    <Route path="/reports/daily" element={<DailyReportPage />} />
                     <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/audit-logs" element={<AuditLogsPage />} />
                     <Route path="/license" element={<LicensePage />} />

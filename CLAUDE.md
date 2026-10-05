@@ -2870,3 +2870,98 @@ génération/hachage du mot de passe repris de `UserController::resetPassword()`
   réussie avec ce nouveau mot de passe (confirmé par un second appel de
   connexion réel, pas simulé) ; mot de passe de test restauré après coup pour
   ne pas perturber l'environnement de développement partagé.
+
+**08 Rapports & bilans — Bilan journalier et performance caissiers** — fait le
+2026-10-05, dernier des quatre chantiers de l'audit de conformité du même jour
+(suite directe des chantiers Login ci-dessus). Écran jusqu'ici entièrement non
+construit (CLAUDE.md le documentait comme « quasi intégralement dépendant
+d'agrégats absents »). Confirmé par le même audit : le second écran Rapports
+(« Vue d'ensemble », `KpiPage.tsx`) est déjà conforme à ce qu'il affiche
+aujourd'hui — les écarts qui y restent (histogramme CA, répartition paiements,
+synthèse fidélité) étaient déjà documentés et l'utilisateur a choisi de ne
+construire que le Bilan journalier dans cette passe, un écran séparé et plus
+structurant.
+- **Nouveau `App\Services\DailyReportService::build(agencyId, date)`** —
+  réutilise au maximum l'existant plutôt que de redériver des formules déjà
+  standardisées : `revenue_today`/`outstanding` empruntés tels quels à
+  `CashService::dailyStats()` (injection de service, pas de requête dupliquée).
+  Le reste est nouveau, avec des décisions de modélisation explicites :
+  - `payments_by_method` : vraie granularité à 4 valeurs d'enum
+    (`espece|carte|flooz|tmoney`), bornée au jour calendaire — **distinct** de
+    `CashService::paymentBreakdown()` (depuis la dernière clôture, 3 buckets
+    seulement, sémantique différente, pas réutilisable telle quelle).
+  - `payments_by_hour` : bornée à la plage **[première heure, dernière heure]**
+    de transaction du jour — jamais 24 créneaux fabriqués (`Agency` n'a pas de
+    champ horaires d'ouverture, même décision déjà actée ailleurs dans ce
+    fichier pour la même raison).
+  - `settled_today`/`unpaid_today` : `Invoice` n'a pas de colonne `paid_at`
+    (vérifié, confirmé absent) — « soldé aujourd'hui » dérivé honnêtement d'un
+    `whereHas('payments', …)` sur `payments.paid_at`, jamais une colonne
+    fabriquée. « Impayé du jour » = factures **émises** aujourd'hui encore
+    impayées (`issued_at`), pas une notion d'ancienneté plus large.
+  - `discounts_today` : `sum(orders.discount_amount)` du jour — exactement la
+    colonne déjà pointée par le gap documenté, aucune nouvelle colonne.
+  - `cashiers` : regroupement de `Payment::receiver()` (jamais `receivedBy()`
+    — piège Eloquent déjà documenté dans ce fichier) sur les paiements complets
+    du jour. **N'affiche que les caissiers ayant réellement encaissé au moins
+    un paiement ce jour** — jamais une ligne à 0 FCFA fabriquée pour un employé
+    présent mais sans vente (testé explicitement,
+    `test_cashiers_only_lists_users_who_actually_received_a_payment_today`).
+    Statut dérivé de `Attendance` du jour pour ce caissier (`en_attente`/
+    `verifie` selon `clock_out`), même construction que
+    `CashService::operatorsForDate()` (la méthode existante répond à une
+    question différente — « présent maintenant » vs « a travaillé ce jour-là »
+    — donc pas réutilisée telle quelle).
+  - **Explicitement omis** (catégorie (c) de la méthode d'audit, pas des
+    oublis) : « Progression vs objectif » par caissier (aucune notion
+    d'objectif/cible n'existe nulle part dans le modèle de données) ; notion de
+    « session de caisse » par caissier distincte de la présence (même gap déjà
+    documenté dans ce fichier pour l'écran Caisse — un caissier apparaît une
+    fois par jour avec son total agrégé, pas par session d'ouverture/fermeture
+    de poste).
+- **Résolution d'agence** : une seule agence obligatoire, même patron exact que
+  `CashController::resolveAgencyId()`/`AtelierController::resolveSingleAgency()`
+  (422 explicite pour un rôle global sans `agency_id`) — jamais
+  `resolveAgencyFilter()` (vues consolidées multi-agences) : un bilan de caisse
+  raisonne toujours par caisse physique, jamais une vue réseau.
+- **Export Excel** : `App\Services\DailyReportExcelExporter`, copie exacte du
+  squelette `KpiExcelExporter`/`CashLedgerExcelExporter` (PhpSpreadsheet déjà
+  une dépendance), 2 feuilles (Synthèse + Performance des caissiers).
+- **Frontend** `pages/reports/DailyReportPage.tsx` (route `/reports/daily`) :
+  même garde « agence requise » que `CashRegisterPage.tsx`
+  (`user?.agency_id ?? activeAgencyId`, `EmptyState` sinon). 4 `StatCard`
+  d'en-tête (`grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-4`, jamais
+  `grid-cols-2` direct — montants FCFA, piège déjà documenté). `SegmentedBar`
+  (déjà existant) pour la répartition par mode de paiement ; petit histogramme
+  horaire dédié (inline, pas une réutilisation forcée de `CashFlowBars`/
+  `RevenueBars` — leurs props attendent des séries par **date**, pas par
+  **heure**, les forcer aurait exigé un formatage de date trompeur). Table
+  « Performance des caissiers » patronnée sur `AuditLogsPage.tsx`
+  (`overflow-x-auto`, colonnes fixes). Nouveau lien dans les raccourcis
+  « Rapports détaillés » de `KpiPage.tsx` (gardé par `reports.view`, même
+  composant `ReportLink` déjà là, pas un nouveau composant).
+- **Bug de troncature trouvé par capture Playwright, pas par les tests** :
+  la carte « Écart de caisse » affichait un texte (« Pas encore clôturé », cas
+  honnête d'un jour non encore clôturé — jamais un écart à 0 fabriqué) qui se
+  faisait tronquer par le `truncate` déjà appliqué à toute valeur de
+  `StatCard` — visible seulement à 1440px (4 cartes par ligne, moins de largeur
+  par carte), pas à 390px (une carte par ligne, assez de place). Conforme à la
+  convention déjà établie dans ce fichier pour ce piège (`StatCard` tronque
+  ses valeurs, donc rester sur un texte court plutôt que de modifier le
+  composant partagé) — corrigé en raccourcissant le texte (« Non clôturé »/
+  « Not closed »), revérifié par capture aux deux largeurs.
+- Tests : `tests/Feature/Reports/DailyReportTest.php` (13 — gating
+  `reports.view`, 422 sans `agency_id` pour un rôle global, chaque agrégat
+  vérifié individuellement sur des données construites explicitement (`stats`,
+  les 4 moyens de paiement, la plage horaire bornée, mouvements validés
+  seulement, soldé/impayé du jour, remises, caissiers filtrés + statut dérivé
+  de la présence), isolation inter-agences, export Excel). Suite complète
+  493/493 après ajout (aucune régression). `tsc --noEmit` et `npm run build`
+  propres, parité i18n fr/en stricte. Vérifié aussi par un parcours réel bout
+  en bout (navigateur, pas seulement HTTP) : données construites via tinker
+  (2 paiements à un même caissier, un mouvement de sortie, une remise sur
+  dépôt, une présence ouverte) → connexion réelle avec sélection d'agence au
+  login (chantier précédent) → `/reports/daily` → chaque valeur affichée à
+  l'écran vérifiée égale au calcul attendu (7 500 FCFA de CA, répartition
+  66,7 %/33,3 % espèce/Flooz, 1 caissier avec 2 tickets à 3 750 FCFA de panier
+  moyen, statut « En poste »). 1440px et 390px, aucun débordement horizontal.

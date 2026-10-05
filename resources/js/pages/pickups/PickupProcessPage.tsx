@@ -21,6 +21,7 @@ import { useFormat } from '../../lib/format';
 import { auditLogLabel } from '../../lib/auditLog';
 import PrintableTicket from '../../components/PrintableTicket';
 import PaymentMethodPicker from '../../components/PaymentMethodPicker';
+import PaymentReferenceField from '../../components/PaymentReferenceField';
 import { Avatar } from '../../components/ui/PageHeader';
 import { Alert, EmptyState, LoadingState, Spinner } from '../../components/ui/Feedback';
 import { Pill } from '../../components/ui/StatusBadge';
@@ -416,16 +417,7 @@ export default function PickupProcessPage() {
                                     />
                                 </label>
                                 {referenceRequired && (
-                                    <label className="block">
-                                        <span className={label}>{t(`pickup.paymentReference.${paymentMethod}`)}</span>
-                                        <input
-                                            value={paymentReference}
-                                            onChange={(e) => setPaymentReference(e.target.value)}
-                                            placeholder={t(`pickup.paymentReference.${paymentMethod}.placeholder`)}
-                                            className={cx(input, 'w-full')}
-                                        />
-                                        <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{t('pickup.paymentReference.hint')}</p>
-                                    </label>
+                                    <PaymentReferenceField method={paymentMethod} value={paymentReference} onChange={setPaymentReference} />
                                 )}
                                 {needsOverride && (
                                     <div className="space-y-3 rounded-xl border border-red-300 bg-red-50 p-4 dark:border-red-400/30 dark:bg-red-400/5">

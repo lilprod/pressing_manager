@@ -202,6 +202,7 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
 
     Route::post('/payments/cash', [PaymentController::class, 'storeCash']);
     Route::post('/payments/remote', [PaymentController::class, 'initiateRemote']);
+    Route::post('/payments/manual', [PaymentController::class, 'storeManual']);
     Route::get('/payments/{payment}', [PaymentController::class, 'show']);
 
     Route::get('/cash/summary', [CashController::class, 'summary']);

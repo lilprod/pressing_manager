@@ -746,6 +746,69 @@ couleur accent/gold mené le même jour sur la Caisse) :
     le paiement est `complete` avec la référence saisie et la facture `payee`.
     1440px et 390px, aucun débordement.
 
+**Encaissement des factures impayées — même design V1 étendu à l'autre écran
+réel** (2026-10-05, demande utilisateur directe « Fais pareil pour l'encaissement
+des factures impayées sur les autres écrans », suite immédiate du chantier Retraits
+ci-dessus) — recherche faite avant tout code pour ne pas deviner le périmètre :
+`InvoicePanel.tsx` (composant partagé monté dans `OrderDetail.tsx`) est le seul
+autre écran qui encaisse réellement un solde de facture impayée et avait
+exactement le même bug que l'ancien `PickupProcessPage.tsx` (branche `else` →
+`POST /payments/remote` → `setInterval` qui sonde `GET /payments/{id}` toutes les
+4s en attendant un webhook d'agrégateur qui n'arrivera jamais en V1).
+`InvoicesOutstandingPage.tsx` (écran « Impayés ») n'a **aucune** UI d'encaissement
+propre — il ne fait que lister et renvoyer vers `OrderDetail.tsx`, donc rien à y
+changer. `SubscriptionsPage.tsx` utilise aussi `PaymentMethodPicker` mais encaisse
+des abonnements clients, un domaine distinct des « factures impayées » demandées
+explicitement — **hors scope**, non touché.
+- **Nouvel endpoint `POST /payments/manual`** (`PaymentController::storeManual()`,
+  `StoreManualPaymentRequest`) — même garde `payments.manage` +
+  `authorizeAgency()` que `storeCash()`/`initiateRemote()`, appelle
+  `PaymentService::recordManualPayment()` **déjà construit** pour les Retraits
+  (aucune nouvelle logique métier : carte/Flooz/T-Money confirmés immédiatement
+  par le caissier, `status=complete` direct, jamais `en_attente`). `method`
+  restreint à `carte|flooz|tmoney` (l'espèce reste sur `/payments/cash`, qui ne
+  change pas) ; `reference` obligatoire (`required|string|max:255`) — même
+  décision PCI que les Retraits : jamais de numéro de carte complet, 4 derniers
+  chiffres ou référence de transaction uniquement, réutilise
+  `payments.external_reference`, aucune nouvelle colonne.
+- **`PaymentReferenceField.tsx`** (nouveau composant partagé,
+  `resources/js/components/`) — extraction du bloc label+input+hint qui existait
+  déjà en dur dans `PickupProcessPage.tsx` (même JSX, même comportement), pour
+  éviter de le dupliquer une seconde fois dans `InvoicePanel.tsx`. Clés i18n
+  migrées de `pickup.paymentReference.*` (namespace devenu trop étroit) vers
+  `payment.reference.*` (générique, partagé) — `PickupProcessPage.tsx` mis à jour
+  pour utiliser le composant partagé plutôt que son ancien bloc inline,
+  comportement inchangé. Parité fr/en revérifiée (script Node, 0 écart).
+- **`InvoicePanel.tsx` réécrit** : suppression complète de `pollingPayment`/
+  `pollRef`/`useEffect` de nettoyage/`setInterval` — `pay()` appelle désormais
+  `/payments/cash` (espèce, inchangé) ou `/payments/manual` (carte/Flooz/
+  T-Money, nouveau) et rafraîchit la facture **immédiatement** après la réponse,
+  comme l'espèce l'a toujours fait. Champ référence (`PaymentReferenceField`)
+  affiché conditionnellement dès qu'une méthode non-espèce est choisie, bouton
+  « Encaisser » désactivé tant que la référence est vide pour ces méthodes
+  (même garde client que `PickupProcessPage.tsx`, en plus de la validation
+  serveur 422). Bouton et libellé unifiés (`payment.pay`/icône `HandCoins` pour
+  toutes les méthodes désormais, puisque toutes se terminent de la même façon
+  immédiate) — la clé `payment.initiate` (« Initier le paiement ») devenue
+  orpheline par cette réécriture a été supprimée des deux dictionnaires plutôt
+  que laissée morte.
+- Tests : `tests/Feature/Payments/ManualPaymentTest.php` (6 — paiement Flooz
+  avec référence règle la facture immédiatement, carte sans référence rejetée
+  422, espèce explicitement refusée sur cet endpoint (422, `/payments/cash`
+  reste le seul chemin espèce), gating `payments.manage`, paiement partiel
+  laisse la facture `partiellement_payee`, `agency_id` d'une agence étrangère
+  rejeté pour un utilisateur d'agence). Suite complète 424/424 après ajout
+  (aucune régression). `tsc --noEmit` et `npm run build` propres. Vérifié par
+  Playwright bout en bout, parcours réel complet (pas seulement HTTP) : connexion
+  → dépôt + facture créés via tinker → ouverture de `/orders/{id}` → sélection
+  Flooz → saisie référence → clic réel sur « Encaisser » → facture passe à
+  « Payée » à l'écran sans aucun état « En attente » intermédiaire, carte
+  « Facture entièrement réglée » affichée, dernier paiement montré « Complété ».
+  Vérifié séparément à 390px sur un second dépôt/facture : sélection Carte →
+  bouton « Encaisser » désactivé tant que le champ « 4 derniers chiffres de la
+  carte » est vide, activé dès qu'une valeur est saisie ; aucun débordement
+  horizontal (`document.documentElement.scrollWidth === clientWidth`).
+
 **03 Clients — Fiche client et formulaires** (captures Figma fournies le 2026-10-01,
 pas de node exact) — écarts additionnels à ceux déjà notés :
 - ~~Fiche client : 4 KPI (valeur vie client, dépôts réalisés, panier moyen, solde à

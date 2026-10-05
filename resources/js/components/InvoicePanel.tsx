@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { api, ApiError } from '../lib/api';
 import type { Invoice, Order, Payment, PaymentMethod } from '../types';
-import { CircleCheck, FileDown, FilePlus2, HandCoins, Receipt, Send } from 'lucide-react';
+import { CircleCheck, FileDown, FilePlus2, HandCoins, Receipt } from 'lucide-react';
 import { useFormat } from '../lib/format';
 import PaymentMethodPicker from './PaymentMethodPicker';
+import PaymentReferenceField from './PaymentReferenceField';
 import StatusBadge from './ui/StatusBadge';
 import { Alert, Spinner } from './ui/Feedback';
 import { button, card, cx, input, label, sectionTitle } from './ui/styles';
@@ -21,12 +22,11 @@ export default function InvoicePanel({ order }: { order: Order }) {
     const [busy, setBusy] = useState(false);
     const [method, setMethod] = useState<PaymentMethod>('espece');
     const [amount, setAmount] = useState<number>(order.total_amount);
-    const [pollingPayment, setPollingPayment] = useState<Payment | null>(null);
-    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const [reference, setReference] = useState('');
+    const [lastPayment, setLastPayment] = useState<Payment | null>(null);
 
-    useEffect(() => () => {
-        if (pollRef.current) clearInterval(pollRef.current);
-    }, []);
+    const referenceRequired = method !== 'espece';
+    const referenceMissing = referenceRequired && reference.trim() === '';
 
     async function createInvoice() {
         setBusy(true);
@@ -51,38 +51,30 @@ export default function InvoicePanel({ order }: { order: Order }) {
     }
 
     async function pay() {
-        if (!invoice) return;
+        if (!invoice || referenceMissing) return;
         setBusy(true);
         setError(null);
         try {
-            if (method === 'espece') {
-                await api.post<Payment>('/payments/cash', {
-                    ...agencyScope,
-                    client_id: order.client_id,
-                    invoice_id: invoice.id,
-                    amount,
-                });
-                const refreshed = await api.get<Invoice>(`/invoices/${invoice.id}`);
-                setInvoice(refreshed);
-            } else {
-                const payment = await api.post<Payment>('/payments/remote', {
-                    ...agencyScope,
-                    client_id: order.client_id,
-                    invoice_id: invoice.id,
-                    amount,
-                    method,
-                });
-                setPollingPayment(payment);
-                pollRef.current = setInterval(async () => {
-                    const latest = await api.get<Payment>(`/payments/${payment.id}`);
-                    if (latest.status !== 'en_attente') {
-                        setPollingPayment(latest);
-                        if (pollRef.current) clearInterval(pollRef.current);
-                        const refreshedInvoice = await api.get<Invoice>(`/invoices/${invoice.id}`);
-                        setInvoice(refreshedInvoice);
-                    }
-                }, 4000);
-            }
+            const payment =
+                method === 'espece'
+                    ? await api.post<Payment>('/payments/cash', {
+                          ...agencyScope,
+                          client_id: order.client_id,
+                          invoice_id: invoice.id,
+                          amount,
+                      })
+                    : await api.post<Payment>('/payments/manual', {
+                          ...agencyScope,
+                          client_id: order.client_id,
+                          invoice_id: invoice.id,
+                          amount,
+                          method,
+                          reference: reference.trim(),
+                      });
+            setLastPayment(payment);
+            setReference('');
+            const refreshed = await api.get<Invoice>(`/invoices/${invoice.id}`);
+            setInvoice(refreshed);
         } catch (err) {
             setError(err instanceof ApiError ? err.message : t('common.error'));
         } finally {
@@ -170,29 +162,31 @@ export default function InvoicePanel({ order }: { order: Order }) {
 
                                 <PaymentMethodPicker name={`invoice-method-${order.id}`} value={method} onChange={setMethod} layout="compact" />
 
-                                <button type="button" onClick={() => void pay()} disabled={busy} className={button('success', 'lg', 'w-full')}>
-                                    {busy ? (
-                                        <Spinner className="h-5 w-5" />
-                                    ) : method === 'espece' ? (
-                                        <HandCoins aria-hidden="true" className="h-5 w-5" />
-                                    ) : (
-                                        <Send aria-hidden="true" className="h-5 w-5" />
-                                    )}
-                                    {method === 'espece' ? t('payment.pay') : t('payment.initiate')}
+                                {referenceRequired && (
+                                    <PaymentReferenceField method={method} value={reference} onChange={setReference} />
+                                )}
+
+                                <button
+                                    type="button"
+                                    onClick={() => void pay()}
+                                    disabled={busy || referenceMissing}
+                                    className={button('success', 'lg', 'w-full')}
+                                >
+                                    {busy ? <Spinner className="h-5 w-5" /> : <HandCoins aria-hidden="true" className="h-5 w-5" />}
+                                    {t('payment.pay')}
                                 </button>
                             </div>
                         )}
 
-                        {pollingPayment && (
+                        {lastPayment && (
                             <div
                                 role="status"
                                 className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink-200 px-3.5 py-3 text-sm dark:border-ink-700"
                             >
                                 <span className="inline-flex items-center gap-2 font-medium text-ink-800 dark:text-ink-100">
-                                    {pollingPayment.status === 'en_attente' && <Spinner className="h-4 w-4 text-amber-700 dark:text-amber-300" />}
-                                    {money(pollingPayment.amount)}
+                                    {money(lastPayment.amount)}
                                 </span>
-                                <StatusBadge kind="payment" status={pollingPayment.status} />
+                                <StatusBadge kind="payment" status={lastPayment.status} />
                             </div>
                         )}
                     </div>

@@ -326,6 +326,16 @@ export default function OrderDetail() {
                         </h2>
                         <Pill tone="neutral">{t('order.itemsCount', { count: itemCount })}</Pill>
                     </div>
+                    {order.items.length > 0 && (
+                        <div
+                            role="row"
+                            className="hidden items-center gap-4 rounded-xl border border-ink-200/80 bg-ink-50 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
+                        >
+                            <span className="min-w-0 flex-1">{t('order.itemsTable.article')}</span>
+                            <span className="w-28 shrink-0 text-right">{t('order.itemsTable.price')}</span>
+                            <span className="w-32 shrink-0 text-right">{t('order.itemsTable.status')}</span>
+                        </div>
+                    )}
                     <ul className="space-y-3">
                         {order.items.map((item) => (
                             <OrderItemRow key={item.id} item={item} onUpdated={handleItemUpdated} onPrintLabel={printLabel} />

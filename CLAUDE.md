@@ -994,11 +994,29 @@ même décision utilisateur : « Oui, construire les deux » pour Modifier/Annul
   `annule` en base et à l'écran, boutons Modifier/Annuler/Suivre l'atelier
   correctement disparus, aucun débordement horizontal à 390px
   (`document.documentElement.scrollWidth === clientWidth`).
-- **Reste à faire sur ce module** (tableau Articles restylé pour se rapprocher
-  de la capture « Dépôt DEP-240928 » — en-têtes de colonnes, badges d'état par
-  ligne) avant de passer au chantier suivant (refonte du flux Nouveau dépôt
-  avec paiement intégré à la création, puis réagencement Ticket et facture),
-  chacun avec son propre arrêt de validation.
+- **Tableau Articles — en-têtes de colonnes** (fait le 2026-10-05, suite
+  immédiate) : barre d'en-têtes ARTICLE/PRIX/ÉTAT (`role="row"`, même langage
+  visuel que le patron déjà établi sur `PickupProcessPage.tsx`) ajoutée
+  au-dessus de la liste de `OrderItemRow`, visible à partir de `sm:` (masquée
+  sur mobile, où les cartes empilées n'en ont pas besoin). **Décision
+  délibérée** : ne **pas** collapser `OrderItemRow` en lignes de tableau denses
+  façon `PickupProcessPage` — chaque article y porte une barre de progression,
+  un panneau de contrôle qualité conditionnel et plusieurs boutons de
+  transition de statut ; les forcer dans des colonnes de largeur fixe aurait
+  dégradé l'ergonomie sans gain réel, et aucune capture exacte n'était
+  disponible pour trancher un réagencement plus profond (capture d'origine
+  « Dépôt DEP-240928 » revue dans un tour précédent, non re-disponible pour
+  cette passe). La barre d'en-têtes seule comble l'essentiel de l'écart visuel
+  (« tableau » perçu) sans rien inventer côté données — chaque colonne reflète
+  une information déjà affichée sur la carte (prix de ligne, badge de statut).
+  Vérifié par Playwright à 1440px (en-tête alignée avec les prix/badges de
+  chaque carte) et 390px (en-tête masquée, aucun débordement). Suite complète
+  454/454 inchangée (changement purement frontend).
+
+Ce module (02 Dépôts) a maintenant trois chantiers restants, chacun avec son
+propre arrêt de validation : **refonte du flux Nouveau dépôt** (paiement
+intégré à la création, le plus structurant des trois, planifié en mode plan
+avant tout code vu l'ampleur), puis réagencement de **Ticket et facture**.
 
 **03 Clients — Fiche client et formulaires** (captures Figma fournies le 2026-10-01,
 pas de node exact) — écarts additionnels à ceux déjà notés :

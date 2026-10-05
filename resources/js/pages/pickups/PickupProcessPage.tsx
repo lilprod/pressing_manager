@@ -20,12 +20,13 @@ import { api, ApiError } from '../../lib/api';
 import { useFormat } from '../../lib/format';
 import { auditLogLabel } from '../../lib/auditLog';
 import PrintableTicket from '../../components/PrintableTicket';
+import PaymentMethodPicker from '../../components/PaymentMethodPicker';
 import { Avatar } from '../../components/ui/PageHeader';
 import { Alert, EmptyState, LoadingState, Spinner } from '../../components/ui/Feedback';
 import { Pill } from '../../components/ui/StatusBadge';
 import { Timeline, type TimelineEntry } from '../../components/ui/Timeline';
 import { button, card, cardPadded, cx, input, label, sectionTitle, textLink } from '../../components/ui/styles';
-import type { AuditLog, Order, PickupConditionStatus, PickupRecipientType } from '../../types';
+import type { AuditLog, Order, PaymentMethod, PickupConditionStatus, PickupRecipientType } from '../../types';
 
 /* Écran « Traiter le retrait » (Figma SPARK PRESSING, section 05, « Retraits en
  * agence ») — mise en page deux colonnes, chronologie atelier et journal d'audit
@@ -50,6 +51,7 @@ export default function PickupProcessPage() {
     const [condition, setCondition] = useState<PickupConditionStatus>('conforme');
     const [conditionNotes, setConditionNotes] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('espece');
     const [overrideUnpaid, setOverrideUnpaid] = useState(false);
     const [overrideReason, setOverrideReason] = useState('');
     const [printReceiptAfter, setPrintReceiptAfter] = useState(true);
@@ -118,8 +120,14 @@ export default function PickupProcessPage() {
     }, [order]);
 
     const collected = Number(paymentAmount) || 0;
-    const remainingAfterPayment = Math.max(0, balanceDue - collected);
+    // Seule l'espèce est immédiate (PaymentService::recordCashPayment). Carte/Mobile
+    // Money restent `en_attente` jusqu'au callback opérateur (initiateRemotePayment) :
+    // le montant saisi ne doit donc jamais être traité comme déjà encaissé ici, sous
+    // peine de débloquer un retrait sur un paiement non confirmé.
+    const confirmedCollected = paymentMethod === 'espece' ? collected : 0;
+    const remainingAfterPayment = Math.max(0, balanceDue - confirmedCollected);
     const needsOverride = remainingAfterPayment > 0;
+    const pendingRemotePayment = paymentMethod !== 'espece' && collected > 0;
 
     function setQuantity(itemId: number, value: number, max: number) {
         setQuantities((current) => ({ ...current, [itemId]: Math.max(0, Math.min(max, value)) }));
@@ -153,6 +161,7 @@ export default function PickupProcessPage() {
                     .filter(([, qty]) => qty > 0)
                     .map(([itemId, qty]) => ({ order_item_id: Number(itemId), quantity: qty })),
                 payment_amount: collected > 0 ? collected : undefined,
+                payment_method: collected > 0 ? paymentMethod : undefined,
                 override_unpaid: needsOverride ? overrideUnpaid : undefined,
                 override_reason: needsOverride && overrideUnpaid ? overrideReason : undefined,
             });
@@ -243,7 +252,7 @@ export default function PickupProcessPage() {
 
             {error && <Alert tone="error">{error}</Alert>}
 
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="space-y-4 lg:col-span-2">
                     {eligibleItems.length === 0 ? (
                         <section className={card}>
@@ -252,60 +261,64 @@ export default function PickupProcessPage() {
                     ) : (
                         <section className={cx(card, 'overflow-hidden')}>
                             <h2 className={cx(sectionTitle, 'px-5 pt-5')}>{t('pickup.itemsVerification')}</h2>
-                            <div
-                                role="row"
-                                className="mt-3 flex items-center gap-4 border-y border-ink-200/80 bg-ink-50 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
-                            >
-                                <span className="min-w-0 flex-1">{t('pickup.itemsTable.article')}</span>
-                                <span className="w-28 shrink-0">{t('pickup.itemsTable.remaining')}</span>
-                                <span className="w-32 shrink-0">{t('pickup.itemsTable.quantity')}</span>
-                                <span className="w-32 shrink-0 text-right">{t('pickup.itemsTable.status')}</span>
+                            <div className="mt-3 overflow-x-auto">
+                                <div className="min-w-[680px]">
+                                    <div
+                                        role="row"
+                                        className="flex items-center gap-4 border-y border-ink-200/80 bg-ink-50 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
+                                    >
+                                        <span className="min-w-0 flex-1">{t('pickup.itemsTable.article')}</span>
+                                        <span className="w-28 shrink-0">{t('pickup.itemsTable.remaining')}</span>
+                                        <span className="w-32 shrink-0">{t('pickup.itemsTable.quantity')}</span>
+                                        <span className="w-32 shrink-0 text-right">{t('pickup.itemsTable.status')}</span>
+                                    </div>
+                                    <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                                        {eligibleItems.map((item) => {
+                                            const remaining = item.quantity - item.quantity_delivered;
+                                            const qty = quantities[item.id] ?? 0;
+                                            return (
+                                                <li key={item.id} className="flex items-center gap-4 px-5 py-3">
+                                                    <p className="min-w-0 flex-1 font-semibold text-ink-900 dark:text-ink-50">
+                                                        {item.service?.name ?? item.description}
+                                                    </p>
+                                                    <p className="w-28 shrink-0 text-sm text-ink-600 dark:text-ink-350">{t('pickup.remaining', { count: remaining })}</p>
+                                                    <div className="flex w-32 shrink-0 items-center gap-1.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setQuantity(item.id, qty - 1, remaining)}
+                                                            className={button('secondary', 'sm', 'w-8 px-0')}
+                                                            aria-label={t('common.decrease')}
+                                                        >
+                                                            −
+                                                        </button>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            max={remaining}
+                                                            value={qty}
+                                                            onChange={(e) => setQuantity(item.id, Number(e.target.value), remaining)}
+                                                            className={cx(input, 'h-8 w-14 text-center')}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setQuantity(item.id, qty + 1, remaining)}
+                                                            className={button('secondary', 'sm', 'w-8 px-0')}
+                                                            aria-label={t('common.increase')}
+                                                        >
+                                                            +
+                                                        </button>
+                                                    </div>
+                                                    <div className="w-32 shrink-0 text-right">
+                                                        <Pill tone={qty === remaining ? 'emerald' : qty > 0 ? 'amber' : 'neutral'}>
+                                                            {qty === remaining ? t('pickup.full') : qty > 0 ? t('pickup.partial') : t('pickup.noneSelected')}
+                                                        </Pill>
+                                                    </div>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
                             </div>
-                            <ul className="divide-y divide-ink-100 dark:divide-ink-800">
-                                {eligibleItems.map((item) => {
-                                    const remaining = item.quantity - item.quantity_delivered;
-                                    const qty = quantities[item.id] ?? 0;
-                                    return (
-                                        <li key={item.id} className="flex flex-wrap items-center gap-4 px-5 py-3">
-                                            <p className="min-w-0 flex-1 basis-full font-semibold text-ink-900 sm:basis-0 dark:text-ink-50">
-                                                {item.service?.name ?? item.description}
-                                            </p>
-                                            <p className="w-28 shrink-0 text-sm text-ink-600 dark:text-ink-350">{t('pickup.remaining', { count: remaining })}</p>
-                                            <div className="flex w-32 shrink-0 items-center gap-1.5">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setQuantity(item.id, qty - 1, remaining)}
-                                                    className={button('secondary', 'sm', 'w-8 px-0')}
-                                                    aria-label={t('common.decrease')}
-                                                >
-                                                    −
-                                                </button>
-                                                <input
-                                                    type="number"
-                                                    min={0}
-                                                    max={remaining}
-                                                    value={qty}
-                                                    onChange={(e) => setQuantity(item.id, Number(e.target.value), remaining)}
-                                                    className={cx(input, 'h-8 w-14 text-center')}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setQuantity(item.id, qty + 1, remaining)}
-                                                    className={button('secondary', 'sm', 'w-8 px-0')}
-                                                    aria-label={t('common.increase')}
-                                                >
-                                                    +
-                                                </button>
-                                            </div>
-                                            <div className="w-32 shrink-0 text-right">
-                                                <Pill tone={qty === remaining ? 'emerald' : qty > 0 ? 'amber' : 'neutral'}>
-                                                    {qty === remaining ? t('pickup.full') : qty > 0 ? t('pickup.partial') : t('pickup.noneSelected')}
-                                                </Pill>
-                                            </div>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
                         </section>
                     )}
 
@@ -387,6 +400,7 @@ export default function PickupProcessPage() {
                         )}
                         {balanceDue > 0 && (
                             <>
+                                <PaymentMethodPicker name="pickup-payment-method" value={paymentMethod} onChange={setPaymentMethod} layout="compact" />
                                 <label className="block">
                                     <span className={label}>{t('pickup.collectAmount')}</span>
                                     <input
@@ -398,6 +412,9 @@ export default function PickupProcessPage() {
                                         className={cx(input, 'w-full')}
                                     />
                                 </label>
+                                {pendingRemotePayment && (
+                                    <Alert tone="warning">{t('pickup.pendingRemotePayment', { method: t(`payment.${paymentMethod === 'carte' ? 'card' : paymentMethod}`) })}</Alert>
+                                )}
                                 {needsOverride && (
                                     <div className="space-y-3 rounded-xl border border-red-300 bg-red-50 p-4 dark:border-red-400/30 dark:bg-red-400/5">
                                         <label className="flex items-center gap-2 text-sm font-semibold text-red-900 dark:text-red-200">
@@ -451,7 +468,7 @@ export default function PickupProcessPage() {
                         type="button"
                         onClick={() => void handleSubmit()}
                         disabled={!canSubmit}
-                        className={cx(button('primary', 'md'), 'w-full justify-center')}
+                        className={cx(button('accent', 'md'), 'w-full justify-center')}
                     >
                         {busy ? <Spinner className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4" />}
                         {t('pickup.confirm')}

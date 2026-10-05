@@ -23,6 +23,7 @@ class StoreOrderPickupRequest extends FormRequest
             'items.*.order_item_id' => ['required', 'integer', 'exists:order_items,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'payment_amount' => ['nullable', 'integer', 'min:0'],
+            'payment_method' => ['nullable', Rule::in(['espece', 'carte', 'flooz', 'tmoney'])],
             'override_unpaid' => ['nullable', 'boolean'],
             'override_reason' => ['required_if:override_unpaid,true', 'nullable', 'string', 'max:1000'],
         ];

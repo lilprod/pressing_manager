@@ -208,6 +208,88 @@ class PickupTest extends TestCase
         $this->assertDatabaseHas('invoices', ['id' => $invoice['id'], 'status' => 'payee']);
     }
 
+    /** Carte/Mobile Money : PaymentService::initiateRemotePayment() laisse le paiement
+     * `en_attente` jusqu'au callback opérateur — il ne doit donc jamais débloquer un
+     * retrait à lui seul, contrairement à l'espèce qui est toujours immédiate. */
+    public function test_a_mobile_money_payment_stays_pending_and_does_not_unblock_the_pickup(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $order = $this->makeReadyOrder($agency, quantity: 1, unitPrice: 2000);
+        $item = $order->items()->first();
+        $invoice = $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/invoice")->json();
+
+        $response = $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/pickups", [
+            'recipient_type' => 'client',
+            'recipient_name' => 'Aminata Koné',
+            'condition_status' => 'conforme',
+            'items' => [['order_item_id' => $item->id, 'quantity' => 1]],
+            'payment_amount' => $invoice['total_amount'],
+            'payment_method' => 'flooz',
+        ]);
+
+        // Pas de dérogation fournie et le paiement reste en attente : le retrait doit
+        // rester bloqué, exactement comme s'il n'y avait pas eu de saisie de paiement.
+        // process() est transactionnel : le paiement en attente initié ici est annulé
+        // avec le reste (aucune trace orpheline d'un encaissement jamais confirmé).
+        $response->assertStatus(422);
+        $this->assertSame(0, $item->refresh()->quantity_delivered);
+        $this->assertDatabaseMissing('payments', ['invoice_id' => $invoice['id']]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice['id'], 'status' => 'emise']);
+    }
+
+    /** Même paiement en attente, mais avec une dérogation motivée : le retrait passe
+     * (comme pour un impayé classique), et le paiement Mobile Money reste tracé et
+     * rattaché au retrait pour suivi ultérieur une fois le callback reçu. */
+    public function test_a_card_payment_with_an_override_unblocks_the_pickup_while_the_payment_stays_pending(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $order = $this->makeReadyOrder($agency, quantity: 1, unitPrice: 2000);
+        $item = $order->items()->first();
+        $invoice = $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/invoice")->json();
+
+        $response = $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/pickups", [
+            'recipient_type' => 'client',
+            'recipient_name' => 'Aminata Koné',
+            'condition_status' => 'conforme',
+            'items' => [['order_item_id' => $item->id, 'quantity' => 1]],
+            'payment_amount' => $invoice['total_amount'],
+            'payment_method' => 'carte',
+            'override_unpaid' => true,
+            'override_reason' => 'Paiement carte initié, confirmation opérateur attendue.',
+        ]);
+
+        $response->assertCreated();
+        $this->assertSame('livre', $item->refresh()->status);
+        $pickup = $response->json();
+        $this->assertDatabaseHas('payments', ['invoice_id' => $invoice['id'], 'method' => 'carte', 'status' => 'en_attente']);
+        $this->assertNotNull($pickup['payment_id'] ?? null);
+    }
+
+    public function test_an_invalid_payment_method_is_rejected(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $order = $this->makeReadyOrder($agency, quantity: 1, unitPrice: 2000);
+        $item = $order->items()->first();
+        $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/invoice")->assertCreated();
+
+        $response = $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/pickups", [
+            'recipient_type' => 'client',
+            'recipient_name' => 'Aminata Koné',
+            'condition_status' => 'conforme',
+            'items' => [['order_item_id' => $item->id, 'quantity' => 1]],
+            'payment_amount' => 1000,
+            'payment_method' => 'cheque',
+        ]);
+
+        $response->assertStatus(422);
+    }
+
     public function test_an_override_with_a_reason_unblocks_the_pickup_despite_the_unpaid_balance(): void
     {
         $this->seedRbac();

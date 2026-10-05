@@ -41,6 +41,7 @@ class PickupService
      *     condition_notes?: string|null,
      *     items: array<int, array{order_item_id: int, quantity: int}>,
      *     payment_amount?: int|null,
+     *     payment_method?: string|null,
      *     override_unpaid?: bool,
      *     override_reason?: string|null,
      * }  $data
@@ -54,6 +55,7 @@ class PickupService
 
             $balanceDue = $this->balanceDue($order);
             $collected = (int) ($data['payment_amount'] ?? 0);
+            $method = $data['payment_method'] ?? 'espece';
             $payment = null;
 
             if ($collected > 0) {
@@ -62,14 +64,32 @@ class PickupService
                     throw new HttpException(422, 'Aucune facture à encaisser pour ce dépôt.');
                 }
 
-                $payment = $this->payments->recordCashPayment([
-                    'agency_id' => $order->agency_id,
-                    'client_id' => $order->client_id,
-                    'invoice_id' => $invoice->id,
-                    'amount' => $collected,
-                ], $actor);
+                if ($method === 'espece') {
+                    $payment = $this->payments->recordCashPayment([
+                        'agency_id' => $order->agency_id,
+                        'client_id' => $order->client_id,
+                        'invoice_id' => $invoice->id,
+                        'amount' => $collected,
+                    ], $actor);
 
-                $balanceDue = max(0, $balanceDue - $collected);
+                    $balanceDue = max(0, $balanceDue - $collected);
+                } else {
+                    // Carte/Mobile Money : initié ici mais reste `en_attente` jusqu'au callback
+                    // opérateur (PaymentService::handleWebhook) — un encaissement non confirmé
+                    // ne peut pas débloquer un retrait, même si le montant est déjà saisi. Comme
+                    // tout ceci reste dans la transaction DB de process(), un retrait finalement
+                    // bloqué (pas de dérogation) annule aussi ce paiement en attente — volontaire :
+                    // mieux vaut qu'aucune trace de paiement ne survive à un retrait qui n'a pas eu
+                    // lieu plutôt qu'un paiement « en attente » orphelin, jamais rattaché à un
+                    // retrait réel. Le caissier ressaisit l'encaissement au nouvel essai.
+                    $payment = $this->payments->initiateRemotePayment([
+                        'agency_id' => $order->agency_id,
+                        'client_id' => $order->client_id,
+                        'invoice_id' => $invoice->id,
+                        'amount' => $collected,
+                        'method' => $method,
+                    ]);
+                }
             }
 
             $blockIfUnpaid = AgencySetting::forAgency($order->agency_id)->block_pickup_if_unpaid;

@@ -647,6 +647,96 @@ résolution de conflit (aujourd'hui une resynchronisation écrase ou échoue
 silencieusement selon le cas, à vérifier). Chantier à part entière, pas prioritaire
 tant que les modules Retraits/Caisse/Articles ne sont pas tranchés.
 
+**05 Retraits — Centre de retrait + Traiter le retrait, audit de conformité
+2026-10-05** (captures Figma fournies par l'utilisateur, galerie « 05 — Retraits »)
+— audit zone par zone du code réel contre les captures (suite logique de l'audit
+couleur accent/gold mené le même jour sur la Caisse) :
+- **Centre de retrait** jugé **déjà conforme** — les 4 `StatCard`, la carte de
+  recherche, « Retraits du jour » et le tableau correspondent exactement aux
+  données réelles de `GET /pickups/summary`/`GET /pickups` (vérifié y compris sur
+  les valeurs numériques). Aucun changement.
+- **Traiter le retrait** — deux écarts réels trouvés et corrigés :
+  1. **Bouton « Confirmer le retrait » en vert** (`button('primary', 'md')`) alors
+     que la capture le montre en gold — même principe que les CTA finaux de la
+     Caisse (`button('accent', 'md')`). Corrigé, sans changement de mise en page
+     (contrairement à la Caisse, ce bouton était déjà confiné à la colonne
+     latérale sticky, pas une barre pleine largeur — conforme à la capture telle
+     quelle).
+  2. **Mode de paiement limité à l'espèce** : la capture montre 3 boutons
+     (Espèces/Mobile Money/Carte). Sur confirmation utilisateur (« les trois modes
+     de paiement sont à prendre en compte »), câblé pour de vrai plutôt qu'en
+     façade :
+     - **Décision de modélisation (clé)** : réutilise le composant partagé
+       `PaymentMethodPicker.tsx` (4 tuiles réelles Espèce/Carte/Flooz/T-Money) déjà
+       utilisé ailleurs dans l'app, plutôt que de fabriquer un 3e bucket
+       « Mobile Money » générique qui n'existe pas dans l'enum réel
+       `Payment.method` (`espece|carte|flooz|tmoney` — « Mobile Money » n'est qu'un
+       regroupement d'affichage utilisé côté Caisse pour l'agrégation, pas une
+       vraie méthode de paiement sur laquelle créer un `Payment`). L'intention de
+       l'utilisateur (« les trois modes sont à prendre en compte ») est honorée
+       sans fabriquer une méthode qui n'existe pas.
+     - **Honnêteté sur l'asynchronisme réel** (confirmé en lisant
+       `PaymentService` avant d'écrire quoi que ce soit) : espèce est **immédiat**
+       (`recordCashPayment`, statut `complete`) ; carte/Flooz/T-Money restent
+       **`en_attente`** jusqu'au callback opérateur (`initiateRemotePayment` +
+       `handleWebhook`). `PickupService::process()` encaisse donc différemment
+       selon la méthode, et surtout **un paiement non confirmé ne réduit jamais
+       le solde qui débloque le retrait** — sinon on fabriquerait un encaissement
+       qui n'a pas réellement eu lieu. Front : `PickupProcessPage.tsx` calcule
+       `confirmedCollected` (= montant saisi seulement si espèce, sinon 0) et
+       affiche une alerte honnête (« Ce paiement {méthode} reste en attente de
+       confirmation par l'opérateur — une dérogation motivée reste nécessaire
+       pour remettre les articles maintenant. ») plutôt que de prétendre le solde
+       réglé.
+     - **Le paiement en attente est transactionnel avec le retrait lui-même** :
+       `PickupService::process()` reste dans une seule transaction DB — si le
+       retrait est finalement bloqué (pas de dérogation), le paiement Flooz/Carte
+       initié dans la même requête est annulé avec le reste. Décision assumée
+       (documentée en commentaire dans le service) : mieux vaut qu'aucune trace
+       de paiement « en attente » ne survive à un retrait qui n'a pas eu lieu
+       plutôt qu'un paiement orphelin jamais rattaché à un retrait réel ; le
+       caissier ressaisit l'encaissement au nouvel essai (avec dérogation cette
+       fois).
+     - `StoreOrderPickupRequest` gagne `payment_method` (nullable,
+       `Rule::in(['espece','carte','flooz','tmoney'])`, défaut `espece` côté
+       service si omis — rétro-compatible avec les appels existants).
+       **Aucune nouvelle colonne** : la méthode choisie est déjà portée par
+       `Payment.method` via `OrderPickup.payment_id`, pas dupliquée sur
+       `order_pickups`.
+  - **Bug CSS trouvé et corrigé pendant la validation Playwright** (pas par les
+    tests backend — deux occurrences, piège déjà documenté mais toujours facile à
+    rater) :
+    1. Le conteneur principal `<div className="grid gap-4 lg:grid-cols-3">` de
+       l'écran n'avait **pas** de classe `grid-cols-1` de base — exactement le
+       piège de dimensionnement par contenu maximal déjà documenté sur le
+       chantier Caisse (2026-10-05). Invisible avant cette passe faute de contenu
+       assez large dans la colonne de droite ; le nouveau sélecteur à 4 tuiles
+       `PaymentMethodPicker` a suffi à pousser la page à 527px de large à 390px
+       de viewport (confirmé par `document.documentElement.scrollWidth`, pas
+       juste à l'œil). Corrigé par `grid-cols-1` en base.
+    2. **Nouveau sous-cas du même piège, propre aux tableaux en `flex`** : l'en-tête
+       du tableau « Vérification des articles » (`role="row"` en `flex` avec une
+       colonne `flex-1` + 3 colonnes `shrink-0` fixes) n'était enrobé d'aucun
+       `overflow-x-auto`/`min-w-[...]`, contrairement à la convention déjà établie
+       pour ce cas précis (voir `ServicesPage.tsx`, commit `fc75065`, déjà notée
+       plus haut dans ce fichier) — à 390px, les 3 colonnes fixes (112px+128px+128px
+       + les `gap-4`) dépassaient déjà la largeur de la carte avant même la
+       colonne `flex-1` « Article », qui se retrouvait réduite à ~0 et laissait son
+       texte chevaucher visuellement la colonne suivante (« ARTICLE »/« RESTANT »
+       rendus collés, repéré sur une capture, pas par `tsc`/les tests). Corrigé en
+       enrobant l'en-tête **et** la liste (même conteneur scrollable, pas deux
+       séparés) dans `overflow-x-auto` + `min-w-[680px]`, suppression du
+       `flex-wrap`/`basis-full` devenu inutile sur les lignes (le tableau défile
+       horizontalement dans sa carte plutôt que de tenter de tout faire tenir).
+  - Tests : `tests/Feature/Pickups/PickupTest.php` +3 (un paiement Mobile Money/
+    Carte reste en attente et ne débloque jamais seul le retrait ; avec une
+    dérogation motivée le retrait passe et le paiement reste tracé `en_attente`
+    rattaché au retrait réel ; une méthode de paiement invalide est rejetée).
+    Suite complète 418/418 après ajout (aucune régression). Vérifié aussi par
+    Playwright bout en bout (navigateur réel, dépôt et facture créés via l'API) à
+    1440px et 390px, avec le scénario Flooz + montant saisi + solde toujours
+    bloqué tant qu'aucune dérogation n'est cochée.
+
 **03 Clients — Fiche client et formulaires** (captures Figma fournies le 2026-10-01,
 pas de node exact) — écarts additionnels à ceux déjà notés :
 - ~~Fiche client : 4 KPI (valeur vie client, dépôts réalisés, panier moyen, solde à

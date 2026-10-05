@@ -6,6 +6,8 @@ use App\Models\Agency;
 use App\Models\AgencySetting;
 use App\Models\Client;
 use App\Models\Order;
+use App\Models\Permission;
+use App\Models\Role;
 use App\Models\Service;
 use App\Models\TreatmentType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -389,5 +391,198 @@ class OrderCreationTest extends TestCase
 
         $response->assertStatus(422);
         $this->assertSame(0, Order::count());
+    }
+
+    // --- Paiement intégré à la création (refonte flux comptoir, 2026-10-05) ---
+
+    public function test_an_order_created_without_payment_fields_has_no_invoice(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 2]],
+        ]);
+
+        $response->assertCreated();
+        $this->assertEmpty($response->json('invoice'));
+        $this->assertSame(0, \App\Models\Invoice::count());
+    }
+
+    public function test_a_cash_payment_at_creation_creates_an_invoice_and_settles_it(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $expectedTotal = (int) round(2000 * (1 + config('invoicing.tax_rate')));
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 2]],
+            'payment_method' => 'espece',
+            'payment_amount' => $expectedTotal,
+        ]);
+
+        $response->assertCreated();
+        $invoice = $response->json('invoice.0');
+        $this->assertNotNull($invoice);
+        $this->assertSame('payee', $invoice['status']);
+        $this->assertCount(1, $invoice['payments']);
+        $this->assertSame('espece', $invoice['payments'][0]['method']);
+        $this->assertSame('complete', $invoice['payments'][0]['status']);
+    }
+
+    public function test_a_card_payment_at_creation_requires_a_reference(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 1]],
+            'payment_method' => 'carte',
+            'payment_amount' => 1000,
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertSame(0, Order::count());
+    }
+
+    public function test_a_card_payment_at_creation_with_a_reference_settles_the_invoice(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $expectedTotal = (int) round(1000 * (1 + config('invoicing.tax_rate')));
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 1]],
+            'payment_method' => 'carte',
+            'payment_amount' => $expectedTotal,
+            'payment_reference' => '1234',
+        ]);
+
+        $response->assertCreated();
+        $invoice = $response->json('invoice.0');
+        $this->assertSame('payee', $invoice['status']);
+        $this->assertSame('1234', $invoice['payments'][0]['external_reference']);
+    }
+
+    public function test_a_partial_payment_at_creation_leaves_the_invoice_partially_paid(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 2000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 1]],
+            'payment_method' => 'espece',
+            'payment_amount' => 500,
+        ]);
+
+        $response->assertCreated();
+        $invoice = $response->json('invoice.0');
+        $this->assertSame('partiellement_payee', $invoice['status']);
+        $this->assertSame(500, $invoice['payments'][0]['amount']);
+    }
+
+    public function test_the_applied_payment_amount_is_capped_at_the_invoice_total(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $expectedTotal = (int) round(1000 * (1 + config('invoicing.tax_rate')));
+
+        // Montant reçu (15 000) très supérieur au total — la "monnaie à rendre" est un
+        // calcul client, jamais persistée : le serveur ne doit jamais enregistrer un
+        // paiement plus grand que la facture elle-même.
+        $response = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 1]],
+            'payment_method' => 'espece',
+            'payment_amount' => 15000,
+        ]);
+
+        $response->assertCreated();
+        $invoice = $response->json('invoice.0');
+        $this->assertSame('payee', $invoice['status']);
+        $this->assertSame($expectedTotal, $invoice['payments'][0]['amount']);
+    }
+
+    public function test_a_role_with_orders_manage_but_without_billing_permissions_cannot_charge_at_creation(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $limitedRole = Role::create(['slug' => 'depot_only', 'name' => 'Dépôt seul', 'scope' => 'agency']);
+        $limitedRole->permissions()->attach(Permission::where('slug', 'orders.manage')->firstOrFail()->id);
+        $limitedUser = \App\Models\User::factory()->create(['role_id' => $limitedRole->id, 'agency_id' => $agency->id]);
+
+        $response = $this->actingAs($limitedUser)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 1]],
+            'payment_method' => 'espece',
+            'payment_amount' => 1000,
+        ]);
+
+        $response->assertStatus(403);
+        $this->assertSame(0, Order::count());
+    }
+
+    public function test_resyncing_an_order_that_already_has_a_payment_does_not_charge_twice(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+
+        $uuid = (string) \Illuminate\Support\Str::uuid();
+        $payload = [
+            'client_id' => $client->id,
+            'client_local_uuid' => $uuid,
+            'items' => [['service_id' => $service->id, 'quantity' => 1]],
+            'payment_method' => 'espece',
+            'payment_amount' => 1000,
+        ];
+
+        $first = $this->actingAs($accueil)->postJson('/api/orders', $payload);
+        $first->assertCreated();
+
+        $replay = $this->actingAs($accueil)->postJson('/api/orders', $payload);
+        $replay->assertOk();
+
+        $this->assertSame(1, Order::count());
+        $this->assertSame(1, \App\Models\Payment::count());
     }
 }

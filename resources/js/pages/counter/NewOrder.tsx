@@ -11,7 +11,9 @@ import { readCachedTreatmentTypes, writeCachedTreatmentTypes } from '../../lib/t
 import { readRecentClients, rememberClients } from '../../lib/recentClientsCache';
 import { syncEvents } from '../../lib/sync';
 import { categoryMeta } from '../../lib/serviceCategory';
-import type { AgencySettings, Client, IntakeCondition, Order, Service, ServiceCategory, TreatmentType } from '../../types';
+import PaymentMethodPicker from '../../components/PaymentMethodPicker';
+import PaymentReferenceField from '../../components/PaymentReferenceField';
+import type { AgencySettings, Client, IntakeCondition, Order, PaymentMethod, Service, ServiceCategory, TreatmentType } from '../../types';
 import {
     Award,
     Building2,
@@ -103,6 +105,13 @@ export default function NewOrder() {
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+
+    // Paiement intégré à la création (refonte flux comptoir) — optionnel, off par défaut :
+    // un dépôt créé sans l'activer se comporte exactement comme avant cette passe.
+    const [payNow, setPayNow] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('espece');
+    const [amountReceived, setAmountReceived] = useState(0);
+    const [paymentReference, setPaymentReference] = useState('');
 
     useEffect(() => {
         if (!agencyId) {
@@ -303,6 +312,15 @@ export default function NewOrder() {
                 intake_notes: l.intake_notes || null,
                 treatment_type_id: l.treatment_type_id ?? undefined,
             })),
+            ...(payNow
+                ? {
+                      payment_method: paymentMethod,
+                      // Jamais plus que le total : la monnaie rendue reste un calcul client,
+                      // le serveur ne doit jamais recevoir/enregistrer un paiement surnuméraire.
+                      payment_amount: Math.min(amountReceived, grandTotal),
+                      ...(paymentMethod !== 'espece' ? { payment_reference: paymentReference.trim() } : {}),
+                  }
+                : {}),
         };
 
         try {
@@ -313,7 +331,7 @@ export default function NewOrder() {
             const order = await api.post<Order>('/orders', payload);
             setFeedback(t('order.submitted'));
             resetForm();
-            navigate(`/orders/${order.id}`);
+            navigate(`/orders/${order.id}/documents`);
         } catch (err) {
             if (err instanceof ApiError) {
                 setError(err.message);
@@ -347,6 +365,10 @@ export default function NewOrder() {
         setExpandedLine(null);
         setDiscount(0);
         setDiscountEdited(false);
+        setPayNow(false);
+        setPaymentMethod('espece');
+        setAmountReceived(0);
+        setPaymentReference('');
     }
 
     function toggleIntakeCondition(serviceId: number, conditionId: number) {
@@ -825,14 +847,79 @@ export default function NewOrder() {
                             </span>
                         </div>
 
+                        <div className="space-y-3 border-t border-ink-200/80 pt-3 dark:border-ink-800">
+                            <StepHeading id="payment-heading" step={3} title={t('order.payment.title')} />
+                            <label className="flex items-center justify-between gap-3 rounded-xl border border-ink-200 bg-white px-3.5 py-3 dark:border-ink-700 dark:bg-ink-900">
+                                <span className="text-sm font-semibold text-ink-900 dark:text-ink-50">{t('order.payment.toggle')}</span>
+                                <input
+                                    type="checkbox"
+                                    checked={payNow}
+                                    onChange={() =>
+                                        setPayNow((prev) => {
+                                            const next = !prev;
+                                            if (next) {
+                                                setAmountReceived(grandTotal);
+                                                setPaymentMethod('espece');
+                                                setPaymentReference('');
+                                            }
+                                            return next;
+                                        })
+                                    }
+                                    className="h-5 w-5 rounded border-ink-300 text-brand-600 focus:ring-brand-500 dark:border-ink-600"
+                                />
+                            </label>
+
+                            {payNow && (
+                                <div className="space-y-3 rounded-xl border border-ink-200 bg-ink-50/60 p-3.5 dark:border-ink-700 dark:bg-ink-950/40">
+                                    <PaymentMethodPicker name="new-order-payment-method" value={paymentMethod} onChange={setPaymentMethod} layout="wide" />
+                                    <label className="block">
+                                        <span className={label}>
+                                            {paymentMethod === 'espece' ? t('order.payment.amountReceived') : t('order.payment.amount')}
+                                        </span>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            value={amountReceived}
+                                            onChange={(e) => setAmountReceived(Math.max(0, Number(e.target.value)))}
+                                            className={cx(inputSm, 'w-full tabular-nums')}
+                                        />
+                                    </label>
+                                    {paymentMethod === 'espece' ? (
+                                        <>
+                                            {amountReceived > grandTotal && (
+                                                <p className="flex items-center justify-between text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                                                    <span>{t('order.payment.changeDue')}</span>
+                                                    <span className="tabular-nums">{money(amountReceived - grandTotal)}</span>
+                                                </p>
+                                            )}
+                                            {amountReceived > 0 && amountReceived < grandTotal && (
+                                                <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                    {t('order.payment.partialNotice', { amount: money(grandTotal - amountReceived) })}
+                                                </p>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <PaymentReferenceField method={paymentMethod} value={paymentReference} onChange={setPaymentReference} />
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
                         <button
                             type="button"
                             onClick={() => void handleSubmit()}
-                            disabled={!selectedClient || cart.length === 0 || submitting || hasInvalidWeight}
+                            disabled={
+                                !selectedClient ||
+                                cart.length === 0 ||
+                                submitting ||
+                                hasInvalidWeight ||
+                                (payNow && amountReceived <= 0) ||
+                                (payNow && paymentMethod !== 'espece' && paymentReference.trim() === '')
+                            }
                             className={button('primary', 'lg', 'w-full text-lg')}
                         >
                             {submitting ? <Spinner className="h-5 w-5" /> : <Check aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />}
-                            {t('order.submit')}
+                            {payNow ? t('order.submitAndPay') : t('order.submit')}
                         </button>
                         {submitHint && <p className="text-center text-xs text-ink-600 dark:text-ink-350">{submitHint}</p>}
                     </div>

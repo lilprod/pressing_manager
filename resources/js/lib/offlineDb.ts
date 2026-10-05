@@ -1,13 +1,27 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 
 export interface PendingOrderPayload {
+    agency_id?: number;
     client_id: number;
     client_local_uuid: string;
     is_express?: boolean;
     promised_at?: string | null;
     notes?: string | null;
     discount_amount?: number;
-    items: Array<{ service_id: number; quantity: number; description?: string | null }>;
+    items: Array<{
+        service_id: number;
+        quantity: number;
+        weight_kg?: number;
+        description?: string | null;
+        intake_condition_ids?: number[];
+        intake_notes?: string | null;
+        treatment_type_id?: number;
+    }>;
+    // Encaissement optionnel intégré à la création (refonte flux comptoir) — voyage
+    // dans le même payload mis en file et rejoué tel quel par /orders au retour réseau.
+    payment_method?: 'espece' | 'carte' | 'flooz' | 'tmoney';
+    payment_amount?: number;
+    payment_reference?: string;
 }
 
 export interface PendingOrder {

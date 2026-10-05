@@ -14,8 +14,10 @@ use App\Models\CustomerSubscription;
 use App\Models\OrderSyncLog;
 use App\Models\Payment;
 use App\Models\TreatmentType;
+use App\Services\InvoiceService;
 use App\Services\OrderNumberGenerator;
 use App\Services\OrdersExcelExporter;
+use App\Services\PaymentService;
 use App\Services\QrCodeGenerator;
 use App\Services\ServicePricingService;
 use App\Services\SubscriptionService;
@@ -34,6 +36,8 @@ class OrderController extends ApiController
         private readonly SubscriptionService $subscriptions,
         private readonly ServicePricingService $pricing,
         private readonly OrdersExcelExporter $exporter,
+        private readonly InvoiceService $invoices,
+        private readonly PaymentService $payments,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -184,11 +188,20 @@ class OrderController extends ApiController
         $agencyId = $request->user()->agency_id ?? $data['agency_id'];
         $this->authorizeAgency($request->user(), $agencyId);
 
+        // Encaissement intégré à la création (refonte flux comptoir) : un rôle personnalisé
+        // peut avoir orders.manage sans les permissions de facturation/encaissement — ne
+        // jamais supposer silencieusement qu'il les détient (accueil/manager/admin les ont
+        // tous les trois par défaut, mais un rôle custom peut diverger).
+        if (! empty($data['payment_method'])) {
+            $this->authorizePermission($request->user(), 'invoices.manage');
+            $this->authorizePermission($request->user(), 'payments.manage');
+        }
+
         // Idempotence : une commande créée hors-ligne déjà synchronisée n'est jamais dupliquée.
         if (! empty($data['client_local_uuid'])) {
             $existing = Order::where('client_local_uuid', $data['client_local_uuid'])->first();
             if ($existing !== null) {
-                return response()->json($existing->load('items.intakeConditions'), 200);
+                return response()->json($existing->load(['items.intakeConditions', 'invoice.payments']), 200);
             }
         }
 
@@ -299,6 +312,31 @@ class OrderController extends ApiController
             }
             $order->save();
 
+            // Paiement intégré à la création (refonte flux comptoir, 2026-10-05) : la
+            // facture n'est générée que si un paiement est réellement soumis — un dépôt
+            // créé sans aucun champ de paiement reste exactement comme avant cette passe
+            // (aucune facture, encaissement différé via InvoicePanel/Retrait).
+            if (! empty($data['payment_method'])) {
+                $invoice = $this->invoices->createFromOrder($order);
+                // Jamais un paiement enregistré plus grand que la facture, même si le
+                // frontend calcule mal la monnaie à rendre (concept purement client, non
+                // persisté) : le serveur reste seul garant du montant réellement appliqué.
+                $appliedAmount = min((int) $data['payment_amount'], $invoice->total_amount);
+                $paymentData = [
+                    'agency_id' => $agencyId,
+                    'client_id' => $data['client_id'],
+                    'invoice_id' => $invoice->id,
+                    'amount' => $appliedAmount,
+                ];
+                if ($data['payment_method'] === 'espece') {
+                    $this->payments->recordCashPayment($paymentData, $request->user());
+                } else {
+                    $paymentData['method'] = $data['payment_method'];
+                    $paymentData['external_reference'] = $data['payment_reference'];
+                    $this->payments->recordManualPayment($paymentData, $request->user());
+                }
+            }
+
             $activeSubscription = CustomerSubscription::where('client_id', $data['client_id'])
                 ->where('agency_id', $agencyId)
                 ->where('status', 'active')
@@ -322,7 +360,7 @@ class OrderController extends ApiController
             return $order;
         });
 
-        return response()->json($order->load('items.intakeConditions'), 201);
+        return response()->json($order->load(['items.intakeConditions', 'invoice.payments']), 201);
     }
 
     public function show(Request $request, Order $order): JsonResponse

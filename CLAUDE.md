@@ -1013,10 +1013,108 @@ même décision utilisateur : « Oui, construire les deux » pour Modifier/Annul
   chaque carte) et 390px (en-tête masquée, aucun débordement). Suite complète
   454/454 inchangée (changement purement frontend).
 
-Ce module (02 Dépôts) a maintenant trois chantiers restants, chacun avec son
-propre arrêt de validation : **refonte du flux Nouveau dépôt** (paiement
-intégré à la création, le plus structurant des trois, planifié en mode plan
-avant tout code vu l'ampleur), puis réagencement de **Ticket et facture**.
+**Nouveau dépôt — paiement intégré à la création (flux comptoir)** — fait le
+2026-10-05, troisième et plus structurant des chantiers Dépôts identifiés par
+l'audit de conformité du même jour (5 captures), planifié en mode plan avant
+tout code vu l'ampleur (2 agents d'exploration frontend/backend + lecture
+directe du code, plan sauvegardé puis exécuté). Capture `Nv_Depot.PNG`
+(dossier Drive `Pressing/New`) retrouvée via recherche Drive après être sortie
+du contexte — montre un panneau « Paiement et ticket » intégré **directement**
+à l'écran de création (tuiles de moyen de paiement, « Montant reçu », « Monnaie
+à rendre » calculée, bouton unique) sous un fil d'Ariane à 4 étapes (Client/
+Articles/Paiement/Ticket). **Lecture clé** : ce fil d'Ariane est un indicateur
+de progression visuel au-dessus d'une page à colonne unique déjà conforme
+(jugée telle le 2026-09-30), pas un assistant multi-écrans à reconstruire — la
+vraie nouveauté est le panneau de paiement lui-même, ajouté au panier latéral
+sticky existant.
+
+- **Constat vérifié avant tout code** : créer un dépôt et l'encaisser étaient
+  deux actions totalement déconnectées (`POST /orders` ne touchait jamais
+  `Invoice`/`Payment` ; facturation et encaissement se faisaient ensuite,
+  séparément, sur `OrderDetail.tsx`). `InvoiceService::createFromOrder()` et
+  `PaymentService::recordCashPayment()`/`recordManualPayment()` étaient déjà
+  des blocs autonomes et transactionnels — la bonne architecture était de les
+  appeler **depuis `OrderController::store()`, dans la même transaction**,
+  plutôt que de chaîner 3 appels HTTP côté frontend (ce qui aurait cassé
+  l'atomicité du replay hors-ligne : un seul `POST /orders`, déjà idempotent
+  via `client_local_uuid`, doit rester l'unique opération rejouable).
+- **Paiement strictement optionnel** : bascule « Encaisser à la création »
+  (off par défaut) — un dépôt sans aucun champ de paiement soumis se comporte
+  **exactement comme avant** (aucune facture créée, cas normal pour un client
+  facturé plus tard ou qui paiera au retrait). Les 18 tests existants
+  d'`OrderCreationTest.php` n'ont demandé aucune modification.
+- **« Montant reçu »/« Monnaie à rendre » restent purement frontend, jamais
+  persistés** — aucune colonne n'existe ni n'a été ajoutée pour la monnaie
+  rendue (concept absent de tout le modèle de données, propre à l'espèce).
+  Le montant réellement appliqué (`payment_amount`) est plafonné **côté
+  serveur** à `min(payment_amount, invoice.total_amount)` avant transmission à
+  `PaymentService` — jamais un paiement enregistré plus grand que la facture,
+  même si le frontend calcule mal ; un montant inférieur au total reste un
+  paiement partiel valide (`partiellement_payee`), cas déjà supporté ailleurs
+  (Retraits, `InvoicePanel`).
+- **Référence obligatoire pour carte/Flooz/T-Money, jamais pour l'espèce** —
+  même règle PCI déjà actée pour Retraits/`InvoicePanel` (`Rule::requiredIf`),
+  réutilise `PaymentMethodPicker.tsx`/`PaymentReferenceField.tsx` tels quels,
+  aucun nouveau composant de paiement.
+- **Garde RBAC explicite, pas supposée** : quand des champs de paiement sont
+  soumis, `store()` vérifie désormais `invoices.manage` **et**
+  `payments.manage` en plus de `orders.manage` déjà requis — tous les rôles
+  actuels avec `orders.manage` (accueil/manager/admin) ont déjà les deux
+  (`PermissionSeeder`), mais l'app supporte des rôles custom
+  (`RoleManagementTest` le confirme) : un rôle personnalisé avec seulement
+  `orders.manage` ne doit pas silencieusement hériter d'une capacité de
+  facturation.
+- **Redirection post-soumission** : `/orders/{id}/documents`
+  (`TicketFacturePage.tsx`, déjà construit) au lieu de `/orders/{id}` — ferme
+  la boucle vers l'« étape 4 : Ticket » de la capture sans fabriquer un
+  nouvel écran d'impression. Le flux hors-ligne est inchangé (pas de
+  navigation, le dépôt reste en file jusqu'à synchronisation).
+- **Hors-ligne** : les champs de paiement voyagent dans le même payload déjà
+  mis en file (`queuePendingOrder`/IndexedDB), rejoués par le même
+  `POST /orders` au retour réseau — aucune nouvelle mécanique de
+  synchronisation. `PendingOrderPayload` (`lib/offlineDb.ts`), qui avait
+  dérivé de `StoreOrderRequest` au fil du temps, a été corrigé et étendu au
+  passage (`agency_id`, `intake_condition_ids`, `intake_notes`,
+  `treatment_type_id`, et les 3 nouveaux champs de paiement).
+- **Backend** : `StoreOrderRequest` gagne `payment_method`/`payment_amount`
+  (`required_with:payment_method`)/`payment_reference`
+  (`Rule::requiredIf` si méthode non-espèce), tous optionnels.
+  `OrderController::store()` : garde RBAC avant la transaction si
+  `payment_method` est présent ; juste après `$order->save()`, dans la même
+  transaction, crée la facture puis enregistre le paiement plafonné ; réponse
+  finale étendue à `invoice.payments` (additif, aucun consommateur existant
+  cassé).
+- **Frontend (`NewOrder.tsx`)** : nouveau bloc « 3 Paiement » inséré dans le
+  footer sticky du panier (entre le total TTC et le bouton de soumission) —
+  toggle, puis si actif : `PaymentMethodPicker` (4 tuiles), et selon la
+  méthode soit « Montant reçu » + « Monnaie à rendre » calculée (espèce) soit
+  montant + `PaymentReferenceField` (carte/Flooz/T-Money). Bouton désactivé
+  tant que le paiement actif est incomplet (montant nul, ou référence vide
+  pour une méthode non-espèce) ; libellé `order.submitAndPay` au lieu de
+  `order.submit` quand `payNow` est actif.
+- Tests : 9 nouveaux dans `tests/Feature/Orders/OrderCreationTest.php`
+  (espèce règle la facture, carte/flooz/tmoney sans référence → 422, avec
+  référence → facture réglée, montant surnuméraire plafonné sans erreur,
+  dépôt sans paiement → toujours aucune facture, rôle `orders.manage` sans
+  `invoices.manage`/`payments.manage` → 403, replay idempotent par
+  `client_local_uuid` ne crée pas de second paiement). 3 tests initialement
+  en échec à cause d'une hypothèse de TVA à 0 % — corrigés en calculant le
+  total attendu via `config('invoicing.tax_rate')` (18 % dans cet
+  environnement) plutôt qu'en codant en dur le sous-total. Suite complète
+  462/462 après ajout (aucune régression).
+- Vérifié par Playwright bout en bout (navigateur réel, utilisateur
+  `accueil` scopé agence plutôt que l'admin global, pour éviter la
+  complication du sélecteur d'agence d'en-tête) à 1440px et 390px : dépôt
+  encaissé en espèce → facture `payee` (1180 FCFA = 1000 + 18 % TVA),
+  paiement `complete`, redirection vers `/orders/{id}/documents`, aucun
+  débordement horizontal (`scrollWidth === clientWidth`) ; sélection Flooz →
+  bouton de soumission désactivé tant que la référence est vide, réactivé dès
+  qu'elle est saisie. Comparaison visuelle directe à `Nv_Depot.PNG` : panneau
+  de paiement conforme (tuiles de moyen de paiement, montant, référence,
+  TOTAL TTC déjà visible au-dessus).
+
+Ce module (02 Dépôts) a maintenant un seul chantier restant : réagencement de
+**Ticket et facture**.
 
 **03 Clients — Fiche client et formulaires** (captures Figma fournies le 2026-10-01,
 pas de node exact) — écarts additionnels à ceux déjà notés :

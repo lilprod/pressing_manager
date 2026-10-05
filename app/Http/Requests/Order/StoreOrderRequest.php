@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Order;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreOrderRequest extends FormRequest
 {
@@ -30,6 +31,16 @@ class StoreOrderRequest extends FormRequest
             'items.*.intake_notes' => ['nullable', 'string'],
             'items.*.intake_condition_ids' => ['nullable', 'array'],
             'items.*.intake_condition_ids.*' => ['integer', 'exists:intake_conditions,id'],
+            // Encaissement optionnel intégré à la création (refonte flux comptoir) :
+            // absents, le dépôt se comporte exactement comme avant (aucune facture créée).
+            'payment_method' => ['nullable', Rule::in(['espece', 'carte', 'flooz', 'tmoney'])],
+            'payment_amount' => ['nullable', 'required_with:payment_method', 'integer', 'min:1'],
+            'payment_reference' => [
+                'nullable',
+                Rule::requiredIf(fn () => $this->input('payment_method') && $this->input('payment_method') !== 'espece'),
+                'string',
+                'max:255',
+            ],
         ];
     }
 }

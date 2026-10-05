@@ -208,10 +208,11 @@ class PickupTest extends TestCase
         $this->assertDatabaseHas('invoices', ['id' => $invoice['id'], 'status' => 'payee']);
     }
 
-    /** Carte/Mobile Money : PaymentService::initiateRemotePayment() laisse le paiement
-     * `en_attente` jusqu'au callback opérateur — il ne doit donc jamais débloquer un
-     * retrait à lui seul, contrairement à l'espèce qui est toujours immédiate. */
-    public function test_a_mobile_money_payment_stays_pending_and_does_not_unblock_the_pickup(): void
+    /** V1, en attendant une intégration réelle avec un agrégateur : Flooz/T-Money/
+     * carte sont confirmés manuellement par le caissier avec une référence de
+     * transaction, exactement comme l'espèce — débloque le retrait immédiatement,
+     * pas de statut `en_attente`. */
+    public function test_a_mobile_money_payment_with_a_reference_unblocks_the_pickup_like_cash(): void
     {
         $this->seedRbac();
         $agency = Agency::factory()->create();
@@ -227,22 +228,24 @@ class PickupTest extends TestCase
             'items' => [['order_item_id' => $item->id, 'quantity' => 1]],
             'payment_amount' => $invoice['total_amount'],
             'payment_method' => 'flooz',
+            'payment_reference' => 'FLZ-2026-998877',
         ]);
 
-        // Pas de dérogation fournie et le paiement reste en attente : le retrait doit
-        // rester bloqué, exactement comme s'il n'y avait pas eu de saisie de paiement.
-        // process() est transactionnel : le paiement en attente initié ici est annulé
-        // avec le reste (aucune trace orpheline d'un encaissement jamais confirmé).
-        $response->assertStatus(422);
-        $this->assertSame(0, $item->refresh()->quantity_delivered);
-        $this->assertDatabaseMissing('payments', ['invoice_id' => $invoice['id']]);
-        $this->assertDatabaseHas('invoices', ['id' => $invoice['id'], 'status' => 'emise']);
+        $response->assertCreated();
+        $this->assertSame('livre', $item->refresh()->status);
+        $this->assertDatabaseHas('payments', [
+            'invoice_id' => $invoice['id'],
+            'method' => 'flooz',
+            'status' => 'complete',
+            'external_reference' => 'FLZ-2026-998877',
+        ]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice['id'], 'status' => 'payee']);
     }
 
-    /** Même paiement en attente, mais avec une dérogation motivée : le retrait passe
-     * (comme pour un impayé classique), et le paiement Mobile Money reste tracé et
-     * rattaché au retrait pour suivi ultérieur une fois le callback reçu. */
-    public function test_a_card_payment_with_an_override_unblocks_the_pickup_while_the_payment_stays_pending(): void
+    /** La référence de transaction est la seule preuve d'un paiement carte/mobile
+     * money en V1 (pas de numéro de carte complet, jamais stocké) — elle est donc
+     * obligatoire, contrairement à l'espèce qui n'en a pas besoin. */
+    public function test_a_card_payment_without_a_reference_is_rejected(): void
     {
         $this->seedRbac();
         $agency = Agency::factory()->create();
@@ -258,15 +261,10 @@ class PickupTest extends TestCase
             'items' => [['order_item_id' => $item->id, 'quantity' => 1]],
             'payment_amount' => $invoice['total_amount'],
             'payment_method' => 'carte',
-            'override_unpaid' => true,
-            'override_reason' => 'Paiement carte initié, confirmation opérateur attendue.',
         ]);
 
-        $response->assertCreated();
-        $this->assertSame('livre', $item->refresh()->status);
-        $pickup = $response->json();
-        $this->assertDatabaseHas('payments', ['invoice_id' => $invoice['id'], 'method' => 'carte', 'status' => 'en_attente']);
-        $this->assertNotNull($pickup['payment_id'] ?? null);
+        $response->assertStatus(422);
+        $this->assertSame(0, $item->refresh()->quantity_delivered);
     }
 
     public function test_an_invalid_payment_method_is_rejected(): void

@@ -24,6 +24,14 @@ class StoreOrderPickupRequest extends FormRequest
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'payment_amount' => ['nullable', 'integer', 'min:0'],
             'payment_method' => ['nullable', Rule::in(['espece', 'carte', 'flooz', 'tmoney'])],
+            // V1, en attendant une intégration réelle avec un agrégateur (Flooz, T-Money,
+            // gateway carte) : carte/mobile money sont confirmés manuellement par le
+            // caissier (PaymentService::recordManualPayment), jamais le numéro de carte
+            // complet (PCI) — 4 derniers chiffres ou référence de transaction uniquement.
+            'payment_reference' => [
+                Rule::requiredIf(fn () => in_array($this->input('payment_method'), ['carte', 'flooz', 'tmoney'], true)),
+                'nullable', 'string', 'max:255',
+            ],
             'override_unpaid' => ['nullable', 'boolean'],
             'override_reason' => ['required_if:override_unpaid,true', 'nullable', 'string', 'max:1000'],
         ];

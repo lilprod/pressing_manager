@@ -675,34 +675,41 @@ couleur accent/gold mené le même jour sur la Caisse) :
        vraie méthode de paiement sur laquelle créer un `Payment`). L'intention de
        l'utilisateur (« les trois modes sont à prendre en compte ») est honorée
        sans fabriquer une méthode qui n'existe pas.
-     - **Honnêteté sur l'asynchronisme réel** (confirmé en lisant
-       `PaymentService` avant d'écrire quoi que ce soit) : espèce est **immédiat**
-       (`recordCashPayment`, statut `complete`) ; carte/Flooz/T-Money restent
-       **`en_attente`** jusqu'au callback opérateur (`initiateRemotePayment` +
-       `handleWebhook`). `PickupService::process()` encaisse donc différemment
-       selon la méthode, et surtout **un paiement non confirmé ne réduit jamais
-       le solde qui débloque le retrait** — sinon on fabriquerait un encaissement
-       qui n'a pas réellement eu lieu. Front : `PickupProcessPage.tsx` calcule
-       `confirmedCollected` (= montant saisi seulement si espèce, sinon 0) et
-       affiche une alerte honnête (« Ce paiement {méthode} reste en attente de
-       confirmation par l'opérateur — une dérogation motivée reste nécessaire
-       pour remettre les articles maintenant. ») plutôt que de prétendre le solde
-       réglé.
-     - **Le paiement en attente est transactionnel avec le retrait lui-même** :
-       `PickupService::process()` reste dans une seule transaction DB — si le
-       retrait est finalement bloqué (pas de dérogation), le paiement Flooz/Carte
-       initié dans la même requête est annulé avec le reste. Décision assumée
-       (documentée en commentaire dans le service) : mieux vaut qu'aucune trace
-       de paiement « en attente » ne survive à un retrait qui n'a pas eu lieu
-       plutôt qu'un paiement orphelin jamais rattaché à un retrait réel ; le
-       caissier ressaisit l'encaissement au nouvel essai (avec dérogation cette
-       fois).
+     - **Première version (asynchrone, correcte mais jugée trop restrictive par
+       l'utilisateur)** : espèce immédiate (`recordCashPayment`), carte/Flooz/
+       T-Money `en_attente` jusqu'à un callback opérateur
+       (`initiateRemotePayment`/`handleWebhook`) — un paiement non confirmé ne
+       débloquait jamais seul le retrait. **Remplacée le jour même** sur demande
+       explicite de l'utilisateur : « en attendant l'intégration avec les
+       agrégateurs, enregistrer ces paiements avec les informations comme le
+       numéro de carte ou référence de transaction… au lieu de les laisser en
+       attente ».
+     - **V1 retenue** : `PaymentService::recordManualPayment()` (nouveau) —
+       carte/Flooz/T-Money sont désormais confirmés **manuellement par le
+       caissier**, exactement comme l'espèce (`status = 'complete'` immédiat, pas
+       `en_attente`), le caissier constatant lui-même la confirmation sur son
+       propre terminal/téléphone. `initiateRemotePayment()`/`handleWebhook()`
+       restent en place, **inchangés**, pour le jour où un agrégateur sera
+       réellement intégré (chemin cible documenté en commentaire dans
+       `PaymentService`) — `recordManualPayment()` est un chemin V1 additionnel,
+       pas un remplacement.
+     - **Décision de sécurité non négociable, prise sans redemander** : jamais le
+       numéro de carte complet, qui serait une violation PCI-DSS sérieuse (stocker
+       un PAN sans être un prestataire de paiement certifié). Un seul champ
+       `payment_reference` générique est capturé — 4 derniers chiffres pour une
+       carte, référence de transaction imprimée sur le reçu du terminal pour
+       Flooz/T-Money — réutilisant la colonne `payments.external_reference` déjà
+       en base (aucune nouvelle colonne). Libellé/placeholder adaptés par méthode
+       (`pickup.paymentReference.carte`/`.flooz`/`.tmoney`) + rappel explicite à
+       l'écran (« Ne jamais saisir le numéro de carte complet… »).
+     - **Référence obligatoire, jamais optionnelle** pour carte/Flooz/T-Money
+       (`StoreOrderPickupRequest::payment_reference`, `Rule::requiredIf` sur le
+       moyen de paiement) — c'est la seule preuve tracée du paiement en V1, sans
+       elle aucune garantie qu'il a réellement eu lieu.
      - `StoreOrderPickupRequest` gagne `payment_method` (nullable,
        `Rule::in(['espece','carte','flooz','tmoney'])`, défaut `espece` côté
-       service si omis — rétro-compatible avec les appels existants).
-       **Aucune nouvelle colonne** : la méthode choisie est déjà portée par
-       `Payment.method` via `OrderPickup.payment_id`, pas dupliquée sur
-       `order_pickups`.
+       service si omis — rétro-compatible avec les appels existants) et
+       `payment_reference` (ci-dessus).
   - **Bug CSS trouvé et corrigé pendant la validation Playwright** (pas par les
     tests backend — deux occurrences, piège déjà documenté mais toujours facile à
     rater) :
@@ -728,14 +735,16 @@ couleur accent/gold mené le même jour sur la Caisse) :
        séparés) dans `overflow-x-auto` + `min-w-[680px]`, suppression du
        `flex-wrap`/`basis-full` devenu inutile sur les lignes (le tableau défile
        horizontalement dans sa carte plutôt que de tenter de tout faire tenir).
-  - Tests : `tests/Feature/Pickups/PickupTest.php` +3 (un paiement Mobile Money/
-    Carte reste en attente et ne débloque jamais seul le retrait ; avec une
-    dérogation motivée le retrait passe et le paiement reste tracé `en_attente`
-    rattaché au retrait réel ; une méthode de paiement invalide est rejetée).
-    Suite complète 418/418 après ajout (aucune régression). Vérifié aussi par
-    Playwright bout en bout (navigateur réel, dépôt et facture créés via l'API) à
-    1440px et 390px, avec le scénario Flooz + montant saisi + solde toujours
-    bloqué tant qu'aucune dérogation n'est cochée.
+  - Tests : `tests/Feature/Pickups/PickupTest.php` +3 (un paiement Flooz avec
+    référence débloque le retrait immédiatement comme l'espèce, facture `payee` ;
+    un paiement carte sans référence est rejeté — 422 ; une méthode de paiement
+    invalide est rejetée). Suite complète 418/418 après ajout (aucune régression).
+    Vérifié aussi par Playwright bout en bout, **parcours réel complet** (pas
+    seulement HTTP) : connexion → dépôt + facture créés via l'API → sélection
+    Flooz → saisie du montant et de la référence → clic réel sur « Confirmer le
+    retrait » → redirection vers `/orders/{id}/documents` → vérifié en base que
+    le paiement est `complete` avec la référence saisie et la facture `payee`.
+    1440px et 390px, aucun débordement.
 
 **03 Clients — Fiche client et formulaires** (captures Figma fournies le 2026-10-01,
 pas de node exact) — écarts additionnels à ceux déjà notés :

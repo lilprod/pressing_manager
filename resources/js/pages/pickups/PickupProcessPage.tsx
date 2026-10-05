@@ -52,6 +52,7 @@ export default function PickupProcessPage() {
     const [conditionNotes, setConditionNotes] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
     const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('espece');
+    const [paymentReference, setPaymentReference] = useState('');
     const [overrideUnpaid, setOverrideUnpaid] = useState(false);
     const [overrideReason, setOverrideReason] = useState('');
     const [printReceiptAfter, setPrintReceiptAfter] = useState(true);
@@ -120,14 +121,14 @@ export default function PickupProcessPage() {
     }, [order]);
 
     const collected = Number(paymentAmount) || 0;
-    // Seule l'espèce est immédiate (PaymentService::recordCashPayment). Carte/Mobile
-    // Money restent `en_attente` jusqu'au callback opérateur (initiateRemotePayment) :
-    // le montant saisi ne doit donc jamais être traité comme déjà encaissé ici, sous
-    // peine de débloquer un retrait sur un paiement non confirmé.
-    const confirmedCollected = paymentMethod === 'espece' ? collected : 0;
-    const remainingAfterPayment = Math.max(0, balanceDue - confirmedCollected);
+    // V1, en attendant une intégration réelle avec un agrégateur (voir CLAUDE.md) :
+    // carte/Flooz/T-Money sont confirmés manuellement par le caissier exactement
+    // comme l'espèce (débloquent le solde immédiatement), à condition qu'une
+    // référence de transaction soit saisie comme preuve/traçabilité.
+    const remainingAfterPayment = Math.max(0, balanceDue - collected);
     const needsOverride = remainingAfterPayment > 0;
-    const pendingRemotePayment = paymentMethod !== 'espece' && collected > 0;
+    const referenceRequired = paymentMethod !== 'espece' && collected > 0;
+    const referenceMissing = referenceRequired && paymentReference.trim() === '';
 
     function setQuantity(itemId: number, value: number, max: number) {
         setQuantities((current) => ({ ...current, [itemId]: Math.max(0, Math.min(max, value)) }));
@@ -138,6 +139,7 @@ export default function PickupProcessPage() {
         !busy &&
         selectedCount > 0 &&
         recipientName.trim() !== '' &&
+        !referenceMissing &&
         (!needsOverride || (overrideUnpaid && overrideReason.trim() !== ''));
 
     useEffect(() => {
@@ -162,6 +164,7 @@ export default function PickupProcessPage() {
                     .map(([itemId, qty]) => ({ order_item_id: Number(itemId), quantity: qty })),
                 payment_amount: collected > 0 ? collected : undefined,
                 payment_method: collected > 0 ? paymentMethod : undefined,
+                payment_reference: referenceRequired ? paymentReference.trim() : undefined,
                 override_unpaid: needsOverride ? overrideUnpaid : undefined,
                 override_reason: needsOverride && overrideUnpaid ? overrideReason : undefined,
             });
@@ -412,8 +415,17 @@ export default function PickupProcessPage() {
                                         className={cx(input, 'w-full')}
                                     />
                                 </label>
-                                {pendingRemotePayment && (
-                                    <Alert tone="warning">{t('pickup.pendingRemotePayment', { method: t(`payment.${paymentMethod === 'carte' ? 'card' : paymentMethod}`) })}</Alert>
+                                {referenceRequired && (
+                                    <label className="block">
+                                        <span className={label}>{t(`pickup.paymentReference.${paymentMethod}`)}</span>
+                                        <input
+                                            value={paymentReference}
+                                            onChange={(e) => setPaymentReference(e.target.value)}
+                                            placeholder={t(`pickup.paymentReference.${paymentMethod}.placeholder`)}
+                                            className={cx(input, 'w-full')}
+                                        />
+                                        <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{t('pickup.paymentReference.hint')}</p>
+                                    </label>
                                 )}
                                 {needsOverride && (
                                     <div className="space-y-3 rounded-xl border border-red-300 bg-red-50 p-4 dark:border-red-400/30 dark:bg-red-400/5">

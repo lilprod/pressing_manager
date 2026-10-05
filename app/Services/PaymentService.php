@@ -47,8 +47,47 @@ class PaymentService
     }
 
     /**
+     * Encaissement carte/Mobile Money confirmé manuellement par le caissier — V1,
+     * en attendant une intégration réelle avec un agrégateur de paiement (Flooz,
+     * T-Money, gateway carte). Le caissier constate lui-même la confirmation (sur
+     * son terminal/téléphone) et saisit une référence de transaction comme preuve/
+     * traçabilité ; jamais un numéro de carte complet (PCI) — 4 derniers chiffres
+     * ou référence imprimée sur le reçu du terminal uniquement.
+     *
+     * Volontairement distinct de initiateRemotePayment() ci-dessous : ici le
+     * paiement est `complete` immédiatement, comme l'espèce — pas `en_attente`,
+     * puisqu'il n'y a justement pas encore d'agrégateur dont attendre un callback.
+     * initiateRemotePayment()/handleWebhook() restent le chemin cible une fois un
+     * agrégateur réellement intégré.
+     */
+    public function recordManualPayment(array $data, User $actor): Payment
+    {
+        return DB::transaction(function () use ($data, $actor) {
+            $payment = Payment::create([
+                'agency_id' => $data['agency_id'],
+                'invoice_id' => $data['invoice_id'] ?? null,
+                'client_id' => $data['client_id'],
+                'method' => $data['method'],
+                'amount' => $data['amount'],
+                'currency' => 'XOF',
+                'status' => 'complete',
+                'received_by' => $actor->id,
+                'paid_at' => now(),
+                'external_reference' => $data['external_reference'] ?? null,
+            ]);
+
+            $this->applyToInvoiceIfPaid($payment);
+            $this->loyalty->creditPointsForPayment($payment);
+
+            return $payment;
+        });
+    }
+
+    /**
      * Initie un paiement carte ou Mobile Money : le paiement reste `en_attente`
-     * jusqu'au callback de l'opérateur/gateway (voir handleWebhook).
+     * jusqu'au callback de l'opérateur/gateway (voir handleWebhook). Chemin cible
+     * une fois un agrégateur réellement intégré — voir recordManualPayment()
+     * ci-dessus pour le chemin manuel utilisé en V1.
      */
     public function initiateRemotePayment(array $data): Payment
     {

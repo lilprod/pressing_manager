@@ -6,13 +6,17 @@ use App\Http\Requests\Platform\RenewPressingLicenseRequest;
 use App\Http\Requests\Platform\StorePressingRequest;
 use App\Http\Requests\Platform\UpdatePressingRequest;
 use App\Models\Agency;
+use App\Models\AgencySetting;
+use App\Models\AppSetting;
 use App\Models\License;
+use App\Models\LoyaltyTier;
 use App\Models\PlatformAuditLog;
 use App\Models\PlatformPlan;
 use App\Models\Pressing;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\LicenseService;
+use Database\Seeders\LoyaltyTierSeeder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -75,7 +79,10 @@ class PressingController extends PlatformApiController
         $this->authorizePermission($request->user(), 'pressings.manage');
 
         $data = $request->validated();
-        $pressingFields = Arr::except($data, ['agency_code', 'agency_name', 'agency_city', 'manager_name', 'manager_email']);
+        $pressingFields = Arr::except($data, [
+            'agency_code', 'agency_name', 'agency_city', 'manager_name', 'manager_email',
+            'primary_color', 'secondary_color', 'security_policy', 'workshop_steps', 'loyalty_tiers',
+        ]);
 
         $managerTemporaryPassword = Str::password(12);
 
@@ -109,6 +116,42 @@ class PressingController extends PlatformApiController
             // premier accès ; la créer ici permet de l'afficher dans la réponse.
             $license = License::current($pressing->id);
             $pressing->update(['license_expires_at' => $license->expires_at]);
+
+            // Valeurs par défaut à la provision (Chantier D.2, CLAUDE.md) — seuls les
+            // champs réellement fournis sont appliqués (jamais null écrasant un défaut
+            // DB sûr) : couleurs de marque + politique de sécurité (AppSetting, pressing),
+            // workflow atelier (AgencySetting, première agence seulement).
+            $appSettingFields = Arr::only($data, ['primary_color', 'secondary_color']);
+            $appSettingFields = array_merge($appSettingFields, Arr::only($data['security_policy'] ?? [], [
+                'session_timeout_minutes', 'password_min_length', 'password_require_uppercase',
+                'password_require_number', 'password_require_symbol', 'password_expiry_days',
+            ]));
+            $appSettingFields = array_filter($appSettingFields, fn ($v) => $v !== null);
+            if ($appSettingFields !== []) {
+                AppSetting::current($pressing->id)->update($appSettingFields);
+            }
+
+            $workshopStepFields = array_filter(
+                Arr::only($data['workshop_steps'] ?? [], ['washer_step_enabled', 'sorter_step_enabled']),
+                fn ($v) => $v !== null
+            );
+            if ($workshopStepFields !== []) {
+                AgencySetting::forAgency($agency->id)->update($workshopStepFields);
+            }
+
+            // Programme de fidélité par défaut — si omis, repli sur les 3 paliers déjà
+            // seedés ailleurs (LoyaltyTierSeeder::TIERS) : jamais un pressing provisionné
+            // sans aucun palier fonctionnel (même garantie que le backfill du Chantier D.1).
+            $tiers = $data['loyalty_tiers'] ?? LoyaltyTierSeeder::TIERS;
+            foreach ($tiers as $tier) {
+                LoyaltyTier::create([
+                    'pressing_id' => $pressing->id,
+                    'name' => $tier['name'],
+                    'min_points' => $tier['min_points'],
+                    'discount_rate' => $tier['discount_rate'],
+                    'is_active' => true,
+                ]);
+            }
 
             return [$pressing, $reportToken];
         });

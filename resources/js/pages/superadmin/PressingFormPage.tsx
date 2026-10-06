@@ -1,11 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Building2, Check, Copy, UserPlus } from 'lucide-react';
+import { ArrowLeft, BadgePercent, Building2, Check, Copy, Palette, Plus, Shield, Trash2, UserPlus, Workflow } from 'lucide-react';
 import { platformApi, PlatformApiError } from '../../lib/platformApi';
 import { Alert, LoadingState, Spinner } from '../../components/ui/Feedback';
 import { Pill } from '../../components/ui/StatusBadge';
 import { button, cardPadded, cx, input, label, select, textLink } from '../../components/ui/styles';
+import Toggle from '../../components/ui/Toggle';
 import type { PlatformPlan, Pressing } from '../../types';
+
+/** Mêmes 3 paliers que `database/seeders/LoyaltyTierSeeder.php` — reflet du seeder,
+ * pré-remplis ici plutôt que lus depuis un nouvel endpoint de défauts. */
+const DEFAULT_LOYALTY_TIERS = [
+    { name: 'Argent', minPoints: '50', discountPercent: '5' },
+    { name: 'Or', minPoints: '150', discountPercent: '10' },
+    { name: 'Platine', minPoints: '300', discountPercent: '15' },
+];
 
 export default function PressingFormPage() {
     const { id } = useParams<{ id: string }>();
@@ -33,6 +42,22 @@ export default function PressingFormPage() {
     const [agencyCity, setAgencyCity] = useState('');
     const [managerName, setManagerName] = useState('');
     const [managerEmail, setManagerEmail] = useState('');
+
+    // Valeurs par défaut à la provision (Chantier D.2, CLAUDE.md) — même décision :
+    // page unique à sections, pas un assistant multi-écrans séparé, uniquement à la
+    // création. Valeurs pré-remplies identiques aux défauts DB (ne rien changer ici
+    // revient au comportement actuel).
+    const [primaryColor, setPrimaryColor] = useState('#24483F');
+    const [secondaryColor, setSecondaryColor] = useState('#C8A54B');
+    const [sessionTimeoutMinutes, setSessionTimeoutMinutes] = useState('30');
+    const [passwordMinLength, setPasswordMinLength] = useState('8');
+    const [passwordRequireUppercase, setPasswordRequireUppercase] = useState(true);
+    const [passwordRequireNumber, setPasswordRequireNumber] = useState(true);
+    const [passwordRequireSymbol, setPasswordRequireSymbol] = useState(false);
+    const [passwordExpiryDays, setPasswordExpiryDays] = useState('');
+    const [washerStepEnabled, setWasherStepEnabled] = useState(true);
+    const [sorterStepEnabled, setSorterStepEnabled] = useState(true);
+    const [loyaltyTiers, setLoyaltyTiers] = useState(DEFAULT_LOYALTY_TIERS);
 
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -84,6 +109,25 @@ export default function PressingFormPage() {
                           agency_city: agencyCity || null,
                           manager_name: managerName,
                           manager_email: managerEmail,
+                          primary_color: primaryColor,
+                          secondary_color: secondaryColor,
+                          security_policy: {
+                              session_timeout_minutes: Number(sessionTimeoutMinutes),
+                              password_min_length: Number(passwordMinLength),
+                              password_require_uppercase: passwordRequireUppercase,
+                              password_require_number: passwordRequireNumber,
+                              password_require_symbol: passwordRequireSymbol,
+                              password_expiry_days: passwordExpiryDays ? Number(passwordExpiryDays) : null,
+                          },
+                          workshop_steps: {
+                              washer_step_enabled: washerStepEnabled,
+                              sorter_step_enabled: sorterStepEnabled,
+                          },
+                          loyalty_tiers: loyaltyTiers.map((tier) => ({
+                              name: tier.name,
+                              min_points: Number(tier.minPoints),
+                              discount_rate: Number(tier.discountPercent) / 100,
+                          })),
                       }),
             };
 
@@ -113,6 +157,10 @@ export default function PressingFormPage() {
         }
     }
 
+    const tiersValid = loyaltyTiers.every(
+        (tier) => tier.name.trim() !== '' && tier.minPoints.trim() !== '' && tier.discountPercent.trim() !== '',
+    );
+
     const canSubmit =
         name.trim() !== '' &&
         platformPlanId !== '' &&
@@ -121,7 +169,20 @@ export default function PressingFormPage() {
                 agencyCode.trim() !== '' &&
                 agencyName.trim() !== '' &&
                 managerName.trim() !== '' &&
-                managerEmail.trim() !== ''));
+                managerEmail.trim() !== '' &&
+                tiersValid));
+
+    function updateTier(index: number, patch: Partial<(typeof DEFAULT_LOYALTY_TIERS)[number]>) {
+        setLoyaltyTiers((tiers) => tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)));
+    }
+
+    function removeTier(index: number) {
+        setLoyaltyTiers((tiers) => tiers.filter((_, i) => i !== index));
+    }
+
+    function addTier() {
+        setLoyaltyTiers((tiers) => [...tiers, { name: '', minPoints: '', discountPercent: '' }]);
+    }
 
     const backLink = (
         <Link to="/superadmin/pressings" className={cx(textLink, 'inline-flex items-center gap-1.5 text-sm')}>
@@ -304,6 +365,133 @@ export default function PressingFormPage() {
                                 />
                             </label>
                         </div>
+
+                        <div className="flex items-center gap-2">
+                            <Palette aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
+                            <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Couleurs de marque</h2>
+                        </div>
+                        <p className="text-xs text-ink-500 dark:text-ink-400">
+                            Modifiables ensuite par le pressing lui-même (Paramètres → Branding, une fois connecté).
+                        </p>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <ColorField label="Couleur principale" value={primaryColor} onChange={setPrimaryColor} />
+                            <ColorField label="Couleur secondaire" value={secondaryColor} onChange={setSecondaryColor} />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <Shield aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
+                            <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Sécurité par défaut</h2>
+                        </div>
+                        <p className="text-xs text-ink-500 dark:text-ink-400">
+                            Mêmes réglages que l'écran Sécurité du pressing — pré-remplis avec les valeurs par défaut, modifiables ici
+                            ou après coup.
+                        </p>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="block">
+                                <span className={label}>Déconnexion après inactivité (min)</span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={sessionTimeoutMinutes}
+                                    onChange={(e) => setSessionTimeoutMinutes(e.target.value)}
+                                    className={cx(input, 'w-full')}
+                                />
+                            </label>
+                            <label className="block">
+                                <span className={label}>Longueur minimale du mot de passe</span>
+                                <input
+                                    type="number"
+                                    min={4}
+                                    value={passwordMinLength}
+                                    onChange={(e) => setPasswordMinLength(e.target.value)}
+                                    className={cx(input, 'w-full')}
+                                />
+                            </label>
+                            <label className="block sm:col-span-2">
+                                <span className={label}>Expiration du mot de passe (jours, vide = jamais)</span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={passwordExpiryDays}
+                                    onChange={(e) => setPasswordExpiryDays(e.target.value)}
+                                    placeholder="Jamais"
+                                    className={cx(input, 'w-full')}
+                                />
+                            </label>
+                        </div>
+                        <div className="space-y-3 rounded-xl bg-ink-50 p-3 dark:bg-ink-950/40">
+                            <Toggle checked={passwordRequireUppercase} onChange={setPasswordRequireUppercase} label="Exiger une majuscule" />
+                            <Toggle checked={passwordRequireNumber} onChange={setPasswordRequireNumber} label="Exiger un chiffre" />
+                            <Toggle checked={passwordRequireSymbol} onChange={setPasswordRequireSymbol} label="Exiger un symbole" />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <Workflow aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
+                            <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Workflow atelier par défaut</h2>
+                        </div>
+                        <p className="text-xs text-ink-500 dark:text-ink-400">
+                            S'applique à la première agence — mêmes réglages que Paramètres opérationnels.
+                        </p>
+                        <div className="space-y-3 rounded-xl bg-ink-50 p-3 dark:bg-ink-950/40">
+                            <Toggle checked={washerStepEnabled} onChange={setWasherStepEnabled} label="Étape Laveur activée" />
+                            <Toggle checked={sorterStepEnabled} onChange={setSorterStepEnabled} label="Étape Classeur activée" />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <BadgePercent aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
+                            <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Programme de fidélité par défaut</h2>
+                        </div>
+                        <p className="text-xs text-ink-500 dark:text-ink-400">
+                            Pré-rempli avec les 3 paliers par défaut — modifiables ou remplaçables ici, avant toute activité du
+                            pressing.
+                        </p>
+                        <div className="space-y-2">
+                            {loyaltyTiers.map((tier, index) => (
+                                <div key={index} className="flex flex-wrap items-end gap-2 rounded-xl bg-ink-50 p-3 dark:bg-ink-950/40">
+                                    <label className="block min-w-[120px] flex-1">
+                                        <span className={label}>Nom</span>
+                                        <input
+                                            value={tier.name}
+                                            onChange={(e) => updateTier(index, { name: e.target.value })}
+                                            className={cx(input, 'w-full')}
+                                        />
+                                    </label>
+                                    <label className="block w-28">
+                                        <span className={label}>Seuil (pts)</span>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            value={tier.minPoints}
+                                            onChange={(e) => updateTier(index, { minPoints: e.target.value })}
+                                            className={cx(input, 'w-full')}
+                                        />
+                                    </label>
+                                    <label className="block w-28">
+                                        <span className={label}>Remise (%)</span>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            max={100}
+                                            value={tier.discountPercent}
+                                            onChange={(e) => updateTier(index, { discountPercent: e.target.value })}
+                                            className={cx(input, 'w-full')}
+                                        />
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => removeTier(index)}
+                                        aria-label="Retirer ce palier"
+                                        className={cx(button('ghost', 'sm'), 'shrink-0')}
+                                    >
+                                        <Trash2 aria-hidden="true" className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            ))}
+                            <button type="button" onClick={addTier} className={button('ghost', 'sm')}>
+                                <Plus aria-hidden="true" className="h-4 w-4" />
+                                Ajouter un palier
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -361,5 +549,24 @@ function CopyableSecret({
                 </div>
             ))}
         </div>
+    );
+}
+
+/** Même JSX que `ColorField` (local) de `BrandingSettingsPage.tsx` tenant — composant
+ * trop petit pour justifier une extraction partagée entre les deux écrans. */
+function ColorField({ label: fieldLabel, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+    return (
+        <label className="block">
+            <span className={label}>{fieldLabel}</span>
+            <span className="flex items-center gap-2">
+                <input
+                    type="color"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-ink-200/80 dark:border-ink-800"
+                />
+                <input value={value} onChange={(e) => onChange(e.target.value)} className={cx(input, 'font-mono uppercase')} maxLength={7} />
+            </span>
+        </label>
     );
 }

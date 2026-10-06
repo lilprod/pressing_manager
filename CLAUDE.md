@@ -3565,3 +3565,78 @@ donnée partagée.
   `LoyaltyTest.php`, restent verts sans modification). `tsc --noEmit` et
   `npm run build` propres (chantier backend uniquement, aucun fichier
   frontend touché — pas de validation Playwright requise pour cette passe).
+
+**Chantier D.2 — Valeurs par défaut à la provision d'un pressing (item 4)** —
+fait le 2026-10-06, dernier des 3 chantiers de l'audit superadmin (suite
+directe du correctif D.1, qui en était le prérequis). La capture « Pressing
+nouveau » montre un assistant multi-écrans (couleurs, programme de fidélité,
+workflow, sécurité) ; suivant la convention déjà établie dans ce projet pour
+les formulaires de création (une page unique à sections, pas un assistant
+séparé — même décision que `ClientFormPage.tsx`/`ServiceFormPage.tsx`), ces
+4 blocs sont ajoutés comme sections supplémentaires **create-only** à la
+suite de « Première agence »/« Compte manager » existantes, plutôt qu'un
+nouveau composant d'assistant.
+- **Backend** : `StorePressingRequest` gagne 5 champs optionnels —
+  `primary_color`/`secondary_color` (même regex hex que
+  `SaveBrandingDraftRequest` tenant), `security_policy` (sous-objet :
+  `session_timeout_minutes`/`password_min_length`/`password_require_*`/
+  `password_expiry_days`), `workshop_steps` (`washer_step_enabled`/
+  `sorter_step_enabled`), `loyalty_tiers` (tableau optionnel
+  `{name, min_points, discount_rate}[]`, `min_points` avec la règle
+  `distinct` pour empêcher deux paliers soumis au même seuil). Aucun de ces
+  champs n'est requis — rétro-compatible avec l'appel minimal déjà testé par
+  `PressingProvisioningTest`.
+  `PressingController::store()` : dans la même transaction que Pressing +
+  Agence + manager, applique les champs **réellement fournis** (jamais un
+  `null` qui écraserait un défaut DB sûr — filtré explicitement avant
+  `update()`) sur `AppSetting::current($pressing->id)` (couleurs + politique
+  de sécurité) et `AgencySetting::forAgency($agency->id)` (workflow, première
+  agence seulement). Programme de fidélité : boucle `LoyaltyTier::create()`
+  sur les paliers fournis, ou repli sur `LoyaltyTierSeeder::TIERS` si omis —
+  **même garantie que le backfill du Chantier D.1** : jamais un pressing
+  provisionné sans aucun palier fonctionnel.
+- **Hors scope, décisions actées pendant l'audit** : logo (reste un upload
+  tenant-side après coup — un cycle par défaut sur un fichier n'a pas de
+  sens, contrairement à une couleur) ; domaine personnalisé (catégorie (c)
+  de la méthode d'audit, aucune infra de provisioning DNS/SSL).
+- **Frontend** : `PressingFormPage.tsx` — 4 nouvelles sections create-only
+  (masquées en édition, comme « Première agence »/« Compte manager ») :
+  - **Couleurs de marque** : 2 `ColorField` (même JSX que le composant local
+    de `BrandingSettingsPage.tsx` tenant, dupliqué plutôt qu'extrait — trop
+    petit pour justifier un partage entre les deux écrans), pré-remplies aux
+    mêmes valeurs par défaut que le tenant (`#24483F`/`#C8A54B`).
+  - **Sécurité par défaut** : mêmes champs que `SecuritySettingsPage.tsx`
+    tenant, valeurs pré-remplies identiques aux défauts DB (`session_timeout_
+    minutes: 30`, `password_min_length: 8`, majuscule/chiffre exigés,
+    symbole non exigé, expiration jamais) — ne rien changer ici revient
+    exactement au comportement actuel d'un pressing provisionné sans ce
+    chantier.
+  - **Workflow atelier par défaut** : 2 `Toggle` (Laveur/Classeur), tous
+    deux activés par défaut (même défaut DB qu'`AgencySetting`).
+  - **Programme de fidélité par défaut** : 3 lignes pré-remplies avec les
+    valeurs exactes de `LoyaltyTierSeeder::TIERS` (codées en dur côté
+    frontend — elles reflètent le seeder, pas un nouvel endpoint de lecture
+    des défauts), éditables, plus ajout/suppression de lignes libres.
+    Validation client (`tiersValid`) avant soumission : chaque ligne
+    restante doit avoir nom/seuil/remise renseignés.
+- Tests : `tests/Feature/Platform/PressingProvisioningDefaultsTest.php`
+  (3 — couleurs/sécurité/workflow/fidélité réellement appliqués quand
+  fournis, aucun champ cassé ni écrasé par un défaut incorrect quand omis
+  — rétro-compatibilité avec l'appel minimal, chaque pressing provisionné
+  sans paliers fournis reçoit sa **propre** copie des 3 paliers par défaut,
+  jamais une réutilisation de lignes entre deux pressings). Suite complète
+  552/552 après ajout (aucune régression). `tsc --noEmit` et `npm run build`
+  propres. Vérifié par Playwright à 1440px et 390px (connexion réelle via
+  jeton Sanctum `platform` injecté) : les 4 sections s'affichent avec leurs
+  valeurs par défaut, soumission réelle d'un formulaire avec une couleur et
+  un délai d'inactivité personnalisés — confirmé en base après coup que
+  `AppSetting::current()` du nouveau pressing porte bien `#1A2B3C`/45 min et
+  que ses 3 paliers de fidélité par défaut ont été créés, aucun débordement
+  horizontal aux deux largeurs.
+
+Les 3 chantiers de l'audit de conformité superadmin du 2026-10-06
+(Chantier A : Pressings liste + Vue plateforme ; Chantier C : fiche détail
+d'un pressing ; Chantier D : correctif d'isolation `loyalty_tiers` +
+valeurs par défaut à la provision) sont maintenant tous faits. L'item 5
+(écran Agences cross-tenant) reste délibérément non construit — voir
+l'intro de cet audit ci-dessus.

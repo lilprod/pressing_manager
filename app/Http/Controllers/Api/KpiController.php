@@ -41,6 +41,21 @@ class KpiController extends ApiController
         return $exporter->download($data);
     }
 
+    public function revenueSeries(Request $request): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'reports.view');
+        [$agencyId, $agencyIds, $from, $to] = $this->resolveParams($request);
+        $granularity = $request->string('granularity')->value() ?: 'day';
+        $scopeIds = $agencyId ? [$agencyId] : $agencyIds;
+
+        return response()->json([
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'granularity' => $granularity,
+            'series' => $this->kpi->revenueSeries($scopeIds, $from, $to, $granularity),
+        ]);
+    }
+
     /** @return array{0: ?int, 1: array<int>, 2: Carbon, 3: Carbon} */
     private function resolveParams(Request $request): array
     {

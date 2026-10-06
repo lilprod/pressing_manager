@@ -835,12 +835,33 @@ export interface KpiAgencyRow extends KpiMetrics {
     agency_name: string;
 }
 
+export interface LoyaltyTierBreakdown {
+    id: number;
+    name: string;
+    count: number;
+}
+
+export interface LoyaltySummary {
+    by_tier: LoyaltyTierBreakdown[];
+    points_issued: number;
+    points_consumed: number;
+}
+
 export interface KpiData extends KpiMetrics {
     scope: 'agency' | 'consolidated';
     from: string;
     to: string;
     agency?: { id: number; name: string } | null;
     by_agency?: KpiAgencyRow[];
+    payments_by_method: Record<'espece' | 'carte' | 'flooz' | 'tmoney', { amount: number; percent: number }>;
+    loyalty: LoyaltySummary;
+}
+
+export interface RevenueSeriesResponse {
+    from: string;
+    to: string;
+    granularity: 'day' | 'week' | 'month';
+    series: RevenueSeriesPoint[];
 }
 
 export type NotificationEvent = 'order_ready' | 'delivery_completed' | 'delivery_failed' | 'pickup_completed';

@@ -289,6 +289,7 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::get('/kpi', [KpiController::class, 'index']);
     Route::get('/kpi/export/pdf', [KpiController::class, 'exportPdf']);
     Route::get('/kpi/export/excel', [KpiController::class, 'exportExcel']);
+    Route::get('/kpi/revenue-series', [KpiController::class, 'revenueSeries']);
 
     Route::get('/reports/daily', [ReportController::class, 'daily']);
     Route::get('/reports/daily/export/excel', [ReportController::class, 'exportExcel']);

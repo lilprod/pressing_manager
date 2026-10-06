@@ -4,6 +4,7 @@ namespace Tests\Feature\Loyalty;
 
 use App\Models\Agency;
 use App\Models\Client;
+use App\Models\LoyaltyPointMovement;
 use App\Models\LoyaltyTier;
 use App\Models\Payment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,6 +29,12 @@ class LoyaltyTest extends TestCase
 
         $response->assertCreated();
         $this->assertSame(12, $client->refresh()->loyalty_points);
+        $this->assertDatabaseHas('loyalty_point_movements', [
+            'client_id' => $client->id,
+            'agency_id' => $agency->id,
+            'points' => 12,
+            'reason' => 'payment',
+        ]);
     }
 
     public function test_replaying_the_same_webhook_does_not_double_credit_points(): void

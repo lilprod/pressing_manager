@@ -27,18 +27,32 @@ import PageHeader from '../components/ui/PageHeader';
 import { Alert, LoadingState, Spinner } from '../components/ui/Feedback';
 import { ChipToggle, DeltaBadge, percentChange, trend, SectionCard, StatCard } from '../components/ui/Metrics';
 import { Pill } from '../components/ui/StatusBadge';
+import RevenueBars from '../components/ui/RevenueBars';
+import SegmentedBar from '../components/ui/SegmentedBar';
 import { button, cardPadded, cx, input, label } from '../components/ui/styles';
-import type { KpiData } from '../types';
+import type { KpiData, RevenueSeriesResponse } from '../types';
 
 /* Écran « Rapports et bilans » (Figma SPARK PRESSING, section 08, node 43:774).
  * Indicateurs et comparatif d'agences issus de GET /kpi (période choisie + période
- * précédente de même durée pour les variations). Les éléments de la maquette qui
- * demandent de nouveaux agrégats (histogramme du CA par jour/semaine/mois, répartition
- * par mode de paiement, synthèse fidélité, planification d'exports) sont omis — voir
- * CLAUDE.md §2. Les indicateurs opérationnels déjà calculés par l'API (stock, livraisons,
- * présence) sont conservés dans une section dédiée. */
+ * précédente de même durée pour les variations), histogramme du CA par jour/semaine/
+ * mois (GET /kpi/revenue-series), répartition par mode de paiement et synthèse
+ * fidélité (both dans la réponse /kpi) — voir CLAUDE.md pour le détail de ces trois
+ * chantiers (2026-10-05). Seule la planification d'exports reste omise (aucun
+ * planificateur n'existe). Les indicateurs opérationnels déjà calculés par l'API
+ * (stock, livraisons, présence) sont conservés dans une section dédiée. */
 
 const PRESETS: PeriodPreset[] = ['today', '7d', 'month', 'year'];
+
+/** Légende d'un point de la série CA, adaptée à la granularité choisie — un mois
+ * affiché en « 01 oct. » serait trompeur (on veut « oct. 2026 », pas un jour). */
+function seriesLabel(value: string, granularity: 'day' | 'week' | 'month', lang: string): string {
+    const locale = lang === 'fr' ? 'fr-FR' : 'en-GB';
+    const date = new Date(value);
+    if (granularity === 'month') {
+        return new Intl.DateTimeFormat(locale, { month: 'short', year: 'numeric' }).format(date);
+    }
+    return new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short' }).format(date);
+}
 
 function downloadBlob(blob: Blob, filename: string) {
     const url = URL.createObjectURL(blob);
@@ -64,6 +78,8 @@ export default function KpiPage() {
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>('day');
+    const [revenueSeries, setRevenueSeries] = useState<RevenueSeriesResponse | null>(null);
 
     function buildQuery(r = range) {
         const params = new URLSearchParams(r);
@@ -89,6 +105,19 @@ export default function KpiPage() {
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeAgencyId, range.from, range.to]);
+
+    useEffect(() => {
+        if (!range.from || !range.to || range.from > range.to) return;
+        let cancelled = false;
+        const query = buildQuery();
+        api.get<RevenueSeriesResponse>(`/kpi/revenue-series?${query}&granularity=${granularity}`)
+            .then((res) => !cancelled && setRevenueSeries(res))
+            .catch(() => !cancelled && setRevenueSeries(null));
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeAgencyId, range.from, range.to, granularity]);
 
     async function exportFile(kind: 'pdf' | 'excel') {
         setExporting(kind);
@@ -243,6 +272,60 @@ export default function KpiPage() {
                             </div>
                         </SectionCard>
                     )}
+
+                    <SectionCard
+                        id="reports-revenue-series"
+                        title={t('reports.revenueSeries.title')}
+                        subtitle={t('reports.revenueSeries.subtitle')}
+                        headerExtra={
+                            <div role="group" aria-label={t('reports.revenueSeries.granularity')} className="flex flex-wrap gap-2">
+                                {(['day', 'week', 'month'] as const).map((g) => (
+                                    <ChipToggle key={g} active={granularity === g} onClick={() => setGranularity(g)}>
+                                        {t(`reports.revenueSeries.${g}`)}
+                                    </ChipToggle>
+                                ))}
+                            </div>
+                        }
+                    >
+                        {revenueSeries && revenueSeries.series.length > 0 ? (
+                            <RevenueBars series={revenueSeries.series} money={money} dateShort={(value) => seriesLabel(value, granularity, lang)} />
+                        ) : (
+                            <p className="text-sm text-ink-600 dark:text-ink-350">{t('reports.revenueSeries.empty')}</p>
+                        )}
+                    </SectionCard>
+
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                        <SectionCard id="reports-payments" title={t('reports.payments.title')} subtitle={t('reports.payments.subtitle')}>
+                            <SegmentedBar
+                                money={money}
+                                segments={[
+                                    { key: 'espece', label: t('payment.cash'), amount: data.payments_by_method.espece.amount, percent: data.payments_by_method.espece.percent, colorClassName: 'bg-emerald-600 dark:bg-emerald-400' },
+                                    { key: 'carte', label: t('payment.card'), amount: data.payments_by_method.carte.amount, percent: data.payments_by_method.carte.percent, colorClassName: 'bg-brand-600 dark:bg-brand-400' },
+                                    { key: 'flooz', label: t('payment.flooz'), amount: data.payments_by_method.flooz.amount, percent: data.payments_by_method.flooz.percent, colorClassName: 'bg-accent-500 dark:bg-accent-400' },
+                                    { key: 'tmoney', label: t('payment.tmoney'), amount: data.payments_by_method.tmoney.amount, percent: data.payments_by_method.tmoney.percent, colorClassName: 'bg-violet-500 dark:bg-violet-400' },
+                                ]}
+                            />
+                        </SectionCard>
+
+                        <SectionCard id="reports-loyalty" title={t('reports.loyalty.title')} subtitle={t('reports.loyalty.subtitle')}>
+                            <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                <Metric label={t('reports.loyalty.pointsIssued')} value={number(data.loyalty.points_issued)} />
+                                <Metric label={t('reports.loyalty.pointsConsumed')} value={number(data.loyalty.points_consumed)} />
+                            </dl>
+                            {data.loyalty.by_tier.length > 0 ? (
+                                <ul className="space-y-2 border-t border-ink-200/80 pt-3 dark:border-ink-800">
+                                    {data.loyalty.by_tier.map((tier) => (
+                                        <li key={tier.id} className="flex items-center justify-between gap-3 text-sm">
+                                            <span className="font-medium text-ink-800 dark:text-ink-100">{tier.name}</span>
+                                            <span className="tabular-nums text-ink-600 dark:text-ink-350">{t('reports.loyalty.members', { count: tier.count })}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-ink-600 dark:text-ink-350">{t('reports.loyalty.noTiers')}</p>
+                            )}
+                        </SectionCard>
+                    </div>
 
                     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
                         <SectionCard id="reports-operations" title={t('reports.operations.title')} subtitle={t('reports.operations.subtitle')}>

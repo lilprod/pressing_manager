@@ -2965,3 +2965,65 @@ structurant.
   l'écran vérifiée égale au calcul attendu (7 500 FCFA de CA, répartition
   66,7 %/33,3 % espèce/Flooz, 1 caissier avec 2 tickets à 3 750 FCFA de panier
   moyen, statut « En poste »). 1440px et 390px, aucun débordement horizontal.
+
+**08 Rapports & bilans — « Vue d'ensemble » (`KpiPage.tsx`) : histogramme CA,
+répartition paiements, synthèse fidélité** — fait le 2026-10-05, en complément
+direct du Bilan journalier ci-dessus (demande utilisateur explicite : « Oui
+construit les 3 » après confirmation qu'aucun des trois gaps n'était
+techniquement impossible, juste hors scope de la passe précédente).
+- **Histogramme « Évolution du chiffre d'affaires »** : nouveau `GET
+  /kpi/revenue-series?from&to&granularity=day|week|month[&agency_id]`
+  (`KpiService::revenueSeries()`, même principe de trous comblés à 0 que
+  `MultiAgencyService::revenueSeries()`/`CashService::flowSeries()`, mais
+  paramétrable en granularité via `date_trunc()` Postgres plutôt que toujours
+  le jour). Réutilise le composant `RevenueBars` déjà existant (aucun nouveau
+  composant de graphique) + 3 `ChipToggle` Jour/Semaine/Mois (même composant
+  que les raccourcis de période déjà sur cet écran). Légende d'axe adaptée à
+  la granularité (`seriesLabel()` — un mois affiché « 01 oct. » aurait été
+  trompeur, donc « oct. 2026 » pour cette granularité uniquement).
+- **« Répartition — Paiements »** : `KpiService::paymentsByMethod()`, même
+  granularité réelle à 4 valeurs d'enum que `DailyReportService::paymentsByMethod()`
+  mais sur la plage de dates du filtre KPI (pas un seul jour — sémantique
+  distincte, pas de code partagé littéralement réutilisable). Ajouté au
+  niveau racine de la réponse `GET /kpi` (scope agence unique et vue
+  consolidée), affiché avec le composant `SegmentedBar` déjà existant (même
+  rendu que sur le Bilan journalier et le Centre de caisse).
+- **« Fidélité »** — le seul vrai chantier des trois, fermant un gap
+  documenté de longue date (« aucun historique de mouvements de points,
+  seul `clients.loyalty_points` cumulé est stocké ») :
+  - **Nouvelle table `loyalty_point_movements`** (append-only, même principe
+    d'immuabilité que `audit_logs` — jamais de ligne modifiée). **Un seul
+    motif réel existe** (`reason = 'payment'`) : aucune colonne `type`
+    crédit/débit fabriquée par anticipation, puisqu'aucun mécanisme de
+    consommation de points n'existe nulle part dans l'app (vérifié par grep
+    avant d'écrire la migration) — `points` reste toujours positif pour
+    l'instant, un futur mécanisme de consommation ajoutera sa propre colonne
+    le jour où il existera réellement.
+  - **`LoyaltyService::creditPointsForPayment()` étendu** : crée désormais un
+    `LoyaltyPointMovement` en plus de l'incrément déjà existant de
+    `clients.loyalty_points` — un seul point d'écriture, les 3 call sites
+    existants (`PaymentService`, espèces/distant/manuel) en bénéficient tous
+    sans modification.
+  - **`KpiService::loyaltySummary()`** : `by_tier` = répartition réelle des
+    clients actifs par palier **courant** (snapshot, pas borné à la période —
+    un palier est un statut actuel, pas un évènement daté, même principe déjà
+    établi pour `vip_count` dans `ClientController::stats()`) ; `points_issued`
+    = somme des mouvements positifs sur la période ; `points_consumed` =
+    somme des mouvements négatifs — **toujours 0 aujourd'hui, honnêtement**
+    (pas masqué, juste réellement nul tant qu'aucune consommation n'existe).
+  - Régression ajoutée sur `test_a_cash_payment_credits_loyalty_points_to_the_client`
+    (`tests/Feature/Loyalty/LoyaltyTest.php`) : vérifie maintenant aussi la
+    création du mouvement, pas seulement l'incrément du cumul.
+- Tests : `tests/Feature/Kpi/KpiAdvancedMetricsTest.php` (7 — série CA à
+  granularité jour avec trous comblés, agrégation par mois, gating
+  `reports.view`, isolation inter-agences sur la série ET sur paiements/
+  fidélité, répartition paiements à 4 valeurs, répartition par palier +
+  points émis bornés à la période en excluant un mouvement hors période).
+  Suite complète 500/500 après ajout (aucune régression). `tsc --noEmit` et
+  `npm run build` propres, parité i18n fr/en stricte. Vérifié par un parcours
+  réel bout en bout (navigateur, pas seulement HTTP) : données construites via
+  tinker (3 paiements à 3 moyens différents, 2 paliers de fidélité, points
+  crédités via le vrai service) → `/kpi` → les 3 nouvelles sections affichent
+  exactement les valeurs attendues (répartition 71 %/29 % espèce/Flooz, palier
+  Argent à 4 clients, 100 points émis) → bascule de granularité Jour/Semaine/
+  Mois vérifiée en direct. 1440px et 390px, aucun débordement horizontal.

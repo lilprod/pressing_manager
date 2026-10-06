@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Client;
+use App\Models\LoyaltyPointMovement;
 use App\Models\Payment;
 
 /**
@@ -25,5 +26,14 @@ class LoyaltyService
         }
 
         $client->increment('loyalty_points', $points);
+
+        LoyaltyPointMovement::create([
+            'client_id' => $client->id,
+            'agency_id' => $payment->agency_id,
+            'payment_id' => $payment->id,
+            'points' => $points,
+            'reason' => 'payment',
+            'created_at' => now(),
+        ]);
     }
 }

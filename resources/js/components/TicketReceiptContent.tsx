@@ -15,7 +15,7 @@ export default function TicketReceiptContent({ order }: { order: Order }) {
             <div className="mb-2 flex items-center gap-2 border-b border-black pb-2">
                 {settings?.logo_url && <img src={settings.logo_url} alt="" className="h-10 w-10 object-cover" />}
                 <div>
-                    <p className="text-base font-bold leading-tight">{settings?.pressing_name || t('app.title')}</p>
+                    <p className="text-base font-bold leading-tight">{settings?.pressing_name}</p>
                     {order.agency && (
                         <p className="text-xs leading-tight">
                             {order.agency.name}

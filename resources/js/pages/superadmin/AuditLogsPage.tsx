@@ -59,7 +59,7 @@ export default function AuditLogsPage() {
                 </span>
                 <div>
                     <h1 className="font-display text-2xl font-bold text-ink-900 dark:text-white">Audit global</h1>
-                    <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-350">Activité enregistrée sur les pressings et le personnel Spark.</p>
+                    <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-350">Activité enregistrée sur les pressings et le personnel ADMIN.</p>
                 </div>
             </header>
 

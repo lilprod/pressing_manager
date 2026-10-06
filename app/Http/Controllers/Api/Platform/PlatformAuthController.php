@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Platform;
 
 use App\Http\Controllers\Controller;
 use App\Models\PlatformAuditLog;
+use App\Models\PlatformSetting;
 use App\Models\PlatformUser;
 use App\Services\QrCodeGenerator;
 use App\Services\TotpService;
@@ -55,7 +56,7 @@ class PlatformAuthController extends Controller
         if (! $user->hasMfaEnabled()) {
             $secret = $this->totp->generateSecret();
             $user->forceFill(['totp_secret' => $secret])->save();
-            $otpauthUri = $this->totp->provisioningUri($secret, $user->email);
+            $otpauthUri = $this->totp->provisioningUri($secret, $user->email, PlatformSetting::current()->app_name);
 
             return response()->json([
                 'mfa_setup_required' => true,
@@ -122,7 +123,7 @@ class PlatformAuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json($request->user());
+        return response()->json($request->user()->loadMissing('platformRole'));
     }
 
     /** Journal d'activité (écran Utilisateurs transverses) : connexion réussie/échouée/verrouillée. */
@@ -156,7 +157,7 @@ class PlatformAuthController extends Controller
 
         return response()->json([
             'token' => $token->plainTextToken,
-            'user' => $user,
+            'user' => $user->loadMissing('platformRole'),
         ]);
     }
 

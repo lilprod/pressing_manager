@@ -26,7 +26,7 @@ class PasswordResetNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Réinitialisation de votre mot de passe Pressing Manager')
+            ->subject('Réinitialisation de votre mot de passe '.\App\Models\AppSetting::nameFor($notifiable->pressing_id))
             ->greeting("Bonjour {$notifiable->name},")
             ->line('Une demande de réinitialisation de mot de passe a été effectuée pour votre compte.')
             ->action('Réinitialiser le mot de passe', url("/reset-password?token={$this->token}"))

@@ -37,13 +37,13 @@ class CheckPressingStatus
         }
 
         if ($user->pressing->status === 'suspended') {
-            throw new HttpException(403, 'Ce pressing est suspendu. Contactez votre administrateur Spark.');
+            throw new HttpException(403, 'Ce pressing est suspendu. Contactez votre administrateur de plateforme.');
         }
 
         $license = License::current($user->pressing_id)->refreshStatus();
 
         if ($license->status === 'expired') {
-            throw new HttpException(402, 'Licence expirée. Contactez votre administrateur Spark pour la renouveler.');
+            throw new HttpException(402, 'Licence expirée. Contactez votre administrateur de plateforme pour la renouveler.');
         }
 
         if ($license->status === 'grace_period' && ! $request->isMethodSafe()) {

@@ -42,7 +42,7 @@ class KpiExcelExporter
         $label = $data['scope'] === 'agency' ? ($data['agency']['name'] ?? '—') : 'Toutes les agences';
 
         $sheet->fromArray([
-            ['Rapport KPI — Pressing Manager'],
+            ['Rapport KPI — '.\App\Models\AppSetting::nameFor(auth()->user()?->pressing_id)],
             ["Période : {$data['from']} au {$data['to']}"],
             ["Agence : {$label}"],
         ], null, 'A1');

@@ -31,7 +31,7 @@ class OrdersExcelExporter
         $sheet->setTitle('Dépôts');
 
         $sheet->fromArray([
-            ['Gestion des dépôts — Pressing Manager'],
+            ['Gestion des dépôts — '.\App\Models\AppSetting::nameFor(auth()->user()?->pressing_id)],
             ["Agence : {$agencyLabel}"],
             ['Exporté le : '.now()->format('d/m/Y H:i')],
         ], null, 'A1');

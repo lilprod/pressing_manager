@@ -31,7 +31,7 @@ class ServicesExcelExporter
         $sheet->setTitle('Catalogue');
 
         $sheet->fromArray([
-            ['Catalogue articles et tarifs — Pressing Manager'],
+            ['Catalogue articles et tarifs — '.\App\Models\AppSetting::nameFor(auth()->user()?->pressing_id)],
             ['Exporté le : '.now()->format('d/m/Y H:i')],
         ], null, 'A1');
 

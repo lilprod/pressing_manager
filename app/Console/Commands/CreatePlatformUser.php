@@ -19,7 +19,7 @@ class CreatePlatformUser extends Command
 {
     protected $signature = 'platform:users:create {email} {name}';
 
-    protected $description = 'Crée un utilisateur de la console superadmin (plateforme Spark)';
+    protected $description = 'Crée un utilisateur de la console superadmin (plateforme ADMIN)';
 
     public function handle(): int
     {

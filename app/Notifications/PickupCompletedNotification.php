@@ -21,6 +21,8 @@ class PickupCompletedNotification extends ConfigurableNotification
 
     public function summary(): string
     {
-        return "Pressing Manager : le retrait de votre commande n° {$this->pickup->order->order_number} a été confirmé.";
+        $name = \App\Models\AppSetting::nameFor($this->pickup->agency?->pressing_id);
+
+        return "{$name} : le retrait de votre commande n° {$this->pickup->order->order_number} a été confirmé.";
     }
 }

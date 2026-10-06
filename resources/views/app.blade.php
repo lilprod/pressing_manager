@@ -5,8 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#24483f" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)">
-    <title>{{ $settings->pressing_name ?: 'Pressing Manager' }}</title>
-    @if ($settings->favicon_path)
+    @php
+        // Console superadmin (/superadmin/*) : identité et favicon de la plateforme, jamais ceux d'un pressing.
+        $platform = request()->is('superadmin*') ? \App\Models\PlatformSetting::current() : null;
+    @endphp
+    <title>{{ $platform ? $platform->app_name : ($settings->pressing_name ?: config('app.name')) }}</title>
+    @if ($platform?->favicon_path)
+        <link rel="icon" href="{{ url('/api/platform/settings/favicon') }}">
+    @elseif (! $platform && $settings->favicon_path)
         <link rel="icon" href="{{ url('/api/settings/favicon') }}">
     @else
         <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2324483f'/%3E%3Cpath d='M16 11a2.5 2.5 0 1 1 2.5 2.5c-1 0-2.5.6-2.5 2v.6l8.6 5.2c1 .6.6 2.2-.6 2.2H8c-1.2 0-1.6-1.6-.6-2.2L16 16.1' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">

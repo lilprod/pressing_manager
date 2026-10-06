@@ -1,7 +1,8 @@
+import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { Building2, LayoutDashboard, Layers, LogOut, ScrollText, Settings, ShieldHalf, UsersRound } from 'lucide-react';
 import { useSuperadminAuth } from '../contexts/SuperadminAuthContext';
-import { BrandLogo } from './BrandMark';
+import { PlatformLogo } from './PlatformBrand';
 import { Avatar } from './ui/PageHeader';
 import { cx, iconButton } from './ui/styles';
 
@@ -27,15 +28,24 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     );
 
 export default function SuperadminLayout() {
-    const { user, logout } = useSuperadminAuth();
+    const { user, logout, appName } = useSuperadminAuth();
+
+    useEffect(() => {
+        if (!appName) return;
+        const previousTitle = document.title;
+        document.title = appName;
+        return () => {
+            document.title = previousTitle;
+        };
+    }, [appName]);
 
     return (
         <div className="flex min-h-screen bg-ink-50 dark:bg-ink-950">
             <aside className="hidden w-64 shrink-0 flex-col bg-brand-950 p-4 lg:flex">
                 <div className="flex items-center gap-2.5 px-2 py-3">
-                    <BrandLogo className="h-9 w-9" />
+                    <PlatformLogo className="h-9 w-9" />
                     <span className="flex flex-col leading-none">
-                        <span className="font-display text-[15px] font-extrabold text-white">ADMIN Pressing</span>
+                        <span className="font-display text-[15px] font-extrabold text-white">{appName}</span>
                         <span className="mt-1 text-[11px] font-medium text-brand-100">Console plateforme</span>
                     </span>
                 </div>
@@ -87,7 +97,7 @@ export default function SuperadminLayout() {
             <div className="flex min-w-0 flex-1 flex-col">
                 <header className="sticky top-0 z-40 border-b border-ink-200/80 bg-white/85 backdrop-blur-md dark:border-ink-800 dark:bg-ink-950/85">
                     <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
-                        <BrandLogo className="h-8 w-8 lg:hidden" />
+                        <PlatformLogo className="h-8 w-8 lg:hidden" />
                         <p className="hidden truncate text-sm font-semibold text-ink-700 sm:block dark:text-ink-200">Console plateforme</p>
 
                         <div className="ml-auto flex items-center gap-2">

@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Models\PlatformSetting;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -21,7 +22,7 @@ class PlatformUserInvitationNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Votre accès à la console ADMIN Pressing a été créé')
+            ->subject('Votre accès à la console '.PlatformSetting::current()->app_name.' a été créé')
             ->greeting("Bonjour {$notifiable->name},")
             ->line('Un compte vient de vous être créé sur la console superadmin.')
             ->line("Mot de passe temporaire : {$this->temporaryPassword}")

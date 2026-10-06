@@ -71,6 +71,7 @@ Route::get('/settings/favicon', [SettingsController::class, 'favicon']);
 
 // Identité de la console superadmin (logo/nom/couleurs), publique pour l'écran de
 // connexion plateforme — même raisonnement que les routes tenant ci-dessus.
+Route::get('/platform/settings/identity', [\App\Http\Controllers\Api\Platform\PlatformSettingController::class, 'identity']);
 Route::get('/platform/settings/logo', [\App\Http\Controllers\Api\Platform\PlatformSettingController::class, 'logo']);
 Route::get('/platform/settings/favicon', [\App\Http\Controllers\Api\Platform\PlatformSettingController::class, 'favicon']);
 

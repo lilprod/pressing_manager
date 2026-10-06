@@ -180,7 +180,7 @@ export default function Login() {
                                 </h1>
                                 {online ? <Pill tone="emerald">{t('login.online')}</Pill> : <Pill tone="amber">{t('login.offline')}</Pill>}
                             </div>
-                            <p className="text-sm text-ink-600 dark:text-ink-350">{t('login.subtitle')}</p>
+                            <p className="text-sm text-ink-600 dark:text-ink-350">{t('login.subtitle', { name: settings?.pressing_name ?? '' })}</p>
                         </div>
 
                         {error && <Alert tone="error">{error}</Alert>}

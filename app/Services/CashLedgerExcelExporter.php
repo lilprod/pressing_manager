@@ -30,7 +30,7 @@ class CashLedgerExcelExporter
         $sheet->setTitle('Journal de caisse');
 
         $sheet->fromArray([
-            ['Journal de caisse — Pressing Manager'],
+            ['Journal de caisse — '.\App\Models\AppSetting::nameFor(auth()->user()?->pressing_id)],
             ["Agence : {$agencyName}"],
             ["Période : {$from} au {$to}"],
         ], null, 'A1');

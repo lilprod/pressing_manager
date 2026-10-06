@@ -19,6 +19,8 @@ class DeliveryFailedNotification extends ConfigurableNotification
 
     public function summary(): string
     {
-        return "Pressing Manager : la livraison de votre commande n° {$this->delivery->order->order_number} a échoué. Votre agence va vous recontacter.";
+        $name = \App\Models\AppSetting::nameFor($this->delivery->agency?->pressing_id);
+
+        return "{$name} : la livraison de votre commande n° {$this->delivery->order->order_number} a échoué. Votre agence va vous recontacter.";
     }
 }

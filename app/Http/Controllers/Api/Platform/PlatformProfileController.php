@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Platform;
 
 use App\Http\Requests\Platform\ChangePlatformPasswordRequest;
 use App\Http\Requests\Platform\UpdatePlatformProfileRequest;
+use App\Models\PlatformSetting;
 use App\Models\PlatformUser;
 use App\Services\QrCodeGenerator;
 use App\Services\TotpService;
@@ -58,7 +59,7 @@ class PlatformProfileController extends PlatformApiController
 
         $secret = $totp->generateSecret();
         $user->forceFill(['totp_secret' => $secret])->save();
-        $otpauthUri = $totp->provisioningUri($secret, $user->email);
+        $otpauthUri = $totp->provisioningUri($secret, $user->email, PlatformSetting::current()->app_name);
 
         return response()->json([
             'otpauth_uri' => $otpauthUri,

@@ -9,6 +9,9 @@ type LoginChallenge =
 interface SuperadminAuthContextValue {
     user: PlatformUser | null;
     loading: boolean;
+    /** Nom et logo de la console (réglables dans Paramètres) ; vide / null tant que non chargés. */
+    appName: string;
+    logoUrl: string | null;
     requestLogin: (email: string, password: string) => Promise<LoginChallenge>;
     verifyMfa: (challenge: string, code: string) => Promise<void>;
     confirmMfaSetup: (challenge: string, code: string) => Promise<{ recoveryCodes: string[] }>;
@@ -21,6 +24,22 @@ const SuperadminAuthContext = createContext<SuperadminAuthContextValue | null>(n
 export function SuperadminAuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<PlatformUser | null>(null);
     const [loading, setLoading] = useState(true);
+    const [appName, setAppName] = useState('');
+    const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+    const loadIdentity = useCallback(async () => {
+        try {
+            const identity = await platformApi.get<{ app_name: string; logo_url: string | null }>('/settings/identity');
+            setAppName(identity.app_name);
+            setLogoUrl(identity.logo_url);
+        } catch {
+            // Identité indisponible : la console reste utilisable, sans nom affiché.
+        }
+    }, []);
+
+    useEffect(() => {
+        void loadIdentity();
+    }, [loadIdentity]);
 
     useEffect(() => {
         if (!getPlatformToken()) {
@@ -58,10 +77,11 @@ export function SuperadminAuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const refresh = useCallback(async () => {
+        await loadIdentity();
         if (!getPlatformToken()) return;
         const fresh = await platformApi.get<PlatformUser>('/me');
         setUser(fresh);
-    }, []);
+    }, [loadIdentity]);
 
     const logout = useCallback(async () => {
         try {
@@ -74,8 +94,8 @@ export function SuperadminAuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const value = useMemo(
-        () => ({ user, loading, requestLogin, verifyMfa, confirmMfaSetup, logout, refresh }),
-        [user, loading, requestLogin, verifyMfa, confirmMfaSetup, logout, refresh],
+        () => ({ user, loading, appName, logoUrl, requestLogin, verifyMfa, confirmMfaSetup, logout, refresh }),
+        [user, loading, appName, logoUrl, requestLogin, verifyMfa, confirmMfaSetup, logout, refresh],
     );
 
     return <SuperadminAuthContext.Provider value={value}>{children}</SuperadminAuthContext.Provider>;

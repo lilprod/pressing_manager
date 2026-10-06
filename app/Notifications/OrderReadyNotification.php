@@ -19,6 +19,8 @@ class OrderReadyNotification extends ConfigurableNotification
 
     public function summary(): string
     {
-        return "Pressing Manager : votre commande n° {$this->order->order_number} est prête. Merci de passer la récupérer.";
+        $name = \App\Models\AppSetting::nameFor($this->order->agency?->pressing_id);
+
+        return "{$name} : votre commande n° {$this->order->order_number} est prête. Merci de passer la récupérer.";
     }
 }

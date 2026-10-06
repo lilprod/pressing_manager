@@ -27,9 +27,9 @@ class UserInvitationNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Votre compte Pressing Manager a été créé')
+            ->subject('Votre compte '.\App\Models\AppSetting::nameFor($notifiable->pressing_id).' a été créé')
             ->greeting("Bonjour {$notifiable->name},")
-            ->line('Un compte vient de vous être créé sur Pressing Manager.')
+            ->line('Un compte vient de vous être créé sur '.\App\Models\AppSetting::nameFor($notifiable->pressing_id).'.')
             ->line("Mot de passe temporaire : {$this->temporaryPassword}")
             ->line('Vous devrez le changer dès votre première connexion.')
             ->action('Se connecter', url('/login'));

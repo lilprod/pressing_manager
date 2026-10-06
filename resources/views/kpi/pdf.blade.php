@@ -15,7 +15,7 @@
     </style>
 </head>
 <body>
-    <h1>Rapport KPI — Pressing Manager</h1>
+    <h1>Rapport KPI — {{ \App\Models\AppSetting::nameFor(auth()->user()?->pressing_id) }}</h1>
     <p class="muted">
         Période : {{ $data['from'] }} au {{ $data['to'] }}<br>
         Agence : {{ $data['scope'] === 'agency' ? ($data['agency']['name'] ?? '—') : 'Toutes les agences (vue consolidée)' }}

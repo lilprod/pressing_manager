@@ -49,7 +49,18 @@ class AppSetting extends Model
         // par défaut des colonnes (session_timeout_minutes, password_min_length...) ;
         // sans ce rechargement, l'instance en mémoire les aurait à null.
         return static::query()->where('pressing_id', $pressingId)->first()
-            ?? static::create(['pressing_id' => $pressingId, 'pressing_name' => 'Pressing Manager'])->refresh();
+            ?? static::create(['pressing_id' => $pressingId, 'pressing_name' => config('app.name')])->refresh();
+    }
+
+    /**
+     * Nom affiché du pressing (e-mails, exports, PDF) : celui saisi par le tenant dans
+     * Paramètres, sinon le nom du déploiement (APP_NAME). Lecture seule : ne crée pas de ligne.
+     */
+    public static function nameFor(?int $pressingId): string
+    {
+        $name = $pressingId === null ? null : static::query()->where('pressing_id', $pressingId)->value('pressing_name');
+
+        return $name !== null && $name !== '' ? $name : config('app.name');
     }
 
     /** Scopé par pressing_id, pas agency_id — pas d'agence à rattacher. */

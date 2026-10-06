@@ -262,7 +262,7 @@ class SettingsController extends ApiController
     private function presentDefault(): array
     {
         return [
-            'pressing_name' => 'Pressing Manager',
+            'pressing_name' => config('app.name'),
             'address' => null,
             'phone' => null,
             'email' => null,

@@ -26,6 +26,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         void refresh();
     }, [refresh]);
 
+    // Titre de l'onglet = nom du pressing ; la console superadmin garde le sien (SuperadminLayout).
+    useEffect(() => {
+        if (!settings?.pressing_name || window.location.pathname.startsWith('/superadmin')) return;
+        document.title = settings.pressing_name;
+    }, [settings?.pressing_name]);
+
     const value = useMemo(() => ({ settings, refresh }), [settings, refresh]);
 
     return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;

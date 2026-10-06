@@ -19,6 +19,8 @@ class DeliveryCompletedNotification extends ConfigurableNotification
 
     public function summary(): string
     {
-        return "Pressing Manager : votre commande n° {$this->delivery->order->order_number} a été livrée.";
+        $name = \App\Models\AppSetting::nameFor($this->delivery->agency?->pressing_id);
+
+        return "{$name} : votre commande n° {$this->delivery->order->order_number} a été livrée.";
     }
 }

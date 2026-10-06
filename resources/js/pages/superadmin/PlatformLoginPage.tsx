@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import { ArrowRight, Check, KeyRound, Lock, ShieldCheck, User } from 'lucide-react';
 import { useSuperadminAuth } from '../../contexts/SuperadminAuthContext';
 import { PlatformApiError } from '../../lib/platformApi';
-import { BrandLogo } from '../../components/BrandMark';
+import { PlatformLogo } from '../../components/PlatformBrand';
 import { Alert, Spinner } from '../../components/ui/Feedback';
 import { Pill } from '../../components/ui/StatusBadge';
 import { button, card, cx, input, label } from '../../components/ui/styles';
@@ -28,7 +28,16 @@ function extractSecret(otpauthUri: string): string {
 }
 
 export default function PlatformLoginPage() {
-    const { user, loading, requestLogin, verifyMfa, confirmMfaSetup } = useSuperadminAuth();
+    const { user, loading, appName, requestLogin, verifyMfa, confirmMfaSetup } = useSuperadminAuth();
+
+    useEffect(() => {
+        if (!appName) return;
+        const previousTitle = document.title;
+        document.title = appName;
+        return () => {
+            document.title = previousTitle;
+        };
+    }, [appName]);
     const [step, setStep] = useState<Step>({ kind: 'credentials' });
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -102,8 +111,8 @@ export default function PlatformLoginPage() {
             </div>
             <div className="relative w-full max-w-md space-y-6">
                 <div className="flex items-center justify-center gap-2.5">
-                    <BrandLogo className="h-9 w-9" />
-                    <span className="font-display text-[15px] font-extrabold text-white">ADMIN Pressing</span>
+                    <PlatformLogo className="h-9 w-9" />
+                    <span className="font-display text-[15px] font-extrabold text-white">{appName}</span>
                 </div>
 
                 <form

@@ -14,7 +14,7 @@ import type { PlatformSetting } from '../../types';
  * rôles transverses ici plutôt que masquée (évite une page vide sans explication).
  */
 export default function PlatformSettingsPage() {
-    const { user } = useSuperadminAuth();
+    const { user, refresh } = useSuperadminAuth();
     const canEdit = user?.platform_role?.slug === 'superadmin';
     const [settings, setSettings] = useState<PlatformSetting | null>(null);
     const [loading, setLoading] = useState(true);
@@ -65,6 +65,7 @@ export default function PlatformSettingsPage() {
             });
             setSuccess(true);
             load();
+            void refresh();
         } catch (err) {
             setError(err instanceof PlatformApiError ? err.message : 'Une erreur est survenue.');
         } finally {
@@ -105,7 +106,7 @@ export default function PlatformSettingsPage() {
                 </div>
             </header>
 
-            <SectionCard id="platform-branding" title="Marque" subtitle="Remplace « ADMIN Pressing » codé en dur.">
+            <SectionCard id="platform-branding" title="Marque" subtitle="Nom affiché dans la barre latérale et sur la page de connexion.">
                 <div className="flex flex-wrap items-center gap-6">
                     <div className="flex items-center gap-3">
                         {settings.logo_url ? (
@@ -186,7 +187,7 @@ export default function PlatformSettingsPage() {
                     </div>
 
                     <label className="block">
-                        <span className={label}>Raison sociale (Spark)</span>
+                        <span className={label}>Raison sociale (ADMIN)</span>
                         <input value={legalEntityName} onChange={(e) => setLegalEntityName(e.target.value)} className={input} />
                     </label>
 

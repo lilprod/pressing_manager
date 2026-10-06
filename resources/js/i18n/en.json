@@ -1,5 +1,4 @@
 {
-    "app.title": "Pressing Manager",
     "a11y.skipToContent": "Skip to main content",
     "a11y.breadcrumb": "Breadcrumb",
     "nav.newOrder": "New order",
@@ -266,7 +265,7 @@
     "license.graceBanner": "License expired: read-only grace period until {date}. Please renew it.",
     "license.blockedTitle": "Application locked",
     "license.blockedMessage": "The software license has expired and the grace period is over. Renewal is required to continue.",
-    "license.blockedNoPermission": "Contact your Spark administrator to renew the license — renewal is no longer managed from this application.",
+    "license.blockedNoPermission": "Contact your platform administrator to renew the license — renewal is no longer managed from this application.",
     "license.renew": "Renew license",
     "license.plan": "Plan",
     "license.history": "Payment history",
@@ -302,7 +301,7 @@
     "pagination.previous": "Previous",
     "pagination.next": "Next",
     "login.welcome": "Welcome back",
-    "login.subtitle": "Sign in to your Pressing Manager workspace.",
+    "login.subtitle": "Sign in to your {name} workspace.",
     "login.heroTitle": "Spotless laundry, spotless management.",
     "login.heroText": "Orders, item tracking, invoicing and mobile payments — all your agencies in one place.",
     "login.footer": "Built for dry cleaners in Togo.",

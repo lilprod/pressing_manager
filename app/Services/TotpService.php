@@ -19,7 +19,7 @@ class TotpService
         return $this->base32Encode(random_bytes($bytes));
     }
 
-    public function provisioningUri(string $secret, string $accountEmail, string $issuer = 'Spark Pressing Superadmin'): string
+    public function provisioningUri(string $secret, string $accountEmail, string $issuer): string
     {
         return sprintf(
             'otpauth://totp/%s:%s?secret=%s&issuer=%s&algorithm=SHA1&digits=%d&period=%d',

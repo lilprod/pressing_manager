@@ -1,5 +1,4 @@
 {
-    "app.title": "Pressing Manager",
     "a11y.skipToContent": "Aller au contenu principal",
     "a11y.breadcrumb": "Fil d'Ariane",
     "nav.newOrder": "Nouvelle commande",
@@ -266,7 +265,7 @@
     "license.graceBanner": "Licence expirée : période de grâce en lecture seule jusqu'au {date}. Veuillez la renouveler.",
     "license.blockedTitle": "Application bloquée",
     "license.blockedMessage": "La licence logicielle a expiré et la période de grâce est terminée. Un renouvellement est nécessaire pour continuer.",
-    "license.blockedNoPermission": "Contactez votre administrateur Spark pour renouveler la licence — le renouvellement n'est plus géré depuis cette application.",
+    "license.blockedNoPermission": "Contactez votre administrateur de plateforme pour renouveler la licence — le renouvellement n'est plus géré depuis cette application.",
     "license.renew": "Renouveler la licence",
     "license.plan": "Plan",
     "license.history": "Historique des paiements",
@@ -302,7 +301,7 @@
     "pagination.previous": "Précédent",
     "pagination.next": "Suivant",
     "login.welcome": "Bon retour",
-    "login.subtitle": "Connectez-vous à votre espace Pressing Manager.",
+    "login.subtitle": "Connectez-vous à votre espace {name}.",
     "login.heroTitle": "Le linge impeccable, la gestion aussi.",
     "login.heroText": "Commandes, suivi des articles, facturation et paiements mobiles — toutes vos agences au même endroit.",
     "login.footer": "Conçu pour les pressings du Togo.",

@@ -20,6 +20,18 @@ class PlatformSettingController extends PlatformApiController
         return response()->json($this->present(PlatformSetting::current()));
     }
 
+    /** Public (écran de connexion, avant authentification) : nom affiché et assets uniquement, jamais les contacts. */
+    public function identity(): JsonResponse
+    {
+        $settings = PlatformSetting::current();
+
+        return response()->json([
+            'app_name' => $settings->app_name,
+            'logo_url' => $settings->logo_path !== null ? url('/api/platform/settings/logo') : null,
+            'favicon_url' => $settings->favicon_path !== null ? url('/api/platform/settings/favicon') : null,
+        ]);
+    }
+
     public function update(UpdatePlatformSettingRequest $request): JsonResponse
     {
         $settings = PlatformSetting::current();

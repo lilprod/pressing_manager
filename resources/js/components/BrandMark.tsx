@@ -51,7 +51,7 @@ export default function BrandMark({ inverted = false, collapse = false, classNam
             <BrandLogo />
             <span className={cx('flex-col leading-none', collapse ? 'hidden sm:flex' : 'flex')}>
                 <span className={cx('font-display text-[15px] font-extrabold', inverted ? 'text-white' : 'text-ink-900 dark:text-white')}>
-                    {settings?.pressing_name || t('app.title')}
+                    {settings?.pressing_name}
                 </span>
                 <span className={cx('mt-1 text-[11px] font-medium', inverted ? 'text-brand-100' : 'text-ink-600 dark:text-ink-350')}>
                     {t('app.tagline')}

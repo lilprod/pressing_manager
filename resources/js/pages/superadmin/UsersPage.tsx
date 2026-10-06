@@ -145,7 +145,7 @@ export default function UsersPage() {
                     </span>
                     <div className="min-w-0">
                         <h1 className="truncate font-display text-2xl font-bold text-ink-900 dark:text-white">Utilisateurs transverses</h1>
-                        <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-350">Équipe Spark ayant accès à la console plateforme.</p>
+                        <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-350">Équipe ADMIN ayant accès à la console plateforme.</p>
                     </div>
                 </div>
                 <button type="button" onClick={() => focusPanel(null)} className={button('primary', 'md')}>
@@ -475,7 +475,7 @@ function UserPanel({
             <SectionCard
                 id="platform-user-panel-heading"
                 title={editing ? 'Modifier l\'utilisateur' : 'Nouvel utilisateur'}
-                subtitle={editing ? editing.email : 'Ajouter un membre de l\'équipe Spark à la console.'}
+                subtitle={editing ? editing.email : 'Ajouter un membre de l\'équipe ADMIN à la console.'}
                 headerExtra={
                     editing ? (
                         <button type="button" onClick={onCancelEdit} className={cx(iconButton, 'h-8 w-8')} aria-label="Fermer">

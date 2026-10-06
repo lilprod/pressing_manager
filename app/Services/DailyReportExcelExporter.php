@@ -39,7 +39,7 @@ class DailyReportExcelExporter
     {
         $sheet->setTitle('Synthèse');
         $sheet->fromArray([
-            ['Bilan journalier — Pressing Manager'],
+            ['Bilan journalier — '.\App\Models\AppSetting::nameFor(auth()->user()?->pressing_id)],
             ["Date : {$data['date']}"],
             ["Agence : ".($data['agency_name'] ?? '—')],
         ], null, 'A1');

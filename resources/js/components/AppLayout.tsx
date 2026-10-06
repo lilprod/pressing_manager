@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
+import { useSettings } from '../contexts/SettingsContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useOnlineStatus, useLastSyncedAt } from '../lib/useOnlineStatus';
 import { useFormat } from '../lib/format';
@@ -254,6 +255,7 @@ function HeaderStatusPill() {
 export default function AppLayout() {
     const { user, logout } = useAuth();
     const { t, lang, setLang } = useI18n();
+    const { settings } = useSettings();
     const { theme, toggleTheme } = useTheme();
     const online = useOnlineStatus();
     const location = useLocation();
@@ -275,7 +277,7 @@ export default function AppLayout() {
 
             {/* Sidebar — desktop */}
             <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-brand-900/60 bg-brand-950 lg:flex">
-                <Link to="/" className="flex h-16 shrink-0 items-center border-b border-white/10 px-5" aria-label={t('app.title')}>
+                <Link to="/" className="flex h-16 shrink-0 items-center border-b border-white/10 px-5" aria-label={settings?.pressing_name ?? undefined}>
                     <BrandMark inverted />
                 </Link>
                 <SidebarAgencySelector />
@@ -291,7 +293,7 @@ export default function AppLayout() {
                     <div className="fixed inset-0 bg-black/40" onClick={() => setMobileNavOpen(false)} aria-hidden="true" />
                     <aside className="relative flex h-full w-72 max-w-[85vw] flex-col bg-brand-950 shadow-xl">
                         <div className="flex h-16 shrink-0 items-center justify-between border-b border-white/10 px-4">
-                            <Link to="/" aria-label={t('app.title')}>
+                            <Link to="/" aria-label={settings?.pressing_name ?? undefined}>
                                 <BrandMark inverted />
                             </Link>
                             <button
@@ -334,7 +336,7 @@ export default function AppLayout() {
                             <Menu aria-hidden="true" className="h-5 w-5" />
                         </button>
 
-                        <Link to="/" className="shrink-0 rounded-xl lg:hidden" aria-label={t('app.title')}>
+                        <Link to="/" className="shrink-0 rounded-xl lg:hidden" aria-label={settings?.pressing_name ?? undefined}>
                             <BrandMark collapse />
                         </Link>
 

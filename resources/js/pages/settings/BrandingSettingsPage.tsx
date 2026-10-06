@@ -333,7 +333,7 @@ export default function BrandingSettingsPage() {
                                     <BrandLogo />
                                 )}
                                 <div className="min-w-0 leading-tight">
-                                    <p className="truncate font-display text-[15px] font-extrabold text-ink-900 dark:text-white">{form.pressing_name || t('app.title')}</p>
+                                    <p className="truncate font-display text-[15px] font-extrabold text-ink-900 dark:text-white">{form.pressing_name || settings?.pressing_name}</p>
                                     <p className="text-[11px] font-medium text-ink-600 dark:text-ink-350">{t('app.tagline')}</p>
                                 </div>
                                 <span className="ml-auto text-[11px] font-semibold uppercase tracking-wide text-ink-500 dark:text-ink-400">{t('branding.previewApp')}</span>
@@ -343,7 +343,7 @@ export default function BrandingSettingsPage() {
                                 <div className="flex items-center gap-2 border-b border-ink-900 pb-2">
                                     {logoPreview && <img src={logoPreview} alt="" className="h-8 w-8 object-cover" />}
                                     <div className="min-w-0">
-                                        <p className="truncate text-sm font-bold">{form.pressing_name || t('app.title')}</p>
+                                        <p className="truncate text-sm font-bold">{form.pressing_name || settings?.pressing_name}</p>
                                         {form.address && <p className="truncate">{form.address}</p>}
                                         {(form.phone || form.email) && <p className="truncate">{[form.phone, form.email].filter(Boolean).join(' — ')}</p>}
                                         {form.tax_id && (
@@ -385,7 +385,7 @@ export default function BrandingSettingsPage() {
                                 {versions.map((v) => (
                                     <li key={v.id} className="flex items-center justify-between gap-3 border-b border-ink-100 pb-2.5 text-sm last:border-0 last:pb-0 dark:border-ink-800">
                                         <div className="min-w-0">
-                                            <p className="truncate font-medium text-ink-900 dark:text-ink-50">{v.data.pressing_name || t('app.title')}</p>
+                                            <p className="truncate font-medium text-ink-900 dark:text-ink-50">{v.data.pressing_name}</p>
                                             <p className="text-xs text-ink-500 dark:text-ink-400">
                                                 {dateTime(v.created_at)} — {v.published_by?.name ?? t('order.audit.systemActor')}
                                                 {v.restored_from_version_id && ` · ${t('branding.versions.restoredTag')}`}

@@ -23,9 +23,9 @@ class LicenseExpiringNotification extends Notification
         $message = (new MailMessage)->subject($this->subject());
 
         if ($this->daysRemaining > 0) {
-            $message->line("La licence logicielle de Pressing Manager expire dans {$this->daysRemaining} jour(s), le {$this->license->expires_at->format('d/m/Y')}.");
+            $message->line("La licence logicielle de {$this->pressingName()} expire dans {$this->daysRemaining} jour(s), le {$this->license->expires_at->format('d/m/Y')}.");
         } else {
-            $message->line("La licence logicielle de Pressing Manager expire aujourd'hui ({$this->license->expires_at->format('d/m/Y')}).");
+            $message->line("La licence logicielle de {$this->pressingName()} expire aujourd'hui ({$this->license->expires_at->format('d/m/Y')}).");
         }
 
         return $message
@@ -34,10 +34,15 @@ class LicenseExpiringNotification extends Notification
             ->line('Merci de votre confiance.');
     }
 
+    private function pressingName(): string
+    {
+        return \App\Models\AppSetting::nameFor($this->license->pressing_id);
+    }
+
     private function subject(): string
     {
         return $this->daysRemaining > 0
-            ? "Licence Pressing Manager : expiration dans {$this->daysRemaining} jour(s)"
-            : 'Licence Pressing Manager : expiration aujourd\'hui';
+            ? "Licence {$this->pressingName()} : expiration dans {$this->daysRemaining} jour(s)"
+            : "Licence {$this->pressingName()} : expiration aujourd'hui";
     }
 }

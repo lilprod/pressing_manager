@@ -3195,97 +3195,6 @@ statut, fil d'Ariane** — fait le 2026-10-06 :
   « En ligne · À jour • HH:MM » affichée avec l'heure réelle, aucun
   débordement horizontal aux deux largeurs.
 
-**Chantier C — Fiche détail d'un pressing (item 3)** — fait le 2026-10-06,
-deuxième des 3 chantiers de l'audit superadmin (suite du Chantier A). Écran
-entièrement nouveau, rendu possible sans fabrication par le pivot
-multi-tenant (2026-10-02) : superadmin et tenants partagent la même base de
-données, donc une requête live vers les agences/utilisateurs/licence/audit
-d'un pressing est une simple requête scopée, pas un appel réseau vers un
-déploiement séparé comme le supposait `docs/ARCHITECTURE.md` à l'origine.
-- **Backend** : `PressingController::show()` enrichi
-  (`->loadCount('agencies')` + `->load(['platformPlan', 'license.payments'])`)
-  — **décision assumée** : `loadCount('agencies')` écrase volontairement la
-  colonne dénormalisée `pressings.agencies_count` (alimentée par les rapports
-  périodiques tenant, voir Phase 1 Plateforme) par le **compte réel**, pour
-  cette vue à un seul pressing seulement — `index()` garde la version
-  dénormalisée, moins chère, pour la liste. Nouvelle méthode `agencies()`
-  (`GET /pressings/{id}/agencies`) : agences du pressing avec `users_count`
-  et `active_orders_count` réels (même définition « dépôts actifs » que
-  l'Atelier/MultiAgencyService, statuts `recu`→`pret`).
-  `PlatformAuditLogController::index()` gagne un paramètre `pressing_id`
-  explicite (filtre sur `auditable_type=Pressing::class` +
-  `auditable_id=pressing_id`, avec `authorizePressing()` vérifié
-  explicitement — un utilisateur transverse non affecté à ce pressing ne
-  peut pas lire son audit en passant juste ce paramètre).
-- **Bug trouvé et corrigé pendant la validation Playwright, pas par les
-  tests backend** : la carte « Licence » affichait `—` au lieu d'un nombre
-  de jours restants. `days_remaining` n'est **pas** un attribut persistant
-  du modèle `License` (ni une colonne, ni un accesseur `$appends`) —
-  `LicenseController::show()` (tenant, `/license`) le calcule à la volée
-  (`now()->diffInDays($license->expires_at, false)`) uniquement pour sa
-  propre réponse ; `PressingController::show()` chargeait la relation
-  `license` brute sans jamais refaire ce calcul, donc le JSON n'avait
-  simplement pas ce champ bien que le frontend (`PressingDetailPage.tsx`)
-  le lise. Corrigé en répliquant **exactement** la même formule dans
-  `show()` plutôt que d'inventer un accesseur de modèle partagé non demandé
-  ailleurs — asymétrie mineure assumée (le frontend tenant et le frontend
-  plateforme recalculent chacun séparément depuis leur contrôleur respectif,
-  comme c'était déjà le cas avant ce chantier). Test de régression ajouté
-  (`PressingDetailTest::test_show_includes_a_real_agencies_count_and_license_payment_history`
-  étendu, licence positionnée à une échéance connue, `days_remaining`
-  vérifié dans la fenêtre `[9, 10]` pour absorber la seconde de décalage
-  entre la création du test et l'assertion — même imprécision que toute
-  formule `diffInDays` tronquée à l'entier, pas un bug).
-- **Frontend** : `pages/superadmin/PressingDetailPage.tsx` (route
-  `/superadmin/pressings/:id`, déclarée après `pressings/new` et
-  `pressings/:id/edit` dans `App.tsx`), 5 onglets par état local (pas de
-  sous-routes, même patron que `ServicesPage.tsx`) :
-  - **Vue d'ensemble** : 3 `StatCard` (agences actives, utilisateurs,
-    jours de licence restants) + 5 dernières entrées d'audit.
-  - **Agences** : table nom/ville/staff/dépôts actifs/statut.
-  - **Utilisateurs transverses** : réutilise tel quel `GET /users?pressing_id=`
-    (déjà existant depuis la Phase 2 Plateforme, aucun nouvel endpoint).
-  - **Licence** : plan courant, jours restants, historique des paiements,
-    bouton « Enregistrer un paiement » qui réouvre `RenewLicenseModal`
-    **extrait** dans `components/superadmin/RenewLicenseModal.tsx` (pur
-    déplacement de code depuis `PressingsPage.tsx`, qui l'utilise désormais
-    aussi via cet import — zéro duplication entre les deux écrans).
-  - **Audit** : réutilise `PlatformAuditLogController` via `pressing_id=`,
-    même rendu que `pages/superadmin/AuditLogsPage.tsx`.
-  - **Pas d'onglet « Configuration »** — décision actée pendant l'audit :
-    les réglages de numérotation/délais/devise de la maquette sont en
-    réalité par **agence** (`AgencySetting`), pas par pressing ; un résumé
-    « tenant » unique serait trompeur dès qu'un pressing a plusieurs
-    agences aux réglages différents. Déjà consultable, agence par agence,
-    sur `/settings/operational` côté tenant lui-même.
-  - `PressingsPage.tsx` gagne un lien « Voir » (icône `Eye`) vers cette
-    fiche, à côté de Paiement/Impersonation/Modifier.
-- **Pièges de test rencontrés, pas des bugs applicatifs** : `OrderFactory`
-  a un effet de bord connu (`Agency::factory()->create()` appelé en
-  variable locale inconditionnellement, indépendamment de tout `->for()`
-  passé au niveau supérieur) qui fuit des agences parasites — contourné
-  dans `test_agencies_endpoint_lists_real_staff_and_active_order_counts`
-  en cherchant l'agence par nom (`firstWhere('name', 'Agence A')`) plutôt
-  qu'en supposant un tableau à un seul élément, pas corrigé à la racine
-  (risque de changer le comportement implicite de dizaines d'autres tests
-  pour un gain hors scope de ce chantier). `Pressing::create()` déclenche
-  automatiquement une entrée d'audit `pressing.created` via
-  `PlatformAuditable` — le test de filtre par `pressing_id` compte
-  désormais 2 entrées (celle-ci + 1 manuelle) plutôt que de supposer 1 seule.
-- Tests : `tests/Feature/Platform/PressingDetailTest.php` (5 — `show()`
-  enrichi, `agencies()`, isolation du filtre `pressing_id` sur l'audit,
-  2 scénarios de gating transverse non affecté). Suite complète 544/544
-  après ajout (aucune régression). `tsc --noEmit` et `npm run build`
-  propres (pas d'i18n sur cette console, décision Phase 1 inchangée).
-  Vérifié par Playwright à 1440px et 390px (connexion réelle via jeton
-  Sanctum `platform` injecté) : les 5 onglets rendent des données réelles
-  (agences/staff/dépôts actifs, historique de paiement, audit), le lien
-  « Voir » de `PressingsPage.tsx` navigue bien vers la fiche (confirmé
-  précédemment comme l'unique échec attendu de la validation du Chantier A,
-  puisque cet écran n'existait pas encore à ce moment-là), carte Licence
-  affiche désormais un vrai nombre de jours après le correctif ci-dessus,
-  aucun débordement horizontal aux deux largeurs.
-
 **Chantier 4 — Catalogue articles & tarifs (rework complet)** — fait le
 2026-10-06, dernier des 4 chantiers de l'audit de conformité « Catalogue
 articles et tarifs » du même jour, le plus structurant (onglets, filtres,
@@ -3486,3 +3395,173 @@ acceptait déjà `search`/`country_code`/`platform_plan_id`/
   pressings de test n'a encore reçu de rapport), aucun débordement
   horizontal aux deux largeurs. `tsc --noEmit`/`npm run build` propres.
   Aucun test backend concerné (suite 539/539 inchangée).
+
+**Chantier C — Fiche détail d'un pressing (item 3)** — fait le 2026-10-06,
+deuxième des 3 chantiers de l'audit superadmin (suite du Chantier A). Écran
+entièrement nouveau, rendu possible sans fabrication par le pivot
+multi-tenant (2026-10-02) : superadmin et tenants partagent la même base de
+données, donc une requête live vers les agences/utilisateurs/licence/audit
+d'un pressing est une simple requête scopée, pas un appel réseau vers un
+déploiement séparé comme le supposait `docs/ARCHITECTURE.md` à l'origine.
+- **Backend** : `PressingController::show()` enrichi
+  (`->loadCount('agencies')` + `->load(['platformPlan', 'license.payments'])`)
+  — **décision assumée** : `loadCount('agencies')` écrase volontairement la
+  colonne dénormalisée `pressings.agencies_count` (alimentée par les rapports
+  périodiques tenant, voir Phase 1 Plateforme) par le **compte réel**, pour
+  cette vue à un seul pressing seulement — `index()` garde la version
+  dénormalisée, moins chère, pour la liste. Nouvelle méthode `agencies()`
+  (`GET /pressings/{id}/agencies`) : agences du pressing avec `users_count`
+  et `active_orders_count` réels (même définition « dépôts actifs » que
+  l'Atelier/MultiAgencyService, statuts `recu`→`pret`).
+  `PlatformAuditLogController::index()` gagne un paramètre `pressing_id`
+  explicite (filtre sur `auditable_type=Pressing::class` +
+  `auditable_id=pressing_id`, avec `authorizePressing()` vérifié
+  explicitement — un utilisateur transverse non affecté à ce pressing ne
+  peut pas lire son audit en passant juste ce paramètre).
+- **Bug trouvé et corrigé pendant la validation Playwright, pas par les
+  tests backend** : la carte « Licence » affichait `—` au lieu d'un nombre
+  de jours restants. `days_remaining` n'est **pas** un attribut persistant
+  du modèle `License` (ni une colonne, ni un accesseur `$appends`) —
+  `LicenseController::show()` (tenant, `/license`) le calcule à la volée
+  (`now()->diffInDays($license->expires_at, false)`) uniquement pour sa
+  propre réponse ; `PressingController::show()` chargeait la relation
+  `license` brute sans jamais refaire ce calcul, donc le JSON n'avait
+  simplement pas ce champ bien que le frontend (`PressingDetailPage.tsx`)
+  le lise. Corrigé en répliquant **exactement** la même formule dans
+  `show()` plutôt que d'inventer un accesseur de modèle partagé non demandé
+  ailleurs — asymétrie mineure assumée (le frontend tenant et le frontend
+  plateforme recalculent chacun séparément depuis leur contrôleur respectif,
+  comme c'était déjà le cas avant ce chantier). Test de régression ajouté
+  (`PressingDetailTest::test_show_includes_a_real_agencies_count_and_license_payment_history`
+  étendu, licence positionnée à une échéance connue, `days_remaining`
+  vérifié dans la fenêtre `[9, 10]` pour absorber la seconde de décalage
+  entre la création du test et l'assertion — même imprécision que toute
+  formule `diffInDays` tronquée à l'entier, pas un bug).
+- **Frontend** : `pages/superadmin/PressingDetailPage.tsx` (route
+  `/superadmin/pressings/:id`, déclarée après `pressings/new` et
+  `pressings/:id/edit` dans `App.tsx`), 5 onglets par état local (pas de
+  sous-routes, même patron que `ServicesPage.tsx`) :
+  - **Vue d'ensemble** : 3 `StatCard` (agences actives, utilisateurs,
+    jours de licence restants) + 5 dernières entrées d'audit.
+  - **Agences** : table nom/ville/staff/dépôts actifs/statut.
+  - **Utilisateurs transverses** : réutilise tel quel `GET /users?pressing_id=`
+    (déjà existant depuis la Phase 2 Plateforme, aucun nouvel endpoint).
+  - **Licence** : plan courant, jours restants, historique des paiements,
+    bouton « Enregistrer un paiement » qui réouvre `RenewLicenseModal`
+    **extrait** dans `components/superadmin/RenewLicenseModal.tsx` (pur
+    déplacement de code depuis `PressingsPage.tsx`, qui l'utilise désormais
+    aussi via cet import — zéro duplication entre les deux écrans).
+  - **Audit** : réutilise `PlatformAuditLogController` via `pressing_id=`,
+    même rendu que `pages/superadmin/AuditLogsPage.tsx`.
+  - **Pas d'onglet « Configuration »** — décision actée pendant l'audit :
+    les réglages de numérotation/délais/devise de la maquette sont en
+    réalité par **agence** (`AgencySetting`), pas par pressing ; un résumé
+    « tenant » unique serait trompeur dès qu'un pressing a plusieurs
+    agences aux réglages différents. Déjà consultable, agence par agence,
+    sur `/settings/operational` côté tenant lui-même.
+  - `PressingsPage.tsx` gagne un lien « Voir » (icône `Eye`) vers cette
+    fiche, à côté de Paiement/Impersonation/Modifier.
+- **Pièges de test rencontrés, pas des bugs applicatifs** : `OrderFactory`
+  a un effet de bord connu (`Agency::factory()->create()` appelé en
+  variable locale inconditionnellement, indépendamment de tout `->for()`
+  passé au niveau supérieur) qui fuit des agences parasites — contourné
+  dans `test_agencies_endpoint_lists_real_staff_and_active_order_counts`
+  en cherchant l'agence par nom (`firstWhere('name', 'Agence A')`) plutôt
+  qu'en supposant un tableau à un seul élément, pas corrigé à la racine
+  (risque de changer le comportement implicite de dizaines d'autres tests
+  pour un gain hors scope de ce chantier). `Pressing::create()` déclenche
+  automatiquement une entrée d'audit `pressing.created` via
+  `PlatformAuditable` — le test de filtre par `pressing_id` compte
+  désormais 2 entrées (celle-ci + 1 manuelle) plutôt que de supposer 1 seule.
+- Tests : `tests/Feature/Platform/PressingDetailTest.php` (5 — `show()`
+  enrichi, `agencies()`, isolation du filtre `pressing_id` sur l'audit,
+  2 scénarios de gating transverse non affecté). Suite complète 544/544
+  après ajout (aucune régression). `tsc --noEmit` et `npm run build`
+  propres (pas d'i18n sur cette console, décision Phase 1 inchangée).
+  Vérifié par Playwright à 1440px et 390px (connexion réelle via jeton
+  Sanctum `platform` injecté) : les 5 onglets rendent des données réelles
+  (agences/staff/dépôts actifs, historique de paiement, audit), le lien
+  « Voir » de `PressingsPage.tsx` navigue bien vers la fiche (confirmé
+  précédemment comme l'unique échec attendu de la validation du Chantier A,
+  puisque cet écran n'existait pas encore à ce moment-là), carte Licence
+  affiche désormais un vrai nombre de jours après le correctif ci-dessus,
+  aucun débordement horizontal aux deux largeurs.
+
+**Chantier D.1 — Correctif d'isolation `loyalty_tiers` (prérequis de l'item 4)**
+— fait le 2026-10-06, troisième des 3 chantiers de l'audit superadmin. Trouvé en
+creusant la faisabilité de l'item 4 (formulaire de création enrichi avec
+programme de fidélité par défaut) : `loyalty_tiers` est le seul des 7
+référentiels pressing-scopés (`agencies`/`users`/`app_settings`/`services`/
+`treatment_types`/`subscription_plans`/`suppliers`) à avoir été **oublié** lors
+du pivot multi-tenant du 2026-10-02 — vérifié par grep (`SELECT * FROM
+loyalty_tiers` sans aucune colonne `pressing_id`) avant d'écrire la moindre
+ligne. Tous les pressings du déploiement partageaient donc les mêmes 3 paliers
+de fidélité, un vrai trou d'isolation sur l'axe précisément étanchéifié
+partout ailleurs par le pivot. L'utilisateur a confirmé vouloir le corriger
+**dans ce même chantier** plutôt que de le différer (via `AskUserQuestion`,
+voir le plan détaillé) — prérequis de toute façon pour seeder un programme de
+fidélité par défaut propre à chaque pressing à l'item 4, sans fabriquer une
+donnée partagée.
+- **Migration `add_pressing_id_to_loyalty_tiers_table`** — **backfill différent
+  des autres migrations de pivot** : celles-ci rattachent les lignes existantes
+  à un seul pressing `LEGACY` (un historique de licence/audit n'a de sens que
+  pour un seul tenant) ; ici, **chaque pressing existant reçoit sa propre copie
+  des paliers actuels** — un programme de fidélité est une donnée métier dont
+  chaque pressing a besoin pour fonctionner, pas un historique à laisser à un
+  seul tenant. Le premier pressing (par id) garde les lignes existantes
+  (réattribuées), les pressings suivants reçoivent des copies ; tout pressing
+  sans aucun palier (créé après le pivot, avant cette migration) reçoit le
+  même jeu par défaut que `LoyaltyTierSeeder::TIERS`. Contrainte d'unicité
+  `min_points` passe de globale à composite `unique(['pressing_id',
+  'min_points'])`.
+- **Modèle/contrôleur** : `LoyaltyTier::$fillable` gagne `pressing_id` (jamais
+  accepté depuis la requête cliente — ni `StoreLoyaltyTierRequest` ni
+  `UpdateLoyaltyTierRequest` ne valident ce champ, toujours posé côté
+  contrôleur depuis `$request->user()->pressing_id`, même garde que
+  `TreatmentTypeController`). `LoyaltyTierController::index()`/`store()`
+  scopés par pressing ; `update()` gagne la vérification d'appartenance
+  (`$loyaltyTier->pressing_id !== $request->user()->pressing_id` → 403) —
+  **exactement le même trou que celui déjà corrigé sur
+  `TreatmentTypeController::update()`**, copié ligne à ligne plutôt que
+  réinventé. Règles `unique:loyalty_tiers,min_points` des deux `FormRequest`
+  passées de globales à `Rule::unique(...)->where('pressing_id', ...)`.
+- **`Client::currentLoyaltyTier()`** — résout désormais le pressing via
+  `$this->agency->pressing_id`, même patron que
+  `TicketPdfService::render()` (`$order->agency->pressing_id`) pour un modèle
+  agence-scopé qui a besoin du pressing. `ClientController::stats()` (calcul
+  VIP) scopé de la même façon via `$request->user()->pressing_id`.
+- **`KpiService::loyaltySummary()`** (répartition par palier + points émis/
+  consommés, chantier Rapports du 2026-10-05) — gagne un paramètre
+  `$pressingId`, threadé depuis `KpiService::build()` (nouveau paramètre
+  `int $pressingId`, 2 points d'appel) jusqu'à `KpiController` (les 3 méthodes
+  `index()`/`exportPdf()`/`exportExcel()` passent désormais
+  `$request->user()->pressing_id`) — seul autre call site réel de
+  `LoyaltyTier` trouvé par grep avant de toucher le modèle.
+- **Factory/seeder mis à jour pour la cohérence, pas pour corriger un bug
+  latent** : `LoyaltyTierFactory` gagne `pressing_id` (même convention exacte
+  que `TreatmentTypeFactory`/`SupplierFactory` — réutilise le premier pressing
+  déjà créé dans la transaction du test en cours, ou en crée un à la volée) ;
+  `LoyaltyTierSeeder` résout désormais le pressing `DEMO` comme
+  `TreatmentTypeSeeder` (même précédent).
+- **Deux tests existants corrigés, pas des régressions introduites** :
+  `ClientStatsTest`/`KpiAdvancedMetricsTest` appelaient `LoyaltyTier::create()`
+  **directement** (sans passer par la factory, donc mon correctif de factory
+  ne les couvrait pas) sans jamais fournir `pressing_id` — cassaient sur la
+  contrainte NOT NULL dès que la colonne devenait obligatoire. Corrigés en
+  leur passant `$agency->pressing_id`, déjà disponible dans ces deux tests.
+  **Aucune modification de `tests/Feature/Loyalty/LoyaltyTest.php`** (8 tests,
+  déjà tous passants sans changement) — confirme la promesse du pivot
+  multi-tenant : un test qui ne crée jamais explicitement deux pressings
+  continue de voir un monde mono-pressing via la réutilisation implicite du
+  premier pressing du test par les factories.
+- Tests : `tests/Feature/Loyalty/LoyaltyTierIsolationTest.php` (5, nouveau,
+  même patron à deux pressings A/B que `CrossPressingIsolationTest` — un
+  palier créé dans A est invisible depuis B, deux pressings peuvent réutiliser
+  le même seuil `min_points`, un manager de B ne peut pas modifier un palier
+  de A — 403, un client ne résout jamais un palier d'un autre pressing même à
+  points égaux, les stats VIP d'un pressing sans aucun palier configuré ne
+  fuitent jamais le seuil d'un autre pressing). Suite complète 549/549 après
+  ajout (aucune régression — les 544 tests d'avant ce chantier, dont les 8 de
+  `LoyaltyTest.php`, restent verts sans modification). `tsc --noEmit` et
+  `npm run build` propres (chantier backend uniquement, aucun fichier
+  frontend touché — pas de validation Playwright requise pour cette passe).

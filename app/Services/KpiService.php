@@ -81,11 +81,14 @@ class KpiService
      * agencyId null => vue consolidée multi-agences (totaux globaux + ventilation
      * par agence) ; agencyId fourni => vue d'une seule agence. `pressingAgencyIds`
      * borne toujours la vue consolidée aux agences du pressing de l'acteur (jamais
-     * tout le déploiement — voir CLAUDE.md « Pivot multi-tenant »).
+     * tout le déploiement — voir CLAUDE.md « Pivot multi-tenant »). `pressingId`
+     * borne la lecture des paliers de fidélité au pressing de l'acteur (voir
+     * `loyaltySummary()` — `loyalty_tiers` n'avait jamais reçu `pressing_id` lors
+     * du pivot, correctif « Chantier D.1 »).
      *
      * @param  array<int>  $pressingAgencyIds
      */
-    public function build(?int $agencyId, array $pressingAgencyIds, Carbon $from, Carbon $to): array
+    public function build(?int $agencyId, array $pressingAgencyIds, Carbon $from, Carbon $to, int $pressingId): array
     {
         $header = [
             'scope' => $agencyId ? 'agency' : 'consolidated',
@@ -100,7 +103,7 @@ class KpiService
             return $header
                 + ['agency' => $agency ? ['id' => $agency->id, 'name' => $agency->name] : null]
                 + $this->metrics($scopeIds, $from, $to)
-                + ['payments_by_method' => $this->paymentsByMethod($scopeIds, $from, $to), 'loyalty' => $this->loyaltySummary($scopeIds, $from, $to)];
+                + ['payments_by_method' => $this->paymentsByMethod($scopeIds, $from, $to), 'loyalty' => $this->loyaltySummary($scopeIds, $from, $to, $pressingId)];
         }
 
         $byAgency = Agency::whereIn('id', $pressingAgencyIds)->orderBy('name')->get()
@@ -110,7 +113,7 @@ class KpiService
         return $header + $this->metrics($pressingAgencyIds, $from, $to) + [
             'by_agency' => $byAgency,
             'payments_by_method' => $this->paymentsByMethod($pressingAgencyIds, $from, $to),
-            'loyalty' => $this->loyaltySummary($pressingAgencyIds, $from, $to),
+            'loyalty' => $this->loyaltySummary($pressingAgencyIds, $from, $to, $pressingId),
         ];
     }
 
@@ -157,9 +160,9 @@ class KpiService
      * @param  array<int>  $agencyIds
      * @return array{by_tier:array<int,array{id:int,name:string,count:int}>, points_issued:int, points_consumed:int}
      */
-    private function loyaltySummary(array $agencyIds, Carbon $from, Carbon $to): array
+    private function loyaltySummary(array $agencyIds, Carbon $from, Carbon $to, int $pressingId): array
     {
-        $tiers = LoyaltyTier::query()->where('is_active', true)->orderBy('min_points')->get();
+        $tiers = LoyaltyTier::query()->where('pressing_id', $pressingId)->where('is_active', true)->orderBy('min_points')->get();
 
         $byTier = [];
         foreach ($tiers as $index => $tier) {

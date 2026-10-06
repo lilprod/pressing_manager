@@ -51,7 +51,11 @@ class ClientController extends ApiController
         $agencyId = $this->resolveAgencyFilter($request, $request->user());
         $base = fn () => Client::query()->whereIn('agency_id', $agencyId);
 
-        $topTier = LoyaltyTier::query()->where('is_active', true)->orderByDesc('min_points')->first();
+        $topTier = LoyaltyTier::query()
+            ->where('pressing_id', $request->user()->pressing_id)
+            ->where('is_active', true)
+            ->orderByDesc('min_points')
+            ->first();
 
         return response()->json([
             'active_count' => $base()->where('is_active', true)->count(),

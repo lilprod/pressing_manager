@@ -20,14 +20,14 @@ class KpiController extends ApiController
         $this->authorizePermission($request->user(), 'reports.view');
         [$agencyId, $agencyIds, $from, $to] = $this->resolveParams($request);
 
-        return response()->json($this->kpi->build($agencyId, $agencyIds, $from, $to));
+        return response()->json($this->kpi->build($agencyId, $agencyIds, $from, $to, $request->user()->pressing_id));
     }
 
     public function exportPdf(Request $request): Response
     {
         $this->authorizePermission($request->user(), 'reports.view');
         [$agencyId, $agencyIds, $from, $to] = $this->resolveParams($request);
-        $data = $this->kpi->build($agencyId, $agencyIds, $from, $to);
+        $data = $this->kpi->build($agencyId, $agencyIds, $from, $to, $request->user()->pressing_id);
 
         return Pdf::loadView('kpi.pdf', ['data' => $data])->download("kpi-{$data['from']}-{$data['to']}.pdf");
     }
@@ -36,7 +36,7 @@ class KpiController extends ApiController
     {
         $this->authorizePermission($request->user(), 'reports.view');
         [$agencyId, $agencyIds, $from, $to] = $this->resolveParams($request);
-        $data = $this->kpi->build($agencyId, $agencyIds, $from, $to);
+        $data = $this->kpi->build($agencyId, $agencyIds, $from, $to, $request->user()->pressing_id);
 
         return $exporter->download($data);
     }

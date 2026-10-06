@@ -9,7 +9,7 @@ class LoyaltyTier extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'min_points', 'discount_rate', 'is_active'];
+    protected $fillable = ['pressing_id', 'name', 'min_points', 'discount_rate', 'is_active'];
 
     protected function casts(): array
     {

@@ -34,6 +34,9 @@ class Client extends Model
     public function currentLoyaltyTier(): ?LoyaltyTier
     {
         return LoyaltyTier::query()
+            // Même patron que TicketPdfService::render() pour résoudre le pressing d'un
+            // modèle agence-scopé — loyalty_tiers est pressing-scopé, pas agence-scopé.
+            ->where('pressing_id', $this->agency->pressing_id)
             ->where('is_active', true)
             ->where('min_points', '<=', $this->loyalty_points)
             ->orderByDesc('min_points')

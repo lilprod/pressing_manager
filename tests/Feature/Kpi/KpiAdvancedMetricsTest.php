@@ -119,8 +119,8 @@ class KpiAdvancedMetricsTest extends TestCase
         $agency = Agency::factory()->create();
         $manager = $this->makeUser('manager', $agency);
 
-        $silver = LoyaltyTier::create(['name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05, 'is_active' => true]);
-        $gold = LoyaltyTier::create(['name' => 'Or', 'min_points' => 150, 'discount_rate' => 0.10, 'is_active' => true]);
+        $silver = LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05, 'is_active' => true]);
+        $gold = LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Or', 'min_points' => 150, 'discount_rate' => 0.10, 'is_active' => true]);
 
         $silverClient = Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 80, 'is_active' => true]);
         $goldClient = Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 200, 'is_active' => true]);

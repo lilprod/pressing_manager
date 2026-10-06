@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\LoyaltyTier;
+use App\Models\Pressing;
 use Illuminate\Database\Seeder;
 
 class LoyaltyTierSeeder extends Seeder
@@ -15,8 +16,10 @@ class LoyaltyTierSeeder extends Seeder
 
     public function run(): void
     {
+        $pressingId = Pressing::where('code', 'DEMO')->value('id');
+
         foreach (self::TIERS as $tier) {
-            LoyaltyTier::query()->updateOrCreate(['min_points' => $tier['min_points']], $tier + ['is_active' => true]);
+            LoyaltyTier::query()->updateOrCreate(['pressing_id' => $pressingId, 'min_points' => $tier['min_points']], $tier + ['pressing_id' => $pressingId, 'is_active' => true]);
         }
     }
 }

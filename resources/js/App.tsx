@@ -17,6 +17,7 @@ import PlatformLoginPage from './pages/superadmin/PlatformLoginPage';
 import PlatformDashboardPage from './pages/superadmin/DashboardPage';
 import PressingsPage from './pages/superadmin/PressingsPage';
 import PressingFormPage from './pages/superadmin/PressingFormPage';
+import PressingDetailPage from './pages/superadmin/PressingDetailPage';
 import PlatformUsersPage from './pages/superadmin/UsersPage';
 import PlatformProfilePage from './pages/superadmin/ProfilePage';
 import PlatformSettingsPage from './pages/superadmin/PlatformSettingsPage';
@@ -123,6 +124,7 @@ export default function App() {
                         <Route path="pressings" element={<PressingsPage />} />
                         <Route path="pressings/new" element={<PressingFormPage />} />
                         <Route path="pressings/:id/edit" element={<PressingFormPage />} />
+                        <Route path="pressings/:id" element={<PressingDetailPage />} />
                         <Route path="users" element={<PlatformUsersPage />} />
                         <Route path="roles" element={<PlatformRolesPage />} />
                         <Route path="plans" element={<PlatformPlansPage />} />

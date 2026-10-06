@@ -635,6 +635,8 @@ export interface License {
     status: LicenseStatus;
     grace_ends_at: string;
     days_remaining: number;
+    /** Chargé uniquement sur la fiche détail d'un pressing (superadmin), pas sur la liste. */
+    payments?: LicensePayment[];
 }
 
 export interface LicensePayment {
@@ -1031,6 +1033,17 @@ export interface Pressing {
     report_token?: string;
     manager_email?: string;
     manager_temporary_password?: string;
+    /** Chargé uniquement par GET /pressings/{id} (fiche détail), jamais par la liste. */
+    license?: License;
+}
+
+export interface PressingAgency {
+    id: number;
+    name: string;
+    city: string | null;
+    is_active: boolean;
+    users_count: number;
+    active_orders_count: number;
 }
 
 export interface PlatformPermission {

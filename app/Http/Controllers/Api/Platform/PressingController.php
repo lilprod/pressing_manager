@@ -123,11 +123,47 @@ class PressingController extends PlatformApiController
         );
     }
 
+    /**
+     * Enrichi pour la fiche détail (CLAUDE.md « Fiche détail d'un pressing ») :
+     * compteur d'agences réel + historique des paiements de licence. `index()`
+     * n'a pas besoin de ce poids par ligne, seule cette méthode le charge.
+     */
     public function show(Request $request, Pressing $pressing): JsonResponse
     {
         $this->authorizePressing($request->user(), $pressing->id);
 
-        return response()->json($pressing->load('platformPlan'));
+        $pressing->loadCount('agencies')
+            ->load(['platformPlan', 'license.payments' => fn ($q) => $q->latest('paid_at')]);
+
+        $payload = $pressing->toArray();
+        if ($pressing->license) {
+            // Même formule que LicenseController::show() (tenant) — days_remaining n'est
+            // pas un attribut persistant du modèle, calculé à la volée des deux côtés.
+            $payload['license']['days_remaining'] = (int) now()->diffInDays($pressing->license->expires_at, false);
+        }
+
+        return response()->json($payload);
+    }
+
+    /**
+     * Agences du pressing avec compteurs réels — « dépôts actifs » définis comme
+     * l'Atelier/MultiAgencyService (statuts recu→pret), jamais une valeur fabriquée.
+     */
+    public function agencies(Request $request, Pressing $pressing): JsonResponse
+    {
+        $this->authorizePressing($request->user(), $pressing->id);
+
+        $activeOrderStatuses = ['recu', 'trie', 'en_traitement', 'controle_qualite', 'pret'];
+
+        $agencies = $pressing->agencies()
+            ->withCount([
+                'users',
+                'orders as active_orders_count' => fn ($q) => $q->whereIn('status', $activeOrderStatuses),
+            ])
+            ->orderBy('name')
+            ->get();
+
+        return response()->json($agencies);
     }
 
     public function update(UpdatePressingRequest $request, Pressing $pressing): JsonResponse

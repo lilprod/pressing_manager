@@ -41,10 +41,17 @@ class PlatformAuditLogController extends PlatformApiController
             $query->where('created_at', '<=', $request->date('to')->endOfDay());
         }
 
-        // Un non-superadmin ne voit que l'activité des pressings qui lui sont affectés
-        // (même discipline que le reste du RBAC transverse) — jamais les entrées
-        // relatives à d'autres membres du personnel Spark, réservées au superadmin.
-        if (! $user->isSuperadmin()) {
+        // Filtre explicite sur un seul pressing (fiche détail) — autorisation vérifiée
+        // explicitement : un utilisateur transverse non affecté ne doit pas pouvoir lire
+        // l'audit d'un pressing hors de son périmètre en passant juste ce paramètre.
+        if ($request->filled('pressing_id')) {
+            $pressingId = $request->integer('pressing_id');
+            $this->authorizePressing($user, $pressingId);
+            $query->where('auditable_type', Pressing::class)->where('auditable_id', $pressingId);
+        } elseif (! $user->isSuperadmin()) {
+            // Un non-superadmin ne voit que l'activité des pressings qui lui sont affectés
+            // (même discipline que le reste du RBAC transverse) — jamais les entrées
+            // relatives à d'autres membres du personnel Spark, réservées au superadmin.
             $pressingIds = $this->resolvePressingFilter($user) ?? [];
             $query->where('auditable_type', Pressing::class)->whereIn('auditable_id', $pressingIds);
         }

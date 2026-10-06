@@ -3195,6 +3195,97 @@ statut, fil d'Ariane** — fait le 2026-10-06 :
   « En ligne · À jour • HH:MM » affichée avec l'heure réelle, aucun
   débordement horizontal aux deux largeurs.
 
+**Chantier C — Fiche détail d'un pressing (item 3)** — fait le 2026-10-06,
+deuxième des 3 chantiers de l'audit superadmin (suite du Chantier A). Écran
+entièrement nouveau, rendu possible sans fabrication par le pivot
+multi-tenant (2026-10-02) : superadmin et tenants partagent la même base de
+données, donc une requête live vers les agences/utilisateurs/licence/audit
+d'un pressing est une simple requête scopée, pas un appel réseau vers un
+déploiement séparé comme le supposait `docs/ARCHITECTURE.md` à l'origine.
+- **Backend** : `PressingController::show()` enrichi
+  (`->loadCount('agencies')` + `->load(['platformPlan', 'license.payments'])`)
+  — **décision assumée** : `loadCount('agencies')` écrase volontairement la
+  colonne dénormalisée `pressings.agencies_count` (alimentée par les rapports
+  périodiques tenant, voir Phase 1 Plateforme) par le **compte réel**, pour
+  cette vue à un seul pressing seulement — `index()` garde la version
+  dénormalisée, moins chère, pour la liste. Nouvelle méthode `agencies()`
+  (`GET /pressings/{id}/agencies`) : agences du pressing avec `users_count`
+  et `active_orders_count` réels (même définition « dépôts actifs » que
+  l'Atelier/MultiAgencyService, statuts `recu`→`pret`).
+  `PlatformAuditLogController::index()` gagne un paramètre `pressing_id`
+  explicite (filtre sur `auditable_type=Pressing::class` +
+  `auditable_id=pressing_id`, avec `authorizePressing()` vérifié
+  explicitement — un utilisateur transverse non affecté à ce pressing ne
+  peut pas lire son audit en passant juste ce paramètre).
+- **Bug trouvé et corrigé pendant la validation Playwright, pas par les
+  tests backend** : la carte « Licence » affichait `—` au lieu d'un nombre
+  de jours restants. `days_remaining` n'est **pas** un attribut persistant
+  du modèle `License` (ni une colonne, ni un accesseur `$appends`) —
+  `LicenseController::show()` (tenant, `/license`) le calcule à la volée
+  (`now()->diffInDays($license->expires_at, false)`) uniquement pour sa
+  propre réponse ; `PressingController::show()` chargeait la relation
+  `license` brute sans jamais refaire ce calcul, donc le JSON n'avait
+  simplement pas ce champ bien que le frontend (`PressingDetailPage.tsx`)
+  le lise. Corrigé en répliquant **exactement** la même formule dans
+  `show()` plutôt que d'inventer un accesseur de modèle partagé non demandé
+  ailleurs — asymétrie mineure assumée (le frontend tenant et le frontend
+  plateforme recalculent chacun séparément depuis leur contrôleur respectif,
+  comme c'était déjà le cas avant ce chantier). Test de régression ajouté
+  (`PressingDetailTest::test_show_includes_a_real_agencies_count_and_license_payment_history`
+  étendu, licence positionnée à une échéance connue, `days_remaining`
+  vérifié dans la fenêtre `[9, 10]` pour absorber la seconde de décalage
+  entre la création du test et l'assertion — même imprécision que toute
+  formule `diffInDays` tronquée à l'entier, pas un bug).
+- **Frontend** : `pages/superadmin/PressingDetailPage.tsx` (route
+  `/superadmin/pressings/:id`, déclarée après `pressings/new` et
+  `pressings/:id/edit` dans `App.tsx`), 5 onglets par état local (pas de
+  sous-routes, même patron que `ServicesPage.tsx`) :
+  - **Vue d'ensemble** : 3 `StatCard` (agences actives, utilisateurs,
+    jours de licence restants) + 5 dernières entrées d'audit.
+  - **Agences** : table nom/ville/staff/dépôts actifs/statut.
+  - **Utilisateurs transverses** : réutilise tel quel `GET /users?pressing_id=`
+    (déjà existant depuis la Phase 2 Plateforme, aucun nouvel endpoint).
+  - **Licence** : plan courant, jours restants, historique des paiements,
+    bouton « Enregistrer un paiement » qui réouvre `RenewLicenseModal`
+    **extrait** dans `components/superadmin/RenewLicenseModal.tsx` (pur
+    déplacement de code depuis `PressingsPage.tsx`, qui l'utilise désormais
+    aussi via cet import — zéro duplication entre les deux écrans).
+  - **Audit** : réutilise `PlatformAuditLogController` via `pressing_id=`,
+    même rendu que `pages/superadmin/AuditLogsPage.tsx`.
+  - **Pas d'onglet « Configuration »** — décision actée pendant l'audit :
+    les réglages de numérotation/délais/devise de la maquette sont en
+    réalité par **agence** (`AgencySetting`), pas par pressing ; un résumé
+    « tenant » unique serait trompeur dès qu'un pressing a plusieurs
+    agences aux réglages différents. Déjà consultable, agence par agence,
+    sur `/settings/operational` côté tenant lui-même.
+  - `PressingsPage.tsx` gagne un lien « Voir » (icône `Eye`) vers cette
+    fiche, à côté de Paiement/Impersonation/Modifier.
+- **Pièges de test rencontrés, pas des bugs applicatifs** : `OrderFactory`
+  a un effet de bord connu (`Agency::factory()->create()` appelé en
+  variable locale inconditionnellement, indépendamment de tout `->for()`
+  passé au niveau supérieur) qui fuit des agences parasites — contourné
+  dans `test_agencies_endpoint_lists_real_staff_and_active_order_counts`
+  en cherchant l'agence par nom (`firstWhere('name', 'Agence A')`) plutôt
+  qu'en supposant un tableau à un seul élément, pas corrigé à la racine
+  (risque de changer le comportement implicite de dizaines d'autres tests
+  pour un gain hors scope de ce chantier). `Pressing::create()` déclenche
+  automatiquement une entrée d'audit `pressing.created` via
+  `PlatformAuditable` — le test de filtre par `pressing_id` compte
+  désormais 2 entrées (celle-ci + 1 manuelle) plutôt que de supposer 1 seule.
+- Tests : `tests/Feature/Platform/PressingDetailTest.php` (5 — `show()`
+  enrichi, `agencies()`, isolation du filtre `pressing_id` sur l'audit,
+  2 scénarios de gating transverse non affecté). Suite complète 544/544
+  après ajout (aucune régression). `tsc --noEmit` et `npm run build`
+  propres (pas d'i18n sur cette console, décision Phase 1 inchangée).
+  Vérifié par Playwright à 1440px et 390px (connexion réelle via jeton
+  Sanctum `platform` injecté) : les 5 onglets rendent des données réelles
+  (agences/staff/dépôts actifs, historique de paiement, audit), le lien
+  « Voir » de `PressingsPage.tsx` navigue bien vers la fiche (confirmé
+  précédemment comme l'unique échec attendu de la validation du Chantier A,
+  puisque cet écran n'existait pas encore à ce moment-là), carte Licence
+  affiche désormais un vrai nombre de jours après le correctif ci-dessus,
+  aucun débordement horizontal aux deux largeurs.
+
 **Chantier 4 — Catalogue articles & tarifs (rework complet)** — fait le
 2026-10-06, dernier des 4 chantiers de l'audit de conformité « Catalogue
 articles et tarifs » du même jour, le plus structurant (onglets, filtres,

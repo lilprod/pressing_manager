@@ -3335,3 +3335,63 @@ tendances StatCard) — tous déjà documentés « différé » depuis l'audit d
 Les 4 chantiers de l'audit de conformité « Catalogue articles et tarifs »
 du 2026-10-06 (Sidebar, Synchronisation, En-tête, Catalogue) sont maintenant
 tous faits.
+
+**Audit de conformité Figma — interfaces superadmin** — démarré le 2026-10-06
+sur les 7 captures de la console `/superadmin` présentes dans le dossier
+`captures/` du dépôt (fusionné depuis une autre session). Audit zone par
+zone (lecture directe de 7 pages frontend + 5 contrôleurs `Api/Platform/*`
++ modèles `Pressing`/`Agency`/`AgencySetting`/`AppSetting`/`LoyaltyTier`/
+`License`) contre : Vue plateforme, Pressings liste, Pressing détail,
+Pressing nouveau, Agences cross-tenant, Utilisateurs transverses, Login.
+Déjà conforme sans construction : Login superadmin, Utilisateurs
+transverses — les deux correspondent déjà fidèlement à leurs captures.
+Catégorie (c) confirmée omise partout (aucune construction) : « Santé
+technique » (API/SYNC/PRINT), disponibilité/latence/incidents (aucune
+télémétrie réelle) ; statuts « À surveiller »/« Incident » (aucune règle
+métier ne les définit, seul actif/suspendu existe réellement) ; domaine
+personnalisé + SSL (aucune infra de provisioning DNS/SSL). Périmètre
+tranché par l'utilisateur : construire les items 1 à 4 (Pressings liste +
+Vue plateforme enrichies, fiche détail d'un pressing, formulaire de
+création enrichi), **pas** l'item 5 (écran Agences cross-tenant, laissé en
+l'état malgré la découverte en l'auditant que le pivot multi-tenant le
+rend en réalité constructible — superadmin et tenants partagent la même
+base de données, plus de canal de config plateforme→tenant manquant comme
+le supposait la doc d'architecture initiale — à reprendre si prioritaire
+un jour). Remarques notées pour plus tard, hors superadmin, non
+construites : fiche article enrichie (`ServiceFormPage.tsx`, déjà
+« différé »), Bilan journalier « sessions de caisse »/« objectif
+productivité » (aucun concept de session/objectif dans le modèle de
+données). Plan détaillé approuvé en mode plan avant tout code (3 agents
+d'exploration), 3 chantiers distincts (un commit chacun, enchaînés sans
+pause — périmètre déjà tranché explicitement par l'utilisateur, « 1 à 4 »).
+
+**Chantier A — Pressings (liste) + Vue plateforme enrichies (items 1 et 2)**
+— fait le 2026-10-06, aucun changement backend (`PressingController::index()`
+acceptait déjà `search`/`country_code`/`platform_plan_id`/
+`status=renewal_due`, juste jamais exposés côté front) :
+- `resources/js/lib/format.ts` — nouveau `timeAgo(value)` (texte relatif
+  court, « il y a 2 min »/« il y a 3 h »/« il y a 5 j », `—` si `null`) —
+  utilisé par 3 écrans superadmin (liste, vue plateforme, future fiche
+  détail), justifie l'extraction dans l'utilitaire déjà partagé par
+  `useFormat()` plutôt qu'une fonction locale dupliquée.
+- `PressingsPage.tsx` : filtres Pays (liste dérivée des `country_code` déjà
+  chargés au fil des pages, pas de nouvel endpoint catalogue), Licence
+  (`PlatformPlan[]`, déjà chargé pour la modale de renouvellement), Statut
+  (Actif/À renouveler/Suspendu — `renewal_due` déjà supporté côté backend).
+  Colonne « Activité » (`timeAgo(pressing.last_report_at)`, déjà dénormalisé
+  en base). Nouveau lien « Voir » (icône `Eye`) vers la future fiche détail
+  — route construite dans le Chantier C qui suit immédiatement, pas de lien
+  mort laissé entre les deux passes de cette session.
+- `DashboardPage.tsx` : la liste statique des 8 premiers pressings devient
+  filtrable (`ChipToggle` Tous/Actifs/À renouveler/Suspendus, même
+  composant que `KpiPage.tsx`) + recherche + lien « Ouvrir » par ligne —
+  réutilise exactement les mêmes paramètres de requête que `PressingsPage.tsx`
+  (`GET /pressings?status=&search=`), aucun nouvel endpoint.
+- Vérifié par Playwright à 1440px et 390px (connexion réelle via jeton
+  Sanctum `platform` injecté — même contournement du flux MFA déjà utilisé
+  pour les smoke tests précédents de cette console) : filtre Suspendus
+  isole bien le pressing de test suspendu (sans fuite du pressing actif),
+  recherche fonctionnelle, colonne Activité honnête (`—`, aucun des 2
+  pressings de test n'a encore reçu de rapport), aucun débordement
+  horizontal aux deux largeurs. `tsc --noEmit`/`npm run build` propres.
+  Aucun test backend concerné (suite 539/539 inchangée).

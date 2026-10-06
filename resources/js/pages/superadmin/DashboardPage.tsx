@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Building2, LayoutDashboard, ShieldCheck, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Building2, LayoutDashboard, Search, ShieldCheck, Users } from 'lucide-react';
 import { platformApi } from '../../lib/platformApi';
+import { timeAgo } from '../../lib/format';
 import { LoadingState } from '../../components/ui/Feedback';
-import { ProgressBar, SectionCard, StatCard } from '../../components/ui/Metrics';
+import { ChipToggle, ProgressBar, SectionCard, StatCard } from '../../components/ui/Metrics';
 import { Pill } from '../../components/ui/StatusBadge';
-import { card, cx } from '../../components/ui/styles';
+import { card, cx, input } from '../../components/ui/styles';
 import RevenueBars from '../../components/ui/RevenueBars';
 import type { Paginated, PlatformDashboard, Pressing } from '../../types';
+
+type PressingFilter = '' | 'active' | 'renewal_due' | 'suspended';
 
 /* Écran « Vue plateforme » (maquette superadmin) — agrégats réels uniquement :
  * « Santé technique » (API/SYNC/PRINT), disponibilité/latence et incidents sont
@@ -20,16 +24,38 @@ const operationsLabel = (n: number) => `${new Intl.NumberFormat('fr-FR').format(
 export default function DashboardPage() {
     const [dashboard, setDashboard] = useState<PlatformDashboard | null>(null);
     const [pressings, setPressings] = useState<Pressing[]>([]);
+    const [pressingsTotal, setPressingsTotal] = useState(0);
     const [loading, setLoading] = useState(true);
+    const [pressingsLoading, setPressingsLoading] = useState(false);
+    const [pressingFilter, setPressingFilter] = useState<PressingFilter>('');
+    const [pressingSearch, setPressingSearch] = useState('');
 
     useEffect(() => {
-        Promise.all([platformApi.get<PlatformDashboard>('/dashboard'), platformApi.get<Paginated<Pressing>>('/pressings')])
-            .then(([dashboardRes, pressingsRes]) => {
-                setDashboard(dashboardRes);
-                setPressings(pressingsRes.data);
-            })
-            .finally(() => setLoading(false));
+        platformApi.get<PlatformDashboard>('/dashboard').then(setDashboard).finally(() => setLoading(false));
     }, []);
+
+    function reloadPressings() {
+        setPressingsLoading(true);
+        const params = new URLSearchParams({ per_page: '8' });
+        if (pressingFilter) params.set('status', pressingFilter);
+        if (pressingSearch) params.set('search', pressingSearch);
+        platformApi
+            .get<Paginated<Pressing>>(`/pressings?${params}`)
+            .then((res) => {
+                setPressings(res.data);
+                setPressingsTotal(res.total);
+            })
+            .finally(() => setPressingsLoading(false));
+    }
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(reloadPressings, [pressingFilter]);
+
+    useEffect(() => {
+        const timeout = setTimeout(reloadPressings, 250);
+        return () => clearTimeout(timeout);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pressingSearch]);
 
     if (loading || !dashboard) {
         return <LoadingState />;
@@ -102,13 +128,39 @@ export default function DashboardPage() {
                 </SectionCard>
             </div>
 
-            <SectionCard id="platform-pressings-heading" title="Pressings clients" subtitle={`${pressings.length} pressing(s)`} action={{ to: '/superadmin/pressings', label: 'Voir tout' }} flush>
-                {pressings.length === 0 ? (
+            <SectionCard id="platform-pressings-heading" title="Pressings clients" subtitle={`${pressingsTotal} pressing(s)`} action={{ to: '/superadmin/pressings', label: 'Voir tout' }} flush>
+                <div className="flex flex-wrap items-center gap-2 px-5 pb-3 sm:px-6">
+                    <ChipToggle active={pressingFilter === ''} onClick={() => setPressingFilter('')}>
+                        Tous
+                    </ChipToggle>
+                    <ChipToggle active={pressingFilter === 'active'} onClick={() => setPressingFilter('active')}>
+                        Actifs
+                    </ChipToggle>
+                    <ChipToggle active={pressingFilter === 'renewal_due'} onClick={() => setPressingFilter('renewal_due')}>
+                        À renouveler
+                    </ChipToggle>
+                    <ChipToggle active={pressingFilter === 'suspended'} onClick={() => setPressingFilter('suspended')}>
+                        Suspendus
+                    </ChipToggle>
+                    <div className="relative ml-auto min-w-0 flex-1 basis-full sm:basis-56">
+                        <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500 dark:text-ink-350" />
+                        <input
+                            type="search"
+                            value={pressingSearch}
+                            onChange={(e) => setPressingSearch(e.target.value)}
+                            placeholder="Rechercher…"
+                            className={cx(input, 'h-9 w-full pl-9 text-sm')}
+                        />
+                    </div>
+                </div>
+                {pressingsLoading ? (
+                    <LoadingState />
+                ) : pressings.length === 0 ? (
                     <p className="px-5 py-8 text-center text-sm text-ink-600 dark:text-ink-350 sm:px-6">Aucun pressing enregistré.</p>
                 ) : (
                     <div className="overflow-x-auto">
                         <ul className="min-w-[640px] divide-y divide-ink-100 dark:divide-ink-800">
-                            {pressings.slice(0, 8).map((pressing) => (
+                            {pressings.map((pressing) => (
                                 <li key={pressing.id} className="flex items-center gap-4 px-5 py-3 sm:px-6">
                                     <div className="min-w-0 flex-1">
                                         <p className="truncate font-semibold text-ink-900 dark:text-ink-50">{pressing.name}</p>
@@ -117,9 +169,15 @@ export default function DashboardPage() {
                                     <span className="w-24 shrink-0 text-right text-sm tabular-nums text-ink-600 dark:text-ink-350">
                                         {pressing.agencies_count} agence(s)
                                     </span>
+                                    <span className="hidden w-24 shrink-0 text-right text-sm text-ink-600 dark:text-ink-350 sm:inline">
+                                        {timeAgo(pressing.last_report_at)}
+                                    </span>
                                     <Pill tone={pressing.status === 'active' ? 'emerald' : 'neutral'}>
                                         {pressing.status === 'active' ? 'Actif' : 'Suspendu'}
                                     </Pill>
+                                    <Link to={`/superadmin/pressings/${pressing.id}`} className="shrink-0 text-sm font-semibold text-brand-700 hover:underline dark:text-brand-300">
+                                        Ouvrir
+                                    </Link>
                                 </li>
                             ))}
                         </ul>

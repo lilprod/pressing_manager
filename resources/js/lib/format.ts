@@ -10,6 +10,18 @@ export function elapsedLabel(from: string, now: Date = new Date()): string {
     return minutes === 0 ? `${hours}h` : `${hours}h ${String(minutes).padStart(2, '0')}`;
 }
 
+/** Texte relatif court (« il y a 2 min »/« il y a 3 h »/« il y a 5 j ») — superadmin (Pressings/Vue plateforme/fiche détail). */
+export function timeAgo(value: string | null | undefined): string {
+    if (!value) return '—';
+    const totalMinutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
+    if (totalMinutes < 1) return "à l'instant";
+    if (totalMinutes < 60) return `il y a ${totalMinutes} min`;
+    const totalHours = Math.floor(totalMinutes / 60);
+    if (totalHours < 24) return `il y a ${totalHours} h`;
+    const totalDays = Math.floor(totalHours / 24);
+    return `il y a ${totalDays} j`;
+}
+
 /**
  * Formatage d'affichage uniquement (séparateurs de milliers, dates localisées).
  * Les montants envoyés à l'API restent des nombres bruts.

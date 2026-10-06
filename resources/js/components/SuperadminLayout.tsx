@@ -84,9 +84,43 @@ export default function SuperadminLayout() {
                 </div>
             </aside>
 
-            <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
-                <Outlet />
-            </main>
+            <div className="flex min-w-0 flex-1 flex-col">
+                <header className="sticky top-0 z-40 border-b border-ink-200/80 bg-white/85 backdrop-blur-md dark:border-ink-800 dark:bg-ink-950/85">
+                    <div className="flex h-16 items-center gap-3 px-4 sm:px-6">
+                        <BrandLogo className="h-8 w-8 lg:hidden" />
+                        <p className="hidden truncate text-sm font-semibold text-ink-700 sm:block dark:text-ink-200">Console plateforme</p>
+
+                        <div className="ml-auto flex items-center gap-2">
+                            {user && (
+                                <NavLink
+                                    to="/superadmin/profile"
+                                    className="flex items-center gap-2.5 rounded-xl border-l border-ink-200 pl-3 transition hover:bg-ink-100 dark:border-ink-800 dark:hover:bg-ink-800"
+                                >
+                                    <Avatar firstName={user.name.split(' ')[0]} lastName={user.name.split(' ').slice(1).join(' ')} size="sm" />
+                                    <div className="hidden max-w-[12rem] leading-tight md:block">
+                                        <p className="truncate text-sm font-semibold text-ink-900 dark:text-ink-50">{user.name}</p>
+                                        <p className="truncate text-xs text-ink-600 dark:text-ink-350">{user.platform_role?.name ?? 'Superadmin'}</p>
+                                    </div>
+                                </NavLink>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={() => void logout()}
+                                aria-label="Déconnexion"
+                                title="Déconnexion"
+                                className={cx(iconButton, 'text-red-700 hover:bg-red-50 hover:text-red-800 dark:text-red-300 dark:hover:bg-red-400/10 dark:hover:text-red-200')}
+                            >
+                                <LogOut aria-hidden="true" className="h-[18px] w-[18px]" />
+                            </button>
+                        </div>
+                    </div>
+                </header>
+
+                <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">
+                    <Outlet />
+                </main>
+            </div>
         </div>
     );
 }

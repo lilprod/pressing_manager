@@ -90,6 +90,9 @@ Route::prefix('platform')->group(function () {
         Route::get('/me', [PlatformAuthController::class, 'me']);
         Route::patch('/me', [PlatformProfileController::class, 'update']);
         Route::patch('/me/password', [PlatformProfileController::class, 'changePassword']);
+        Route::post('/me/mfa/setup', [PlatformProfileController::class, 'mfaSetup'])->middleware('throttle:10,1');
+        Route::post('/me/mfa/enable', [PlatformProfileController::class, 'mfaEnable'])->middleware('throttle:10,1');
+        Route::post('/me/mfa/disable', [PlatformProfileController::class, 'mfaDisable'])->middleware('throttle:6,1');
         Route::get('/users/{platformUser}/photo', [PlatformProfileController::class, 'photo']);
 
         Route::get('/dashboard', [PlatformDashboardController::class, 'show']);

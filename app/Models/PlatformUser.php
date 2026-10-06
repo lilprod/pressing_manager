@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
@@ -78,6 +79,38 @@ class PlatformUser extends Authenticatable
     public function hasMfaEnabled(): bool
     {
         return $this->totp_enabled_at !== null;
+    }
+
+    public function consumeRecoveryCode(string $code): bool
+    {
+        $match = $this->recoveryCodes()->whereNull('used_at')->where('code_hash', hash('sha256', $code))->first();
+
+        if ($match === null) {
+            return false;
+        }
+
+        $match->forceFill(['used_at' => now()])->save();
+
+        return true;
+    }
+
+    /** @return list<string> codes en clair, affichés une seule fois à l'appelant */
+    public function regenerateRecoveryCodes(): array
+    {
+        $this->recoveryCodes()->delete();
+
+        $plainCodes = [];
+        foreach (range(1, 8) as $i) {
+            $plain = Str::upper(Str::random(10));
+            $plainCodes[] = $plain;
+
+            PlatformUserRecoveryCode::create([
+                'platform_user_id' => $this->id,
+                'code_hash' => hash('sha256', $plain),
+            ]);
+        }
+
+        return $plainCodes;
     }
 
     public function isLocked(): bool

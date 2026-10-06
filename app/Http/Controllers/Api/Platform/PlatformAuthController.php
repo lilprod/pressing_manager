@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\Platform;
 use App\Http\Controllers\Controller;
 use App\Models\PlatformAuditLog;
 use App\Models\PlatformUser;
-use App\Models\PlatformUserRecoveryCode;
 use App\Services\QrCodeGenerator;
 use App\Services\TotpService;
 use Illuminate\Http\JsonResponse;
@@ -82,7 +81,7 @@ class PlatformAuthController extends Controller
             throw new HttpException(422, "La double authentification n'est pas encore configurée pour ce compte.");
         }
 
-        if (! $this->totp->verify($user->totp_secret, $data['code']) && ! $this->consumeRecoveryCode($user, $data['code'])) {
+        if (! $this->totp->verify($user->totp_secret, $data['code']) && ! $user->consumeRecoveryCode($data['code'])) {
             throw ValidationException::withMessages(['code' => ['Code invalide.']]);
         }
 
@@ -107,7 +106,7 @@ class PlatformAuthController extends Controller
         }
 
         $user->forceFill(['totp_enabled_at' => now()])->save();
-        $recoveryCodes = $this->generateRecoveryCodes($user);
+        $recoveryCodes = $user->regenerateRecoveryCodes();
 
         $response = $this->completeLogin($user, $data['challenge']);
 
@@ -161,36 +160,4 @@ class PlatformAuthController extends Controller
         ]);
     }
 
-    private function consumeRecoveryCode(PlatformUser $user, string $code): bool
-    {
-        $hash = hash('sha256', $code);
-        $match = $user->recoveryCodes()->whereNull('used_at')->where('code_hash', $hash)->first();
-
-        if ($match === null) {
-            return false;
-        }
-
-        $match->forceFill(['used_at' => now()])->save();
-
-        return true;
-    }
-
-    /** @return list<string> codes en clair, affichés une seule fois à l'appelant */
-    private function generateRecoveryCodes(PlatformUser $user): array
-    {
-        $user->recoveryCodes()->delete();
-
-        $plainCodes = [];
-        foreach (range(1, 8) as $i) {
-            $plain = Str::upper(Str::random(10));
-            $plainCodes[] = $plain;
-
-            PlatformUserRecoveryCode::create([
-                'platform_user_id' => $user->id,
-                'code_hash' => hash('sha256', $plain),
-            ]);
-        }
-
-        return $plainCodes;
-    }
 }

@@ -30,6 +30,14 @@ export default function ProfilePage() {
     const [passwordError, setPasswordError] = useState<string | null>(null);
     const [passwordSuccess, setPasswordSuccess] = useState(false);
 
+    const [mfaStep, setMfaStep] = useState<'idle' | 'setup' | 'disable'>('idle');
+    const [mfaQrDataUri, setMfaQrDataUri] = useState<string | null>(null);
+    const [mfaPassword, setMfaPassword] = useState('');
+    const [mfaCode, setMfaCode] = useState('');
+    const [mfaBusy, setMfaBusy] = useState(false);
+    const [mfaError, setMfaError] = useState<string | null>(null);
+    const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+
     if (!user) return null;
 
     async function saveProfile(event: FormEvent) {
@@ -86,6 +94,61 @@ export default function ProfilePage() {
         }
     }
 
+    function resetMfaForm() {
+        setMfaStep('idle');
+        setMfaQrDataUri(null);
+        setMfaPassword('');
+        setMfaCode('');
+        setMfaError(null);
+    }
+
+    async function startMfaSetup() {
+        setMfaBusy(true);
+        setMfaError(null);
+        try {
+            const result = await platformApi.post<{ otpauth_uri: string; qr_code_data_uri: string }>('/me/mfa/setup');
+            setMfaQrDataUri(result.qr_code_data_uri);
+            setMfaCode('');
+            setMfaStep('setup');
+        } catch (err) {
+            setMfaError(err instanceof PlatformApiError ? err.message : 'Une erreur est survenue.');
+        } finally {
+            setMfaBusy(false);
+        }
+    }
+
+    async function enableMfa(event: FormEvent) {
+        event.preventDefault();
+        setMfaBusy(true);
+        setMfaError(null);
+        try {
+            const result = await platformApi.post<{ recovery_codes: string[] }>('/me/mfa/enable', { code: mfaCode });
+            setRecoveryCodes(result.recovery_codes);
+            resetMfaForm();
+            await refresh();
+        } catch (err) {
+            setMfaError(err instanceof PlatformApiError ? err.message : 'Une erreur est survenue.');
+        } finally {
+            setMfaBusy(false);
+        }
+    }
+
+    async function disableMfa(event: FormEvent) {
+        event.preventDefault();
+        setMfaBusy(true);
+        setMfaError(null);
+        try {
+            await platformApi.post('/me/mfa/disable', { password: mfaPassword, code: mfaCode });
+            resetMfaForm();
+            await refresh();
+        } catch (err) {
+            setMfaError(err instanceof PlatformApiError ? err.message : 'Une erreur est survenue.');
+        } finally {
+            setMfaBusy(false);
+        }
+    }
+
+    const mfaEnabled = user.totp_enabled_at !== null;
     const [first, ...rest] = (user.name || '?').split(' ');
 
     return (
@@ -203,6 +266,131 @@ export default function ProfilePage() {
                         Changer le mot de passe
                     </button>
                 </form>
+            </SectionCard>
+
+            <SectionCard
+                id="profile-mfa"
+                title="Double authentification"
+                subtitle="Code à 6 chiffres généré par votre application d'authentification."
+            >
+                {mfaError && <Alert tone="error">{mfaError}</Alert>}
+
+                {recoveryCodes ? (
+                    <div className="space-y-4">
+                        <Alert tone="success">
+                            Double authentification activée. Conservez ces codes de secours : ils ne seront plus affichés.
+                        </Alert>
+                        <ul className="grid grid-cols-2 gap-2 font-mono text-sm text-ink-900 dark:text-ink-50">
+                            {recoveryCodes.map((code) => (
+                                <li key={code} className="rounded-lg bg-ink-100 px-3 py-2 dark:bg-ink-800">
+                                    {code}
+                                </li>
+                            ))}
+                        </ul>
+                        <button type="button" onClick={() => setRecoveryCodes(null)} className={button('primary', 'md')}>
+                            J'ai noté mes codes
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <p className="text-sm text-ink-700 dark:text-ink-200">
+                            Statut :{' '}
+                            <span className="font-semibold text-ink-900 dark:text-white">{mfaEnabled ? 'activée' : 'désactivée'}</span>
+                        </p>
+
+                        {mfaStep === 'idle' &&
+                            (mfaEnabled ? (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setMfaError(null);
+                                        setMfaStep('disable');
+                                    }}
+                                    className={button('danger', 'md')}
+                                >
+                                    Désactiver la double authentification
+                                </button>
+                            ) : (
+                                <button type="button" onClick={() => void startMfaSetup()} disabled={mfaBusy} className={button('primary', 'md')}>
+                                    {mfaBusy ? <Spinner className="h-4 w-4" /> : null}
+                                    Activer la double authentification
+                                </button>
+                            ))}
+
+                        {mfaStep === 'setup' && mfaQrDataUri && (
+                            <form onSubmit={enableMfa} className="space-y-4">
+                                <img
+                                    src={mfaQrDataUri}
+                                    alt="QR code de la double authentification"
+                                    className="h-44 w-44 rounded-lg bg-white p-2"
+                                />
+                                <p className="text-sm text-ink-600 dark:text-ink-350">
+                                    Scannez ce QR code avec votre application d'authentification, puis saisissez le code affiché.
+                                </p>
+                                <label className="block">
+                                    <span className={label}>Code à 6 chiffres</span>
+                                    <input
+                                        inputMode="numeric"
+                                        autoComplete="one-time-code"
+                                        maxLength={6}
+                                        value={mfaCode}
+                                        onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ''))}
+                                        className={input}
+                                    />
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    <button type="submit" disabled={mfaBusy || mfaCode.length !== 6} className={button('primary', 'md')}>
+                                        {mfaBusy ? <Spinner className="h-4 w-4" /> : null}
+                                        Confirmer
+                                    </button>
+                                    <button type="button" onClick={resetMfaForm} className={button('secondary', 'md')}>
+                                        Annuler
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+
+                        {mfaStep === 'disable' && (
+                            <form onSubmit={disableMfa} className="space-y-4">
+                                <p className="text-sm text-ink-600 dark:text-ink-350">
+                                    Confirmez avec votre mot de passe et un code à 6 chiffres (ou un code de secours).
+                                </p>
+                                <label className="block">
+                                    <span className={label}>Mot de passe actuel</span>
+                                    <input
+                                        type="password"
+                                        autoComplete="current-password"
+                                        value={mfaPassword}
+                                        onChange={(e) => setMfaPassword(e.target.value)}
+                                        className={input}
+                                    />
+                                </label>
+                                <label className="block">
+                                    <span className={label}>Code à 6 chiffres ou code de secours</span>
+                                    <input
+                                        autoComplete="one-time-code"
+                                        value={mfaCode}
+                                        onChange={(e) => setMfaCode(e.target.value.trim())}
+                                        className={input}
+                                    />
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="submit"
+                                        disabled={mfaBusy || !mfaPassword || !mfaCode}
+                                        className={button('danger', 'md')}
+                                    >
+                                        {mfaBusy ? <Spinner className="h-4 w-4" /> : null}
+                                        Désactiver
+                                    </button>
+                                    <button type="button" onClick={resetMfaForm} className={button('secondary', 'md')}>
+                                        Annuler
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
+                )}
             </SectionCard>
         </div>
     );

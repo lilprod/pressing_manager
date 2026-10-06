@@ -3194,3 +3194,144 @@ statut, fil d'Ariane** — fait le 2026-10-06 :
   raccourci ⌘K focalisant le champ depuis n'importe quel écran, pastille
   « En ligne · À jour • HH:MM » affichée avec l'heure réelle, aucun
   débordement horizontal aux deux largeurs.
+
+**Chantier 4 — Catalogue articles & tarifs (rework complet)** — fait le
+2026-10-06, dernier des 4 chantiers de l'audit de conformité « Catalogue
+articles et tarifs » du même jour, le plus structurant (onglets, filtres,
+tri, export/import, prix par traitement, disponibilité réseau, duplication,
+tendances StatCard) — tous déjà documentés « différé » depuis l'audit du
+2026-10-01, maintenant dans le périmètre choisi par l'utilisateur.
+
+- **Bug racine trouvé et corrigé, prérequis bloquant pour l'agrégat
+  « disponibilité »** : `ServicePricingService::createService()` ne créait
+  **aucune** ligne `agency_services` à la création d'un article — un service
+  nouvellement créé n'était donc disponible dans **aucune** agence tant
+  qu'un admin n'avait pas cliqué « Activer » une par une (`ServiceController::index()`
+  et `OrderController::store()` passent tous deux par une jointure INNER sur
+  ce pivot). Révélé visuellement par la nouvelle colonne « disponibilité »
+  (un article créé après le correctif affiche « Toutes les agences (27) »,
+  un article legacy pré-existant affichait « 3/27 agence(s) » — confirmé par
+  capture Playwright, pas supposé). **Corrigé à la racine** : `createService()`
+  attache désormais le nouvel article à toutes les agences actives du
+  pressing (`is_active = true`, pas de `price_override`) dans la même
+  transaction — restaure le sens réel du défaut `is_active = true` de la
+  colonne pivot. Articles déjà existants **non rétro-modifiés**
+  automatiquement (pas de migration de données devinée sur du contenu déjà
+  en place).
+- **`ServiceController::catalog()` étendu** (route déjà existante, back-office) :
+  - `available_agencies_count`/`total_agencies_count` par service — `withCount`
+    sur la relation `agencies` filtrée (`agency_services.is_active = true`),
+    total agences actives du pressing calculé une fois pour la requête (pas
+    de N+1). Affiché « N/M agences » ou le nom de l'unique agence si `= 1`.
+  - `treatment_prices` (map `{code: montant}`) — uniquement pour les articles
+    **non exclusivement au kilo** (`billing_mode !== 'kg'`) avec un
+    `base_price` réel : prix de base × ratio de chaque `TreatmentType` actif
+    du pressing, via les méthodes **existantes**
+    `ServicePricingService::applyTreatmentRatio()`/`roundAmount()` (jamais une
+    formule dupliquée — même pipeline que le calcul réel au comptoir).
+    `null` pour un article exclusivement au kilo (un prix par traitement
+    exigerait un poids de référence fabriqué) — conserve l'affichage existant
+    « Dès X FCFA/kg » dans ce cas. Colonnes **dynamiques** (pas figées sur
+    Classique/Express/Repassage) — rendues en pastilles plutôt qu'en colonnes
+    fixes, pour rester honnête si le pressing a d'autres traitements actifs.
+  - `sort` (`name`/`updated_at`/`base_price`) et `billing_mode` (nouveaux
+    paramètres de filtre/tri).
+  - Onglet **Indisponibles** (`only_unavailable=1`) : `is_active = false` OU
+    disponible dans aucune agence active — **piège Eloquent rencontré et
+    corrigé** : `wherePivot()` à l'intérieur d'un `withCount()`/
+    `orWhereDoesntHave()` (closures) produit du SQL malformé dans cette
+    version de Laravel (`SQLSTATE[42703]: "pivot" = is_active`) — la forme
+    directe `$agency->services()->wherePivot(...)` (hors closure, déjà
+    utilisée par `index()`) n'est pas affectée. Corrigé en remplaçant les
+    deux occurrences par `->where('agency_services.is_active', true)` à
+    l'intérieur des closures — révélé par le premier run des tests
+    d'isolation cross-pressing, pas visible à la lecture du code.
+- **Tendances StatCard** (pattern 100% frontend déjà établi par
+  `KpiPage.tsx`/`DashboardPage.tsx`, `percentChange()`/`trend()` de
+  `Metrics.tsx` réutilisés tels quels — aucun calcul de delta réinventé côté
+  backend) : `created_this_month_count` (nouveaux articles ce mois-ci, affiché
+  en `hint` sur la carte « Articles actifs ») et `average_base_price_30d_ago`
+  (moyenne reconstituée des prix de base via `ServicePriceHistory` — pour
+  chaque article à la pièce, dernier changement antérieur au cap J-30, repli
+  **documenté** sur le prix actuel si aucun changement n'est antérieur à ce
+  cap, plutôt qu'une reconstruction exacte qui exigerait de remonter à
+  l'`old_value` du tout premier changement). « 2 partagées » (sous-libellé
+  fabriqué de la capture sur la carte Catégories — aucun concept réel ne
+  distingue une catégorie « partagée », une catégorie est une simple colonne
+  globale au pressing, jamais scopée par agence) : **supprimé**, pas
+  reproduit. `catalog_updated_at` (`MAX(services.updated_at)` du pressing)
+  affiché sur une nouvelle carte « Catalogue principal » — **pas de badge
+  « Synchronisé »** fabriqué (aucune notion de sync pour le catalogue).
+- **Onglets** : Tous les articles (existant) / Catégories (regroupement
+  d'affichage par `category`, agrégats déjà disponibles) / Tarifs au kilo
+  (`billing_mode=kg`) / Indisponibles (ci-dessus) / Historique
+  (`GET /services/price-history`, liste paginée de `ServicePriceHistory` du
+  pressing — modèle déjà existant, jamais listé globalement avant cette
+  passe, pagination dédiée distincte de la liste principale).
+- **Export** : `GET /services/export` (route littérale déclarée avant
+  `/services/{service}`), `ServicesExcelExporter` (copie du squelette
+  `OrdersExcelExporter`/`KpiExcelExporter`, PhpSpreadsheet déjà une
+  dépendance), mêmes filtres que `catalog()` sauf pagination.
+- **Import Excel** (`POST /services/import`, multipart) : `ServicesExcelImporter`,
+  parsing PhpSpreadsheet, validation ligne par ligne (règle de validation
+  dédiée pour l'unicité de code **dans le fichier lui-même**, pas seulement
+  contre la base), rapport d'erreurs structuré `{row, field, message}`, tout
+  ou rien (une transaction unique, rien n'est committé si une ligne est
+  invalide). **Scope limité aux articles à la pièce** — décision délibérée :
+  un article au kilo/mixte a besoin d'une grille de prix dégressive
+  (`ServicePriceTier`, plusieurs lignes imbriquées) qu'une ligne de tableur
+  ne peut pas porter proprement sans un format multi-lignes ambigu ; pas de
+  mapping de colonnes interactif (colonnes fixes documentées).
+- **Duplication** (`POST /services/{id}/duplicate`) : copie des champs +
+  grille de prix au kilo, **jamais l'historique de prix** (un historique
+  copié daterait faussement un changement qui n'a jamais eu lieu sur le
+  nouvel article). Code unique généré par un suffixe `-COPIE`/`-COPIE-N`
+  incrémental (jamais d'écrasement). **Copie créée inactive par défaut** —
+  décision délibérée (« à revoir avant publication », jamais calquée telle
+  quelle active).
+- **Frontend `ServicesPage.tsx`** : réécriture complète — 5 onglets, chips
+  de mode de facturation + tri, pastilles de prix par traitement, colonne
+  disponibilité, bouton Dupliquer, boutons Export/Import avec affichage des
+  erreurs de ligne, onglet Historique avec sa propre pagination, tendances
+  sur les `StatCard` (`hint`/`trend()`), carte « Catalogue principal » avec
+  le vrai `catalog_updated_at`.
+- **Barre de résultats Jour/Semaine/Mois de la capture** : **omise**, pas
+  fabriquée — réinterprétée honnêtement comme le tri `sort` ci-dessus plutôt
+  qu'un filtre période (un article n'« arrive » pas à une date qu'on filtre,
+  contrairement à des dépôts — même raisonnement déjà appliqué à l'Atelier
+  Kanban le 2026-10-01 pour un filtre de période jugé ambigu).
+- **Deux bugs CSS trouvés et corrigés pendant la validation Playwright, pas
+  par les tests backend** :
+  1. Grille de `StatCard` en `grid-cols-2 gap-3 sm:grid-cols-4` tronquait les
+     montants FCFA (« 1 339 F... ») à 390px — même piège déjà documenté dans
+     ce fichier (« Grilles de StatCard avec des montants »). Corrigé en
+     `grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:grid-cols-4`.
+  2. La chip « effacer » de la ligne de filtre « Mode de facturation »
+     réutilisait par erreur `service.allCategories` (« Toutes les
+     catégories ») — libellé incohérent sous un en-tête « Mode de
+     facturation : ». Corrigé par une nouvelle clé dédiée
+     `service.allBillingModes` (« Tous les modes »/« All modes »).
+- Tests : `tests/Feature/Services/ServiceAgencyProvisioningTest.php` (un
+  nouveau service est disponible dans toutes les agences actives du pressing
+  dès sa création — régression du bug racine),
+  `ServiceCatalogAggregatesTest.php` (`treatment_prices` correct pièce vs kg,
+  `available_agencies_count`/`total_agencies_count`, tendances `stats()`),
+  `ServiceCatalogFiltersTest.php` (onglets, filtres, tri, isolation
+  cross-pressing — c'est ce test qui a révélé le bug `wherePivot()`),
+  `ServiceExportImportTest.php` (export respecte les filtres, import
+  valide/rejette ligne par ligne, duplication). 19 tests pour ce chantier,
+  suite complète 528/528 après ajout (aucune régression). `tsc --noEmit` et
+  `npm run build` propres, parité i18n fr/en stricte. Vérifié par Playwright
+  à 1440px et 390px (données réelles, pas fabriquées) : les 5 onglets
+  rendent du contenu réel (onglet Catégories confirmé groupé par catégorie
+  avec compteurs réels via un dump `innerText` dédié — un premier test
+  automatisé avait signalé un faux échec en supposant à tort que « Nettoyage »
+  serait la première catégorie alors que « Lavage (20) » l'était réellement,
+  limite du script de test, pas un défaut de l'app), export déclenche un
+  vrai téléchargement `.xlsx`, duplication crée une vraie copie inactive
+  visible dans la liste, aucun débordement horizontal aux deux largeurs
+  après les deux correctifs CSS/libellé ci-dessus.
+
+Les 4 chantiers de l'audit de conformité « Catalogue articles et tarifs »
+du 2026-10-06 (Sidebar, Synchronisation, En-tête, Catalogue) sont maintenant
+tous faits.

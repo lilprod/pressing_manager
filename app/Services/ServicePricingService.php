@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Agency;
 use App\Models\Service;
 use App\Models\ServicePriceHistory;
 use App\Models\ServicePriceTier;
@@ -29,6 +30,19 @@ class ServicePricingService
             if (! empty($data['price_tiers'])) {
                 $this->syncTiers($service, $data['price_tiers'], $actor);
             }
+
+            // Correctif racine (audit Figma 2026-10-06, voir CLAUDE.md) : sans ceci, un
+            // service fraîchement créé n'avait aucune ligne `agency_services` — or
+            // ServiceController::index() et OrderController::store() résolvent le
+            // catalogue comptoir via $agency->services() (jointure INNER sur le pivot),
+            // donc un service sans ligne pivot était introuvable/inachetable dans
+            // TOUTES les agences, malgré le défaut `is_active = true` de la colonne
+            // pivot qui laissait croire le contraire. Restaure le sens réel de ce
+            // défaut : actif partout sauf désactivation explicite ensuite.
+            $agencyIds = Agency::where('pressing_id', $actor?->pressing_id)->where('is_active', true)->pluck('id');
+            $service->agencies()->syncWithoutDetaching(
+                $agencyIds->mapWithKeys(fn ($id) => [$id => ['is_active' => true]])->all()
+            );
 
             return $service->fresh(['priceTiers']);
         });

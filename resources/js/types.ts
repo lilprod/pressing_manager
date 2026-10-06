@@ -352,6 +352,7 @@ export interface ServicePriceHistory {
     new_value: string | null;
     changed_at: string;
     actor?: { id: number; name: string } | null;
+    service?: { id: number; name: string; code: string } | null;
 }
 
 export interface Service {
@@ -373,13 +374,19 @@ export interface Service {
     agency_pivot?: { price_override: number | null; is_active: boolean } | null;
     price_tiers?: ServicePriceTier[];
     price_histories?: ServicePriceHistory[];
+    available_agencies_count?: number;
+    total_agencies_count?: number;
+    treatment_prices?: Record<string, number> | null;
 }
 
 export interface ServiceStats {
     active_count: number;
     category_count: number;
     average_base_price: number;
+    average_base_price_30d_ago: number;
     stale_count: number;
+    created_this_month_count: number;
+    catalog_updated_at: string | null;
 }
 
 export interface OrderStats {

@@ -3027,3 +3027,101 @@ techniquement impossible, juste hors scope de la passe précédente).
   exactement les valeurs attendues (répartition 71 %/29 % espèce/Flooz, palier
   Argent à 4 clients, 100 points émis) → bascule de granularité Jour/Semaine/
   Mois vérifiée en direct. 1440px et 390px, aucun débordement horizontal.
+
+**Audit de conformité Figma « Catalogue articles et tarifs » + chantiers
+globaux (sidebar, en-tête, Synchronisation, Catalogue)** — démarré le
+2026-10-06, capture « Catalogue articles et tarifs » fournie via la skill
+`figma-conformity-audit`. Audit zone par zone (lecture directe de
+`ServicesPage.tsx`, `ServiceController.php`, `ServicePricingService.php`,
+`AppLayout.tsx`, `AuthContext.tsx`, `App.tsx`, `useOnlineStatus.ts`,
+`sync.ts`, `useSyncQueue.ts` + 3 agents d'exploration) a montré deux
+portées : des écarts confinés à l'écran Catalogue (dont plusieurs déjà
+documentés « différé » le 2026-10-01 : onglets, filtres avancés, import
+Excel) et des éléments **globaux** visibles sur la même capture mais qui
+touchent toute l'app (en-tête avec recherche ⌘K/cloche/fil d'Ariane/statut,
+sidebar réorganisée en 3 sections). Périmètre tranché via `AskUserQuestion`
+(4 questions séparées, l'utilisateur a choisi le maximum à chaque fois) :
+répartir les 11 liens de nav actuels non nommés dans la capture plutôt que
+les supprimer, construire un écran Synchronisation minimal réel, construire
+une cloche d'alertes agrégeant des signaux déjà réels, construire une vraie
+recherche globale + raccourci ⌘K. Plan détaillé produit en mode plan (3
+agents d'exploration supplémentaires) avant tout code, 4 chantiers distincts
+(un commit chacun), enchaînés sans pause intermédiaire (périmètre déjà
+entièrement tranché par les 4 réponses ci-dessus — même dérogation déjà
+actée plusieurs fois dans ce fichier pour une passe bundlée).
+
+**Chantier 1 — Sidebar : sélecteur d'agence + regroupement à 3 sections**
+— fait le 2026-10-06 :
+- `AppLayout.tsx` — `useSidebarSections()` réécrite en 3 `NavSection`
+  (OPERATIONS/PILOTAGE/SYSTÈME) au lieu de 4 + le lien Dashboard autrefois
+  standalone (plié dans OPERATIONS) — **mêmes gates `hasPermission(...)`
+  qu'avant pour chaque item, aucun changement RBAC**, uniquement un
+  réagencement visuel. Les 11 liens que la capture ne nommait pas
+  explicitement (Nouvelle commande, Scan, Livraisons, Abonnements, Fidélité,
+  Stock, RH, Utilisateurs, Rôles & permissions, Agences, Impayés,
+  Notifications, Licence) sont répartis dans les 3 sections selon le plus
+  proche jugement métier — décision actée via `AskUserQuestion`, rien n'est
+  supprimé.
+- **Correctif d'étiquette trouvé en marge** : `nav.agencies` (lien CRUD
+  `/agencies`) valait littéralement « Multi-agences » en français — identique
+  au libellé de `/multi-agences` (`nav.multiAgency`, vue consolidée). Deux
+  liens distincts portaient déjà le même texte avant même ce chantier.
+  Corrigé : `nav.agencies` → « Agences » (EN : « Agencies »), `nav.multiAgency`
+  inchangé.
+- **« Équipe & rôles » de la capture reste deux liens distincts** (Utilisateurs
+  + Rôles & permissions) sous PILOTAGE plutôt qu'une page fusionnée — aucune
+  page combinée n'existe (deux contrôleurs/données distincts), la fusionner
+  serait un chantier à part non demandé ici.
+- **Sélecteur d'agence** : relocalisé du header (`<select>` dans la barre du
+  haut) vers le haut de la sidebar, nouveau composant `SidebarAgencySelector`
+  — pure relocalisation de markup, même contrat `AuthContext`
+  (`agencies`/`activeAgencyId`/`setActiveAgencyId`, déjà totalement découplé
+  de sa présentation) réutilisé tel quel, aucun changement de contexte/API.
+- **Encart « Réseau agences »** (bas de sidebar, nouveau `SidebarNetworkBox`,
+  visible seulement pour un utilisateur global avec `reports.view` ou
+  `agencies.manage`) : **seulement** « N agences actives » — réel,
+  `agencies` de `AuthContext` ne liste déjà que les agences actives du
+  pressing (`AgencyController::index()`). **Pas de « dernière synchro »** —
+  élément fabriqué de la capture, aucune télémétrie de synchronisation
+  réseau inter-agences n'existe dans l'app (seule la file hors ligne
+  comptoir, par appareil, existe — voir chantier Synchronisation ci-dessous).
+- **Lien « Synchronisation »** (SYSTÈME, nouveau, sans permission dédiée —
+  même accessibilité que `/scan`, concerne l'appareil de l'utilisateur
+  courant) pointe vers un véritable écran construit dans la foulée (voir
+  Chantier 3 ci-dessous) plutôt que de laisser un lien mort pendant les
+  chantiers suivants.
+- Tests : aucun changement backend dans ce chantier (suite 500/500 inchangée,
+  relancée par précaution). `tsc --noEmit` et `npm run build` propres,
+  parité i18n fr/en stricte. Vérifié par Playwright à 1440px et 390px
+  (desktop + overlay mobile) : 3 sections visibles, sélecteur d'agence dans
+  la sidebar (plus dans le header), encart réseau avec le vrai compte
+  d'agences actives, navigation réelle vers `/synchronisation`, aucun
+  débordement horizontal aux deux largeurs.
+
+**Chantier 3 (construit en avance pour éviter un lien de nav mort) — Écran
+Synchronisation minimal réel** — fait le 2026-10-06, `pages/SyncPage.tsx`
+(route `/synchronisation`) :
+- **Tout réel, rien de fabriqué** : pastille Connexion (`useOnlineStatus()`,
+  déjà existant), « Dernière synchronisation réussie » — nouveau
+  `getLastSyncedAt()`/`useLastSyncedAt()` (`lib/sync.ts`/`lib/useOnlineStatus.ts`)
+  qui persiste un vrai timestamp en `localStorage` **seulement** quand
+  `flushPendingOrders()` se termine avec la file réellement vide (plus rien
+  en attente ni en erreur) — jamais une heure fabriquée, et `null`/texte
+  « aucune synchronisation réussie » si ça n'est encore jamais arrivé sur cet
+  appareil. File d'attente réelle (`useSyncQueue()`, déjà existant — IndexedDB,
+  dépôts comptoir uniquement) avec détail par opération (client, nombre
+  d'articles, date, statut en_attente/erreur). Bouton « Forcer la
+  synchronisation maintenant » appelle directement `flushPendingOrders()`
+  (désactivé hors ligne ou file vide).
+- **Explicitement omis** (chantier à part, déjà documenté non prioritaire) :
+  résolution de conflit interactive, détail multi-opérations (encaissements/
+  fiches client — hors de cette file, qui ne couvre que les dépôts), contrôles
+  d'intégrité listés un par un, vue multi-agences de la synchronisation.
+- Coexiste avec la carte « Synchronisation » déjà existante sur
+  `DashboardPage.tsx` (résumé seul, pas de détail par opération ni
+  d'horodatage) — pas de doublon fonctionnel, celle-ci reste la vue
+  dédiée/détaillée.
+- Vérifié par Playwright (voir Chantier 1 ci-dessus, même passage) : carte
+  Connexion/File d'attente/Opérations en attente toutes rendues avec de
+  vraies données (27 agences actives, file à 0, timestamp réel affiché après
+  un forçage de synchronisation pendant le test).

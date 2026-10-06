@@ -14,6 +14,7 @@ import {
     Menu,
     Moon,
     PackageCheck,
+    RefreshCw,
     ScanLine,
     ScrollText,
     Settings as SettingsIcon,
@@ -70,18 +71,22 @@ function NavSection({ label, children }: { label: string; children: React.ReactN
     );
 }
 
+// Regroupement à 3 sections (OPERATIONS/PILOTAGE/SYSTÈME, conformité Figma
+// 2026-10-06) : purement un réagencement visuel des mêmes liens avec les mêmes
+// gates `hasPermission(...)` qu'avant — aucun changement RBAC. OPERATIONS et
+// SYSTÈME portent chacune au moins un item non gaté (Nouvelle commande/Dépôts/
+// Scan ; Synchronisation/Licence) donc leur wrapper n'a pas besoin de condition
+// de visibilité ; PILOTAGE reste conditionnelle (tous ses items sont gatés).
 function useSidebarSections(onNavigate?: () => void) {
     const { user } = useAuth();
     const { t } = useI18n();
 
     return (
         <>
-            {hasPermission(user, 'reports.view') && (
-                <div className="pt-2">
+            <NavSection label={t('nav.section.operations')}>
+                {hasPermission(user, 'reports.view') && (
                     <NavItem to="/dashboard" icon={LayoutDashboard} label={t('dashboard.title')} onClick={onNavigate} />
-                </div>
-            )}
-            <NavSection label={t('nav.section.counter')}>
+                )}
                 <NavItem to="/" end icon={ShoppingBag} label={t('nav.newOrder')} onClick={onNavigate} />
                 <NavItem to="/orders" icon={ClipboardList} label={t('nav.deposits')} onClick={onNavigate} />
                 {hasPermission(user, 'clients.manage') && <NavItem to="/clients" icon={Users} label={t('nav.clients')} onClick={onNavigate} />}
@@ -96,69 +101,125 @@ function useSidebarSections(onNavigate?: () => void) {
                 )}
             </NavSection>
 
-            {(hasPermission(user, 'subscriptions.manage') || hasPermission(user, 'clients.manage')) && (
-                <NavSection label={t('nav.section.clients')}>
+            {(hasPermission(user, 'services.manage') ||
+                hasPermission(user, 'reports.view') ||
+                hasPermission(user, 'agencies.manage') ||
+                hasPermission(user, 'subscriptions.manage') ||
+                hasPermission(user, 'clients.manage') ||
+                hasPermission(user, 'invoices.manage') ||
+                hasPermission(user, 'users.manage')) && (
+                <NavSection label={t('nav.section.pilotage')}>
+                    {hasPermission(user, 'services.manage') && <NavItem to="/services" icon={Shirt} label={t('nav.services')} onClick={onNavigate} />}
+                    {hasPermission(user, 'reports.view') && <NavItem to="/kpi" icon={ChartNoAxesCombined} label={t('nav.kpi')} onClick={onNavigate} />}
+                    {hasPermission(user, 'reports.view') && (
+                        <NavItem to="/multi-agences" icon={Network} label={t('nav.multiAgency')} onClick={onNavigate} />
+                    )}
+                    {hasPermission(user, 'agencies.manage') && (
+                        <NavItem to="/agencies" icon={Building2} label={t('nav.agencies')} onClick={onNavigate} />
+                    )}
                     {hasPermission(user, 'subscriptions.manage') && (
                         <NavItem to="/subscriptions" icon={Crown} label={t('subscription.title')} onClick={onNavigate} />
                     )}
                     {hasPermission(user, 'clients.manage') && <NavItem to="/loyalty" icon={Award} label={t('loyalty.title')} onClick={onNavigate} />}
-                </NavSection>
-            )}
-
-            {(hasPermission(user, 'services.manage') ||
-                hasPermission(user, 'stocks.manage') ||
-                hasPermission(user, 'hr.manage') ||
-                hasPermission(user, 'hr.clock') ||
-                hasPermission(user, 'users.manage') ||
-                hasPermission(user, 'agencies.manage')) && (
-                <NavSection label={t('nav.section.resources')}>
-                    {hasPermission(user, 'services.manage') && <NavItem to="/services" icon={Shirt} label={t('nav.services')} onClick={onNavigate} />}
-                    {hasPermission(user, 'stocks.manage') && <NavItem to="/stock" icon={Boxes} label={t('nav.stock')} onClick={onNavigate} />}
-                    {(hasPermission(user, 'hr.manage') || hasPermission(user, 'hr.clock')) && (
-                        <NavItem to="/hr" icon={UsersRound} label={t('nav.hr')} onClick={onNavigate} />
+                    {hasPermission(user, 'invoices.manage') && (
+                        <NavItem to="/invoices/outstanding" icon={CircleDollarSign} label={t('invoice.outstandingTitle')} onClick={onNavigate} />
                     )}
                     {hasPermission(user, 'users.manage') && <NavItem to="/users" icon={UsersRound} label={t('users.title')} onClick={onNavigate} />}
                     {hasPermission(user, 'users.manage') && (
                         <NavItem to="/roles-permissions" icon={ShieldCheck} label={t('rbac.title')} onClick={onNavigate} />
                     )}
-                    {hasPermission(user, 'agencies.manage') && (
-                        <NavItem to="/agencies" icon={Building2} label={t('nav.agencies')} onClick={onNavigate} />
-                    )}
                 </NavSection>
             )}
 
-            {(hasPermission(user, 'invoices.manage') ||
-                hasPermission(user, 'reports.view') ||
-                hasPermission(user, 'notifications.manage') ||
-                hasPermission(user, 'agencies.manage') ||
-                hasPermission(user, 'audit.view')) && (
-                <NavSection label={t('nav.section.insights')}>
-                    {hasPermission(user, 'invoices.manage') && (
-                        <NavItem to="/invoices/outstanding" icon={CircleDollarSign} label={t('invoice.outstandingTitle')} onClick={onNavigate} />
-                    )}
-                    {hasPermission(user, 'reports.view') && <NavItem to="/kpi" icon={ChartNoAxesCombined} label={t('nav.kpi')} onClick={onNavigate} />}
-                    {hasPermission(user, 'reports.view') && <NavItem to="/multi-agences" icon={Network} label={t('nav.multiAgency')} onClick={onNavigate} />}
-                    {hasPermission(user, 'notifications.manage') && (
-                        <NavItem to="/notifications" icon={Bell} label={t('nav.notifications')} onClick={onNavigate} />
-                    )}
-                    {hasPermission(user, 'audit.view') && (
-                        <NavItem to="/audit-logs" icon={ScrollText} label={t('auditLogs.title')} onClick={onNavigate} />
-                    )}
-                    {/* Visible sans permission dédiée depuis l'harmonisation licence/plateforme
-                       (voir CLAUDE.md) : écran lecture seule, l'ancienne permission
-                       licenses.manage n'existe plus côté tenant. */}
-                    <NavItem to="/license" icon={KeyRound} label={t('nav.license')} onClick={onNavigate} />
-                    {hasPermission(user, 'agencies.manage') && (
-                        <NavItem to="/settings" icon={SettingsIcon} label={t('settings.title')} onClick={onNavigate} />
-                    )}
-                </NavSection>
-            )}
+            <NavSection label={t('nav.section.systeme')}>
+                {/* Pas de permission dédiée : concerne la file hors ligne de l'appareil de
+                   l'utilisateur courant, pas une donnée privilégiée — même accessibilité que
+                   /scan. Voir chantier « Synchronisation ». */}
+                <NavItem to="/synchronisation" icon={RefreshCw} label={t('sync.title')} onClick={onNavigate} />
+                {hasPermission(user, 'stocks.manage') && <NavItem to="/stock" icon={Boxes} label={t('nav.stock')} onClick={onNavigate} />}
+                {(hasPermission(user, 'hr.manage') || hasPermission(user, 'hr.clock')) && (
+                    <NavItem to="/hr" icon={UsersRound} label={t('nav.hr')} onClick={onNavigate} />
+                )}
+                {hasPermission(user, 'notifications.manage') && (
+                    <NavItem to="/notifications" icon={Bell} label={t('nav.notifications')} onClick={onNavigate} />
+                )}
+                {hasPermission(user, 'audit.view') && (
+                    <NavItem to="/audit-logs" icon={ScrollText} label={t('auditLogs.title')} onClick={onNavigate} />
+                )}
+                {/* Visible sans permission dédiée depuis l'harmonisation licence/plateforme
+                   (voir CLAUDE.md) : écran lecture seule, l'ancienne permission
+                   licenses.manage n'existe plus côté tenant. */}
+                <NavItem to="/license" icon={KeyRound} label={t('nav.license')} onClick={onNavigate} />
+                {hasPermission(user, 'agencies.manage') && (
+                    <NavItem to="/settings" icon={SettingsIcon} label={t('settings.title')} onClick={onNavigate} />
+                )}
+            </NavSection>
         </>
     );
 }
 
+/** Sélecteur d'agence : relocalisé du header vers le haut de la sidebar (conformité
+ * Figma 2026-10-06) — pure relocalisation de markup, même contrat `AuthContext`
+ * (`agencies`/`activeAgencyId`/`setActiveAgencyId`) déjà découplé de sa présentation. */
+function SidebarAgencySelector() {
+    const { t } = useI18n();
+    const { user, agencies, activeAgencyId, setActiveAgencyId } = useAuth();
+
+    if (user?.agency_id !== null || agencies.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="px-3 pb-1 pt-3">
+            <label className="relative flex items-center">
+                <span className="sr-only">{t('nav.agency')}</span>
+                <Building2 aria-hidden="true" className="pointer-events-none absolute left-3 h-4 w-4 text-brand-200/70" />
+                <select
+                    value={activeAgencyId ?? ''}
+                    onChange={(e) => setActiveAgencyId(e.target.value ? Number(e.target.value) : null)}
+                    className="h-10 w-full rounded-xl border border-white/15 bg-white/5 pl-9 pr-8 text-sm font-medium text-white transition hover:bg-white/10 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-300/20"
+                >
+                    <option value="">{t('nav.allAgencies')}</option>
+                    {agencies.map((agency) => (
+                        <option key={agency.id} value={agency.id}>
+                            {agency.name}
+                        </option>
+                    ))}
+                </select>
+            </label>
+        </div>
+    );
+}
+
+/** Encart « Réseau agences » (bas de sidebar) : uniquement « N agences actives »
+ * (réel, `agencies` de `AuthContext` ne liste déjà que les agences actives du
+ * pressing) — jamais de « dernière synchro » fabriquée, aucune télémétrie de
+ * synchronisation réseau inter-agences n'existe (voir CLAUDE.md, audit Figma
+ * 2026-10-06). Réservé à un utilisateur global ayant une vue réseau légitime. */
+function SidebarNetworkBox() {
+    const { t } = useI18n();
+    const { user, agencies } = useAuth();
+
+    if (user?.agency_id !== null || agencies.length === 0) {
+        return null;
+    }
+    if (!hasPermission(user, 'reports.view') && !hasPermission(user, 'agencies.manage')) {
+        return null;
+    }
+
+    return (
+        <div className="mx-3 mb-3 rounded-xl bg-white/5 px-3.5 py-3 ring-1 ring-inset ring-white/10">
+            <div className="flex items-center gap-2 text-xs font-semibold text-white">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" aria-hidden="true" />
+                {t('sidebar.network.title')}
+            </div>
+            <p className="mt-1 text-xs text-brand-100/70">{t('sidebar.network.activeAgencies', { count: agencies.length })}</p>
+        </div>
+    );
+}
+
 export default function AppLayout() {
-    const { user, agencies, activeAgencyId, setActiveAgencyId, logout } = useAuth();
+    const { user, logout } = useAuth();
     const { t, lang, setLang } = useI18n();
     const { theme, toggleTheme } = useTheme();
     const online = useOnlineStatus();
@@ -167,7 +228,6 @@ export default function AppLayout() {
 
     useEffect(() => setMobileNavOpen(false), [location.pathname]);
 
-    const isGlobal = user?.agency_id === null;
     const [firstName, ...rest] = (user?.name ?? '').split(' ');
     const lastName = rest[rest.length - 1];
 
@@ -185,9 +245,11 @@ export default function AppLayout() {
                 <Link to="/" className="flex h-16 shrink-0 items-center border-b border-white/10 px-5" aria-label={t('app.title')}>
                     <BrandMark inverted />
                 </Link>
+                <SidebarAgencySelector />
                 <nav aria-label={t('nav.main')} className="flex-1 overflow-y-auto px-3 pb-4">
                     {sidebarSections}
                 </nav>
+                <SidebarNetworkBox />
             </aside>
 
             {/* Sidebar — mobile overlay */}
@@ -208,9 +270,11 @@ export default function AppLayout() {
                                 <X aria-hidden="true" className="h-5 w-5" />
                             </button>
                         </div>
+                        <SidebarAgencySelector />
                         <nav aria-label={t('nav.main')} className="flex-1 overflow-y-auto px-3 pb-4">
                             {mobileSidebarSections}
                         </nav>
+                        <SidebarNetworkBox />
                     </aside>
                 </div>
             )}
@@ -242,25 +306,6 @@ export default function AppLayout() {
                         </Link>
 
                         <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
-                            {isGlobal && (
-                                <label className="relative flex items-center">
-                                    <span className="sr-only">{t('nav.agency')}</span>
-                                    <Building2 aria-hidden="true" className="pointer-events-none absolute left-3 h-4 w-4 text-ink-600 dark:text-ink-350" />
-                                    <select
-                                        value={activeAgencyId ?? ''}
-                                        onChange={(e) => setActiveAgencyId(e.target.value ? Number(e.target.value) : null)}
-                                        className="h-10 max-w-[7.5rem] rounded-xl border border-ink-400 bg-white pl-9 pr-8 text-sm font-medium text-ink-800 transition hover:border-ink-500 focus:border-brand-600 focus:outline-none focus:ring-4 focus:ring-brand-500/15 sm:max-w-[14rem] dark:border-ink-500 dark:bg-ink-900 dark:text-ink-100"
-                                    >
-                                        <option value="">{t('nav.allAgencies')}</option>
-                                        {agencies.map((agency) => (
-                                            <option key={agency.id} value={agency.id}>
-                                                {agency.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                            )}
-
                             <button
                                 type="button"
                                 onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}

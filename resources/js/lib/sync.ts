@@ -3,6 +3,12 @@ import { listPendingOrders, markPendingOrderError, removePendingOrder } from './
 
 export const syncEvents = new EventTarget();
 
+/** Horodatage réel de la dernière fois où la file a été vidée avec succès (plus
+ * aucune commande en attente ni en erreur) — jamais une heure fabriquée. Lu par
+ * `useLastSyncedAt()` pour la pastille d'en-tête « À jour • HH:MM » et l'écran
+ * Synchronisation. */
+const LAST_SYNCED_KEY = 'pm.lastSyncedAt';
+
 let flushing = false;
 
 export async function flushPendingOrders(): Promise<void> {
@@ -26,10 +32,21 @@ export async function flushPendingOrders(): Promise<void> {
                 }
             }
         }
+
+        // « À jour » signifie réellement « plus rien en attente » — jamais marqué si une
+        // commande reste en file (erreur de validation ou nouvel échec réseau pendant la boucle).
+        const remaining = await listPendingOrders();
+        if (remaining.length === 0) {
+            localStorage.setItem(LAST_SYNCED_KEY, new Date().toISOString());
+        }
     } finally {
         flushing = false;
         syncEvents.dispatchEvent(new Event('change'));
     }
+}
+
+export function getLastSyncedAt(): string | null {
+    return localStorage.getItem(LAST_SYNCED_KEY);
 }
 
 window.addEventListener('online', () => void flushPendingOrders());

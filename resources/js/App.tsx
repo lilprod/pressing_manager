@@ -65,6 +65,7 @@ import DailyReportPage from './pages/reports/DailyReportPage';
 import DashboardPage from './pages/DashboardPage';
 import NotificationsPage from './pages/NotificationsPage';
 import AuditLogsPage from './pages/AuditLogsPage';
+import SyncPage from './pages/SyncPage';
 
 function ProtectedLayout() {
     const { user, loading, logout } = useAuth();
@@ -167,6 +168,7 @@ export default function App() {
                     <Route path="/reports/daily" element={<DailyReportPage />} />
                     <Route path="/notifications" element={<NotificationsPage />} />
                     <Route path="/audit-logs" element={<AuditLogsPage />} />
+                    <Route path="/synchronisation" element={<SyncPage />} />
                     <Route path="/license" element={<LicensePage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/settings/branding" element={<BrandingSettingsPage />} />

@@ -19,6 +19,9 @@ class UpdatePlatformPlanRequest extends FormRequest
             'duration_days' => ['sometimes', 'required', 'integer', 'min:1'],
             'currency' => ['nullable', 'string', 'size:3'],
             'is_active' => ['boolean'],
+            'agencies_limit' => ['nullable', 'integer', 'min:1'],
+            'users_limit' => ['nullable', 'integer', 'min:1'],
+            'storage_limit_gb' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

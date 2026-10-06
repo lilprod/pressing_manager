@@ -159,6 +159,7 @@ function OverviewTab({ pressing, onViewAudit }: { pressing: Pressing; onViewAudi
     }, [pressing.id]);
 
     const daysRemaining = pressing.license?.days_remaining ?? null;
+    const plan = pressing.platform_plan;
 
     return (
         <div className="space-y-6">
@@ -173,6 +174,31 @@ function OverviewTab({ pressing, onViewAudit }: { pressing: Pressing; onViewAudi
                     hint={pressing.license ? pressing.license.status : undefined}
                 />
             </div>
+
+            {/* Chantier « Re-audit Pressing — quotas de licence » (CLAUDE.md) : barre de
+                consommation réelle, affichée seulement si le plan a réellement une limite
+                — jamais un « illimité » fabriqué quand le plan n'en précise pas. */}
+            {plan && (plan.agencies_limit !== null || plan.users_limit !== null || plan.storage_limit_gb !== null) && (
+                <section aria-labelledby="pressing-quotas" className={cx(card, 'space-y-3 p-5 sm:p-6')}>
+                    <h2 id="pressing-quotas" className="font-display text-base font-bold text-ink-900 dark:text-ink-50">
+                        Quotas du plan
+                    </h2>
+                    <div className="space-y-3">
+                        {plan.agencies_limit !== null && (
+                            <QuotaBar label="Agences" used={pressing.agencies_count} limit={plan.agencies_limit} />
+                        )}
+                        {plan.users_limit !== null && (
+                            <QuotaBar label="Utilisateurs" used={pressing.users_count} limit={plan.users_limit} />
+                        )}
+                    </div>
+                    {plan.storage_limit_gb !== null && (
+                        <p className="text-sm text-ink-600 dark:text-ink-350">
+                            Stockage inclus : <span className="font-semibold text-ink-900 dark:text-ink-50">{plan.storage_limit_gb} Go</span>
+                            {' '}— aucune mesure de consommation réelle n'existe dans l'app (uploads ponctuels uniquement).
+                        </p>
+                    )}
+                </section>
+            )}
 
             <section aria-labelledby="pressing-recent-audit" className={cx(card, 'p-5 sm:p-6')}>
                 <div className="mb-3 flex items-center justify-between">
@@ -361,6 +387,28 @@ function AuditTab({ pressingId }: { pressingId: number }) {
                 ))}
             </ul>
             <Pagination meta={meta} onPageChange={setPage} />
+        </div>
+    );
+}
+
+/** Barre de consommation réelle (agences/utilisateurs vs limite du plan) — jamais
+ * affichée sans une vraie limite (voir OverviewTab, appel conditionnel). */
+function QuotaBar({ label: quotaLabel, used, limit }: { label: string; used: number; limit: number }) {
+    const percent = Math.min(100, Math.round((used / limit) * 100));
+    return (
+        <div>
+            <div className="mb-1 flex items-center justify-between text-sm">
+                <span className="text-ink-700 dark:text-ink-200">{quotaLabel}</span>
+                <span className="font-semibold tabular-nums text-ink-900 dark:text-ink-50">
+                    {used} / {limit}
+                </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
+                <div
+                    className={cx('h-full rounded-full', percent >= 100 ? 'bg-red-500' : percent >= 80 ? 'bg-amber-500' : 'bg-brand-600')}
+                    style={{ width: `${percent}%` }}
+                />
+            </div>
         </div>
     );
 }

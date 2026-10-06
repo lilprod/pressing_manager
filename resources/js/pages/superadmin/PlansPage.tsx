@@ -98,6 +98,9 @@ function PlanForm({ editing, onCancel, onSaved }: { editing: PlatformPlan | null
     const [name, setName] = useState(editing?.name ?? '');
     const [price, setPrice] = useState(editing?.price != null ? String(editing.price) : '');
     const [durationDays, setDurationDays] = useState(editing?.duration_days != null ? String(editing.duration_days) : '');
+    const [agenciesLimit, setAgenciesLimit] = useState(editing?.agencies_limit != null ? String(editing.agencies_limit) : '');
+    const [usersLimit, setUsersLimit] = useState(editing?.users_limit != null ? String(editing.users_limit) : '');
+    const [storageLimitGb, setStorageLimitGb] = useState(editing?.storage_limit_gb != null ? String(editing.storage_limit_gb) : '');
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
 
@@ -105,7 +108,14 @@ function PlanForm({ editing, onCancel, onSaved }: { editing: PlatformPlan | null
         setBusy(true);
         setError(null);
         try {
-            const payload = { name, price: Number(price), duration_days: Number(durationDays) };
+            const payload = {
+                name,
+                price: Number(price),
+                duration_days: Number(durationDays),
+                agencies_limit: agenciesLimit ? Number(agenciesLimit) : null,
+                users_limit: usersLimit ? Number(usersLimit) : null,
+                storage_limit_gb: storageLimitGb ? Number(storageLimitGb) : null,
+            };
             if (editing) {
                 await platformApi.patch(`/plans/${editing.id}`, payload);
             } else {
@@ -113,6 +123,9 @@ function PlanForm({ editing, onCancel, onSaved }: { editing: PlatformPlan | null
                 setName('');
                 setPrice('');
                 setDurationDays('');
+                setAgenciesLimit('');
+                setUsersLimit('');
+                setStorageLimitGb('');
             }
             onSaved();
         } catch (err) {
@@ -149,6 +162,44 @@ function PlanForm({ editing, onCancel, onSaved }: { editing: PlatformPlan | null
                 <label className="block">
                     <span className={label}>Prix (XOF)</span>
                     <input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} className={input} />
+                </label>
+            </div>
+
+            {/* Quotas (Chantier « Re-audit Pressing — quotas de licence ») : tous
+                optionnels, vide = illimité/non précisé — comportement actuel inchangé. */}
+            <div className="grid grid-cols-3 gap-3">
+                <label className="block">
+                    <span className={label}>Agences incl.</span>
+                    <input
+                        type="number"
+                        min={1}
+                        placeholder="Illimité"
+                        value={agenciesLimit}
+                        onChange={(e) => setAgenciesLimit(e.target.value)}
+                        className={input}
+                    />
+                </label>
+                <label className="block">
+                    <span className={label}>Utilisateurs incl.</span>
+                    <input
+                        type="number"
+                        min={1}
+                        placeholder="Illimité"
+                        value={usersLimit}
+                        onChange={(e) => setUsersLimit(e.target.value)}
+                        className={input}
+                    />
+                </label>
+                <label className="block">
+                    <span className={label}>Stockage (Go)</span>
+                    <input
+                        type="number"
+                        min={1}
+                        placeholder="Illimité"
+                        value={storageLimitGb}
+                        onChange={(e) => setStorageLimitGb(e.target.value)}
+                        className={input}
+                    />
                 </label>
             </div>
             <button type="button" onClick={() => void submit()} disabled={!canSubmit || busy} className={button('primary', 'md', 'w-full')}>

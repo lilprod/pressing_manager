@@ -7,14 +7,16 @@ use App\Models\License;
 use App\Models\Order;
 use App\Models\PlatformAuditLog;
 use App\Models\Pressing;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\SeedsPlatform;
+use Tests\Concerns\SeedsRbac;
 use Tests\TestCase;
 
 /** Fiche détail d'un pressing (CLAUDE.md « Audit de conformité Figma — interfaces superadmin », Chantier C). */
 class PressingDetailTest extends TestCase
 {
-    use RefreshDatabase, SeedsPlatform;
+    use RefreshDatabase, SeedsPlatform, SeedsRbac;
 
     public function test_show_includes_a_real_agencies_count_and_license_payment_history(): void
     {
@@ -41,6 +43,26 @@ class PressingDetailTest extends TestCase
         // License (contrairement à ce que supposait le frontend) — doit être calculé
         // à la volée, comme le fait déjà LicenseController::show() côté tenant.
         $this->assertContains($response->json('license.days_remaining'), [9, 10]);
+    }
+
+    /**
+     * Chantier « Re-audit Pressing — quotas de licence » (CLAUDE.md) : `users_count`
+     * doit être le compte réel pour cette vue à un seul pressing, pas la colonne
+     * dénormalisée alimentée par les rapports périodiques (toujours à 0 ici, ce
+     * pressing de test n'ayant jamais poussé de rapport).
+     */
+    public function test_show_exposes_a_real_users_count_not_the_denormalized_report_value(): void
+    {
+        $this->seedRbac();
+        $pressing = $this->makePressing();
+        Agency::factory()->for($pressing)->count(2)->create();
+        User::factory()->for($pressing)->count(3)->create();
+        $user = $this->makePlatformUser();
+
+        $response = $this->actingAs($user, 'platform')->getJson("/api/platform/pressings/{$pressing->id}");
+
+        $response->assertOk();
+        $response->assertJsonPath('users_count', 3);
     }
 
     public function test_agencies_endpoint_lists_real_staff_and_active_order_counts(): void

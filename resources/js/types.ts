@@ -998,6 +998,12 @@ export interface PlatformPlan {
     currency: string;
     duration_days: number | null;
     is_active: boolean;
+    // Quotas (Chantier « Re-audit Pressing — quotas de licence ») : tous nullable =
+    // illimité/non précisé. storage_limit_gb est affiché seul (aucune consommation
+    // réelle mesurée nulle part dans l'app — voir PressingDetailPage.tsx).
+    agencies_limit: number | null;
+    users_limit: number | null;
+    storage_limit_gb: number | null;
 }
 
 export interface PlatformSetting {

@@ -175,7 +175,10 @@ class PressingController extends PlatformApiController
     {
         $this->authorizePressing($request->user(), $pressing->id);
 
-        $pressing->loadCount('agencies')
+        // Chantier « Re-audit Pressing — quotas de licence » (CLAUDE.md) : même décision
+        // déjà actée pour agencies_count — compte réel, pas la colonne dénormalisée
+        // alimentée par les rapports périodiques, pour cette vue à un seul pressing.
+        $pressing->loadCount(['agencies', 'users'])
             ->load(['platformPlan', 'license.payments' => fn ($q) => $q->latest('paid_at')]);
 
         $payload = $pressing->toArray();

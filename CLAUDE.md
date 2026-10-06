@@ -3125,3 +3125,72 @@ Synchronisation minimal réel** — fait le 2026-10-06, `pages/SyncPage.tsx`
   Connexion/File d'attente/Opérations en attente toutes rendues avec de
   vraies données (27 agences actives, file à 0, timestamp réel affiché après
   un forçage de synchronisation pendant le test).
+
+**Chantier 2 — En-tête global : recherche ⌘K, cloche d'alertes, pastille de
+statut, fil d'Ariane** — fait le 2026-10-06 :
+- **Recherche globale** : nouveau `App\Http\Controllers\Api\SearchController::index()`,
+  `GET /search?q=` — interroge **en parallèle deux requêtes scopées**
+  (jamais une requête fourre-tout), chacune réutilisant la même logique de
+  recherche que son écran d'origine : clients (`ilike` nom/téléphone, même
+  filtre que `ClientController::index()`, gardé par `clients.manage`,
+  `limit(5)`) et dépôts (numéro brut si la requête est numérique sinon
+  nom/téléphone client, même logique que `OrderController::index()`,
+  `limit(5)`, pas de permission dédiée — cohérent avec `/orders` lui-même).
+  Scope agence/pressing : `resolveAgencyFilter()`, identique partout
+  ailleurs. Frontend `components/GlobalSearch.tsx` — champ dans l'en-tête,
+  debounce 300 ms, 2 caractères minimum, résultats groupés (Clients/Dépôts)
+  dans un menu déroulant, navigation clavier (↑/↓/Entrée), fermeture sur
+  Échap/clic extérieur, raccourci global **⌘K/Ctrl+K** qui focus le champ
+  depuis n'importe quel écran.
+- **Cloche d'alertes** : nouveau `App\Http\Controllers\Api\StaffAlertController::index()`,
+  `GET /staff-alerts` — **pas de nouvelle table**, agrège en live deux
+  signaux déjà réels mais jusqu'ici isolés par écran : mouvements de caisse
+  `CashMovement.status = 'en_attente'` (déjà la bannière de blocage de
+  `CashRegisterPage.tsx`, gardé `payments.manage`) et retraits bloqués pour
+  impayé — dépôts `status = 'pret'` avec un solde dû positif, **même formule
+  dupliquée intentionnellement** de `PickupController::balanceDue()` (3
+  lignes, trop courtes pour justifier un service partagé, commentée comme
+  telle) — gardé `orders.manage`. Réponse : `{type, count, url}` par alerte
+  **sans libellé rendu côté serveur** (l'i18n de cette app est entièrement
+  frontend, un label backend casserait le mode anglais) — le frontend compose
+  le texte via `t('alerts.{type}', {count})`. Frontend
+  `components/StaffAlertsBell.tsx` — icône `Bell` du header avec badge de
+  compteur réel (jamais affiché à 0), panneau déroulant listant chaque
+  alerte avec son lien, rafraîchi toutes les 60 s.
+- **Pastille de statut** (« En ligne · À jour • HH:MM ») : « En ligne »/
+  « Hors ligne » reste `useOnlineStatus()` (déjà réel). « À jour • HH:MM »
+  nécessitait un vrai timestamp de dernière synchro réussie, qui n'existait
+  nulle part (`sync.ts` ne l'avait jamais enregistré) — ajouté
+  `localStorage.setItem('pm.lastSyncedAt', ...)` dans
+  `flushPendingOrders()`, **seulement quand la file est réellement vide**
+  après la passe (plus rien en attente ni en erreur), jamais une heure
+  fabriquée. Nouveau `getLastSyncedAt()`/`useLastSyncedAt()`. La bannière
+  d'avertissement hors-ligne existante (pleine largeur, ambre) est
+  **conservée inchangée** — cette pastille est additive, affichée en plus
+  dans l'en-tête, pas un remplacement.
+- **Fil d'Ariane** : `App.tsx` reste une liste de routes plates (confirmé,
+  aucune hiérarchie exploitable automatiquement) — nouvelle table statique
+  `lib/breadcrumbs.ts` (route → {section, page}, réutilise les clés i18n des
+  3 sections de sidebar + le titre de page déjà établi ailleurs), résolue
+  par préfixe de chemin le plus spécifique. Les sous-écrans d'un même module
+  (`/clients/:id/edit`, `/cash/movements/new`…) réutilisent le libellé du
+  module parent, comme le montre la capture (« Articles & tarifs / Catalogue »,
+  pas un libellé par sous-écran). **Simplification assumée** : les 3
+  sous-pages de Paramètres (branding/sécurité/opérationnel) réutilisent
+  toutes le libellé « Paramètres » plutôt que 3 nouvelles clés i18n — ces
+  écrans ont déjà leur propre lien de retour, le fil d'Ariane n'a pas besoin
+  d'être plus précis. Composant `components/Breadcrumb.tsx`.
+- Tests : `tests/Feature/Search/GlobalSearchTest.php` (4 — requête courte
+  sans frapper la base, trouve client par nom et dépôt par numéro, un rôle
+  sans `clients.manage` ne reçoit jamais de résultats clients, isolation
+  inter-agences), `tests/Feature/StaffAlerts/StaffAlertsTest.php` (5 —
+  aucune alerte par défaut, mouvement en attente détecté, retrait bloqué
+  détecté, un rôle sans `payments.manage` ne voit jamais les alertes caisse,
+  isolation inter-agences). Suite complète 509/509 après ajout (aucune
+  régression). `tsc --noEmit` et `npm run build` propres, parité i18n fr/en
+  stricte. Vérifié par Playwright à 1440px et 390px avec données réelles
+  (tinker) : recherche retrouvant un vrai client et naviguant vers sa fiche,
+  cloche affichant un badge réel et la vraie alerte de mouvement en attente,
+  raccourci ⌘K focalisant le champ depuis n'importe quel écran, pastille
+  « En ligne · À jour • HH:MM » affichée avec l'heure réelle, aucun
+  débordement horizontal aux deux largeurs.

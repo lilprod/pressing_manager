@@ -1087,3 +1087,26 @@ export interface PlatformDashboard {
     license_health: PlatformLicenseHealth;
     activity_series: PlatformActivityPoint[];
 }
+
+export interface SearchResultItem {
+    id: number;
+    label: string;
+    subtitle: string | null;
+    url: string;
+}
+
+export interface GlobalSearchResponse {
+    clients: SearchResultItem[];
+    orders: SearchResultItem[];
+}
+
+export interface StaffAlert {
+    type: 'cash_movement_pending' | 'pickup_blocked';
+    count: number;
+    url: string;
+}
+
+export interface StaffAlertsResponse {
+    alerts: StaffAlert[];
+    total: number;
+}

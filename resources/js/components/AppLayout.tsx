@@ -37,11 +37,15 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { useOnlineStatus } from '../lib/useOnlineStatus';
+import { useOnlineStatus, useLastSyncedAt } from '../lib/useOnlineStatus';
+import { useFormat } from '../lib/format';
 import { hasPermission } from '../lib/permissions';
 import LicenseBanner from './LicenseBanner';
 import PasswordExpiryBanner from './PasswordExpiryBanner';
 import BrandMark from './BrandMark';
+import Breadcrumb from './Breadcrumb';
+import GlobalSearch from './GlobalSearch';
+import StaffAlertsBell from './StaffAlertsBell';
 import { Avatar } from './ui/PageHeader';
 import { cx, iconButton } from './ui/styles';
 
@@ -218,6 +222,35 @@ function SidebarNetworkBox() {
     );
 }
 
+/** Pastille de statut (en-tête) : « En ligne »/« Hors ligne » (réel,
+ * `useOnlineStatus()`) + « À jour • HH:MM » seulement si une synchronisation
+ * a réellement réussi sur cet appareil (`useLastSyncedAt()`) — jamais une
+ * heure fabriquée. La bannière d'avertissement hors-ligne existante reste
+ * inchangée en dessous ; cette pastille est additive, pas un remplacement. */
+function HeaderStatusPill() {
+    const { t } = useI18n();
+    const { time } = useFormat();
+    const online = useOnlineStatus();
+    const lastSyncedAt = useLastSyncedAt();
+
+    return (
+        <div
+            className={cx(
+                'hidden items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-semibold sm:flex',
+                online
+                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300'
+                    : 'bg-amber-50 text-amber-700 dark:bg-amber-400/10 dark:text-amber-300',
+            )}
+        >
+            <span className={cx('h-1.5 w-1.5 shrink-0 rounded-full', online ? 'bg-emerald-500' : 'bg-amber-500')} aria-hidden="true" />
+            {online ? t('sync.status.online') : t('sync.status.offline')}
+            {online && lastSyncedAt && (
+                <span className="text-ink-500 dark:text-ink-400">· {t('sync.upToDate', { time: time(lastSyncedAt) })}</span>
+            )}
+        </div>
+    );
+}
+
 export default function AppLayout() {
     const { user, logout } = useAuth();
     const { t, lang, setLang } = useI18n();
@@ -305,7 +338,13 @@ export default function AppLayout() {
                             <BrandMark collapse />
                         </Link>
 
+                        <Breadcrumb />
+                        <GlobalSearch />
+
                         <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
+                            <HeaderStatusPill />
+                            <StaffAlertsBell />
+
                             <button
                                 type="button"
                                 onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}

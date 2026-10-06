@@ -42,9 +42,11 @@ use App\Http\Controllers\Api\Platform\PressingReportController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\SearchController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\ShiftController;
+use App\Http\Controllers\Api\StaffAlertController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\StockItemController;
 use App\Http\Controllers\Api\StockMovementController;
@@ -153,6 +155,12 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     // côté plateforme, voir CLAUDE.md « Licence / facturation — gap d'harmonisation ».
     Route::get('/license', [LicenseController::class, 'show']);
     Route::get('/license/history', [LicenseController::class, 'history']);
+
+    // Recherche globale (en-tête, raccourci ⌘K) et cloche d'alertes (chantier
+    // « En-tête global », audit Figma 2026-10-06) — pas de permission dédiée,
+    // chaque contrôleur applique son propre gating par signal (voir leur code).
+    Route::get('/search', [SearchController::class, 'index']);
+    Route::get('/staff-alerts', [StaffAlertController::class, 'index']);
 
     Route::get('/clients/stats', [ClientController::class, 'stats']);
     Route::apiResource('clients', ClientController::class)->except(['destroy'])->parameters(['clients' => 'client']);

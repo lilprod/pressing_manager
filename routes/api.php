@@ -123,6 +123,7 @@ Route::prefix('platform')->group(function () {
         Route::post('/pressings', [PlatformPressingController::class, 'store']);
         Route::get('/pressings/{pressing}', [PlatformPressingController::class, 'show']);
         Route::get('/pressings/{pressing}/agencies', [PlatformPressingController::class, 'agencies']);
+        Route::get('/pressings/{pressing}/settings', [PlatformPressingController::class, 'settings']);
         Route::patch('/pressings/{pressing}', [PlatformPressingController::class, 'update']);
         Route::post('/pressings/{pressing}/suspend', [PlatformPressingController::class, 'suspend']);
         Route::post('/pressings/{pressing}/reactivate', [PlatformPressingController::class, 'reactivate']);

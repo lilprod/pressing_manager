@@ -212,6 +212,34 @@ class PressingController extends PlatformApiController
         return response()->json($agencies);
     }
 
+    /**
+     * Chantier « Re-audit Pressing — édition post-création » (CLAUDE.md) : lecture
+     * des réglages réellement éditables (couleurs/sécurité depuis `AppSetting`,
+     * programme de fidélité depuis `LoyaltyTier`) — jamais depuis la colonne
+     * `Pressing` elle-même, qui ne les porte pas.
+     */
+    public function settings(Request $request, Pressing $pressing): JsonResponse
+    {
+        $this->authorizePressing($request->user(), $pressing->id);
+
+        $appSetting = AppSetting::current($pressing->id);
+        $tiers = LoyaltyTier::where('pressing_id', $pressing->id)->where('is_active', true)->orderBy('min_points')->get();
+
+        return response()->json([
+            'primary_color' => $appSetting->primary_color,
+            'secondary_color' => $appSetting->secondary_color,
+            'security_policy' => [
+                'session_timeout_minutes' => $appSetting->session_timeout_minutes,
+                'password_min_length' => $appSetting->password_min_length,
+                'password_require_uppercase' => $appSetting->password_require_uppercase,
+                'password_require_number' => $appSetting->password_require_number,
+                'password_require_symbol' => $appSetting->password_require_symbol,
+                'password_expiry_days' => $appSetting->password_expiry_days,
+            ],
+            'loyalty_tiers' => $tiers,
+        ]);
+    }
+
     public function update(UpdatePressingRequest $request, Pressing $pressing): JsonResponse
     {
         $user = $request->user();
@@ -231,9 +259,65 @@ class PressingController extends PlatformApiController
             $this->authorizePermission($user, 'pressings.manage');
         }
 
-        $pressing->update($data);
+        $pressingFields = Arr::except($data, ['primary_color', 'secondary_color', 'security_policy', 'loyalty_tiers']);
+
+        DB::transaction(function () use ($data, $pressingFields, $pressing) {
+            $pressing->update($pressingFields);
+
+            $appSettingFields = Arr::only($data, ['primary_color', 'secondary_color']);
+            $appSettingFields = array_merge($appSettingFields, Arr::only($data['security_policy'] ?? [], [
+                'session_timeout_minutes', 'password_min_length', 'password_require_uppercase',
+                'password_require_number', 'password_require_symbol', 'password_expiry_days',
+            ]));
+            $appSettingFields = array_filter($appSettingFields, fn ($v) => $v !== null);
+            if ($appSettingFields !== []) {
+                AppSetting::current($pressing->id)->update($appSettingFields);
+            }
+
+            if (array_key_exists('loyalty_tiers', $data)) {
+                $this->syncLoyaltyTiers($pressing, $data['loyalty_tiers']);
+            }
+        });
 
         return response()->json($pressing->fresh('platformPlan'));
+    }
+
+    /**
+     * Upsert avec désactivation douce — jamais de suppression dure (même convention
+     * que `TreatmentTypeController`/`LoyaltyTierController` : `is_active` plutôt que
+     * `destroy`, pour ne jamais casser l'historique des dépôts déjà facturés avec ce
+     * palier). Un tier absent du tableau soumis (retiré côté UI) est désactivé, pas
+     * supprimé.
+     *
+     * @param  array<int,array{id?:int,name:string,min_points:int,discount_rate:float}>  $tiers
+     */
+    private function syncLoyaltyTiers(Pressing $pressing, array $tiers): void
+    {
+        $submittedIds = collect($tiers)->pluck('id')->filter()->all();
+
+        LoyaltyTier::where('pressing_id', $pressing->id)
+            ->where('is_active', true)
+            ->whereNotIn('id', $submittedIds === [] ? [0] : $submittedIds)
+            ->update(['is_active' => false]);
+
+        foreach ($tiers as $tier) {
+            $fields = [
+                'name' => $tier['name'],
+                'min_points' => $tier['min_points'],
+                'discount_rate' => $tier['discount_rate'],
+                'is_active' => true,
+            ];
+
+            if (! empty($tier['id'])) {
+                $existing = LoyaltyTier::where('pressing_id', $pressing->id)->find($tier['id']);
+                if ($existing === null) {
+                    throw new HttpException(404, "Palier de fidélité introuvable pour ce pressing.");
+                }
+                $existing->update($fields);
+            } else {
+                LoyaltyTier::create(['pressing_id' => $pressing->id, ...$fields]);
+            }
+        }
     }
 
     public function suspend(Request $request, Pressing $pressing): JsonResponse

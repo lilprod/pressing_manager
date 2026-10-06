@@ -10,11 +10,32 @@ import type { PlatformPlan, Pressing } from '../../types';
 
 /** Mêmes 3 paliers que `database/seeders/LoyaltyTierSeeder.php` — reflet du seeder,
  * pré-remplis ici plutôt que lus depuis un nouvel endpoint de défauts. */
-const DEFAULT_LOYALTY_TIERS = [
+const DEFAULT_LOYALTY_TIERS: TierFormRow[] = [
     { name: 'Argent', minPoints: '50', discountPercent: '5' },
     { name: 'Or', minPoints: '150', discountPercent: '10' },
     { name: 'Platine', minPoints: '300', discountPercent: '15' },
 ];
+
+interface TierFormRow {
+    id?: number;
+    name: string;
+    minPoints: string;
+    discountPercent: string;
+}
+
+interface PressingSettings {
+    primary_color: string | null;
+    secondary_color: string | null;
+    security_policy: {
+        session_timeout_minutes: number | null;
+        password_min_length: number | null;
+        password_require_uppercase: boolean | null;
+        password_require_number: boolean | null;
+        password_require_symbol: boolean | null;
+        password_expiry_days: number | null;
+    };
+    loyalty_tiers: Array<{ id: number; name: string; min_points: number; discount_rate: number }>;
+}
 
 export default function PressingFormPage() {
     const { id } = useParams<{ id: string }>();
@@ -86,12 +107,43 @@ export default function PressingFormPage() {
                 if (err instanceof PlatformApiError && err.status === 404) setNotFound(true);
             })
             .finally(() => setLoading(false));
+
+        // Chantier « Re-audit Pressing — édition post-création » (CLAUDE.md) :
+        // couleurs/sécurité/fidélité ne sont pas portées par `Pressing` lui-même —
+        // lues depuis le nouvel endpoint dédié (AppSetting/LoyaltyTier réels).
+        platformApi.get<PressingSettings>(`/pressings/${id}/settings`).then((settings) => {
+            if (settings.primary_color) setPrimaryColor(settings.primary_color);
+            if (settings.secondary_color) setSecondaryColor(settings.secondary_color);
+            const sp = settings.security_policy;
+            if (sp.session_timeout_minutes !== null) setSessionTimeoutMinutes(String(sp.session_timeout_minutes));
+            if (sp.password_min_length !== null) setPasswordMinLength(String(sp.password_min_length));
+            if (sp.password_require_uppercase !== null) setPasswordRequireUppercase(sp.password_require_uppercase);
+            if (sp.password_require_number !== null) setPasswordRequireNumber(sp.password_require_number);
+            if (sp.password_require_symbol !== null) setPasswordRequireSymbol(sp.password_require_symbol);
+            setPasswordExpiryDays(sp.password_expiry_days !== null ? String(sp.password_expiry_days) : '');
+            if (settings.loyalty_tiers.length > 0) {
+                setLoyaltyTiers(
+                    settings.loyalty_tiers.map((tier) => ({
+                        id: tier.id,
+                        name: tier.name,
+                        minPoints: String(tier.min_points),
+                        discountPercent: String(Math.round(tier.discount_rate * 100)),
+                    })),
+                );
+            }
+        });
     }, [id]);
 
     async function handleSubmit() {
         setBusy(true);
         setError(null);
         try {
+            // Couleurs/sécurité/fidélité sont pressing-scoped (AppSetting/LoyaltyTier) —
+            // réellement éditables à la création ET après coup (Chantier « Re-audit
+            // Pressing — édition post-création »). `workshop_steps` reste create-only
+            // (agency-scoped, voir la décision documentée dans UpdatePressingRequest) —
+            // modifiable ensuite uniquement par agence sur /settings/operational côté
+            // tenant, jamais ici en édition.
             const payload = {
                 name,
                 code: isEdit ? undefined : code,
@@ -101,6 +153,22 @@ export default function PressingFormPage() {
                 contact_email: contactEmail || null,
                 contact_phone: contactPhone || null,
                 license_expires_at: licenseExpiresAt || null,
+                primary_color: primaryColor,
+                secondary_color: secondaryColor,
+                security_policy: {
+                    session_timeout_minutes: Number(sessionTimeoutMinutes),
+                    password_min_length: Number(passwordMinLength),
+                    password_require_uppercase: passwordRequireUppercase,
+                    password_require_number: passwordRequireNumber,
+                    password_require_symbol: passwordRequireSymbol,
+                    password_expiry_days: passwordExpiryDays ? Number(passwordExpiryDays) : null,
+                },
+                loyalty_tiers: loyaltyTiers.map((tier) => ({
+                    id: tier.id,
+                    name: tier.name,
+                    min_points: Number(tier.minPoints),
+                    discount_rate: Number(tier.discountPercent) / 100,
+                })),
                 ...(isEdit
                     ? {}
                     : {
@@ -109,25 +177,10 @@ export default function PressingFormPage() {
                           agency_city: agencyCity || null,
                           manager_name: managerName,
                           manager_email: managerEmail,
-                          primary_color: primaryColor,
-                          secondary_color: secondaryColor,
-                          security_policy: {
-                              session_timeout_minutes: Number(sessionTimeoutMinutes),
-                              password_min_length: Number(passwordMinLength),
-                              password_require_uppercase: passwordRequireUppercase,
-                              password_require_number: passwordRequireNumber,
-                              password_require_symbol: passwordRequireSymbol,
-                              password_expiry_days: passwordExpiryDays ? Number(passwordExpiryDays) : null,
-                          },
                           workshop_steps: {
                               washer_step_enabled: washerStepEnabled,
                               sorter_step_enabled: sorterStepEnabled,
                           },
-                          loyalty_tiers: loyaltyTiers.map((tier) => ({
-                              name: tier.name,
-                              min_points: Number(tier.minPoints),
-                              discount_rate: Number(tier.discountPercent) / 100,
-                          })),
                       }),
             };
 
@@ -164,15 +217,15 @@ export default function PressingFormPage() {
     const canSubmit =
         name.trim() !== '' &&
         platformPlanId !== '' &&
+        tiersValid &&
         (isEdit ||
             (code.trim() !== '' &&
                 agencyCode.trim() !== '' &&
                 agencyName.trim() !== '' &&
                 managerName.trim() !== '' &&
-                managerEmail.trim() !== '' &&
-                tiersValid));
+                managerEmail.trim() !== ''));
 
-    function updateTier(index: number, patch: Partial<(typeof DEFAULT_LOYALTY_TIERS)[number]>) {
+    function updateTier(index: number, patch: Partial<TierFormRow>) {
         setLoyaltyTiers((tiers) => tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)));
     }
 
@@ -365,135 +418,151 @@ export default function PressingFormPage() {
                                 />
                             </label>
                         </div>
-
-                        <div className="flex items-center gap-2">
-                            <Palette aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
-                            <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Couleurs de marque</h2>
-                        </div>
-                        <p className="text-xs text-ink-500 dark:text-ink-400">
-                            Modifiables ensuite par le pressing lui-même (Paramètres → Branding, une fois connecté).
-                        </p>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <ColorField label="Couleur principale" value={primaryColor} onChange={setPrimaryColor} />
-                            <ColorField label="Couleur secondaire" value={secondaryColor} onChange={setSecondaryColor} />
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <Shield aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
-                            <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Sécurité par défaut</h2>
-                        </div>
-                        <p className="text-xs text-ink-500 dark:text-ink-400">
-                            Mêmes réglages que l'écran Sécurité du pressing — pré-remplis avec les valeurs par défaut, modifiables ici
-                            ou après coup.
-                        </p>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="block">
-                                <span className={label}>Déconnexion après inactivité (min)</span>
-                                <input
-                                    type="number"
-                                    min={1}
-                                    value={sessionTimeoutMinutes}
-                                    onChange={(e) => setSessionTimeoutMinutes(e.target.value)}
-                                    className={cx(input, 'w-full')}
-                                />
-                            </label>
-                            <label className="block">
-                                <span className={label}>Longueur minimale du mot de passe</span>
-                                <input
-                                    type="number"
-                                    min={4}
-                                    value={passwordMinLength}
-                                    onChange={(e) => setPasswordMinLength(e.target.value)}
-                                    className={cx(input, 'w-full')}
-                                />
-                            </label>
-                            <label className="block sm:col-span-2">
-                                <span className={label}>Expiration du mot de passe (jours, vide = jamais)</span>
-                                <input
-                                    type="number"
-                                    min={1}
-                                    value={passwordExpiryDays}
-                                    onChange={(e) => setPasswordExpiryDays(e.target.value)}
-                                    placeholder="Jamais"
-                                    className={cx(input, 'w-full')}
-                                />
-                            </label>
-                        </div>
-                        <div className="space-y-3 rounded-xl bg-ink-50 p-3 dark:bg-ink-950/40">
-                            <Toggle checked={passwordRequireUppercase} onChange={setPasswordRequireUppercase} label="Exiger une majuscule" />
-                            <Toggle checked={passwordRequireNumber} onChange={setPasswordRequireNumber} label="Exiger un chiffre" />
-                            <Toggle checked={passwordRequireSymbol} onChange={setPasswordRequireSymbol} label="Exiger un symbole" />
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <Workflow aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
-                            <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Workflow atelier par défaut</h2>
-                        </div>
-                        <p className="text-xs text-ink-500 dark:text-ink-400">
-                            S'applique à la première agence — mêmes réglages que Paramètres opérationnels.
-                        </p>
-                        <div className="space-y-3 rounded-xl bg-ink-50 p-3 dark:bg-ink-950/40">
-                            <Toggle checked={washerStepEnabled} onChange={setWasherStepEnabled} label="Étape Laveur activée" />
-                            <Toggle checked={sorterStepEnabled} onChange={setSorterStepEnabled} label="Étape Classeur activée" />
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <BadgePercent aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
-                            <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Programme de fidélité par défaut</h2>
-                        </div>
-                        <p className="text-xs text-ink-500 dark:text-ink-400">
-                            Pré-rempli avec les 3 paliers par défaut — modifiables ou remplaçables ici, avant toute activité du
-                            pressing.
-                        </p>
-                        <div className="space-y-2">
-                            {loyaltyTiers.map((tier, index) => (
-                                <div key={index} className="flex flex-wrap items-end gap-2 rounded-xl bg-ink-50 p-3 dark:bg-ink-950/40">
-                                    <label className="block min-w-[120px] flex-1">
-                                        <span className={label}>Nom</span>
-                                        <input
-                                            value={tier.name}
-                                            onChange={(e) => updateTier(index, { name: e.target.value })}
-                                            className={cx(input, 'w-full')}
-                                        />
-                                    </label>
-                                    <label className="block w-28">
-                                        <span className={label}>Seuil (pts)</span>
-                                        <input
-                                            type="number"
-                                            min={0}
-                                            value={tier.minPoints}
-                                            onChange={(e) => updateTier(index, { minPoints: e.target.value })}
-                                            className={cx(input, 'w-full')}
-                                        />
-                                    </label>
-                                    <label className="block w-28">
-                                        <span className={label}>Remise (%)</span>
-                                        <input
-                                            type="number"
-                                            min={0}
-                                            max={100}
-                                            value={tier.discountPercent}
-                                            onChange={(e) => updateTier(index, { discountPercent: e.target.value })}
-                                            className={cx(input, 'w-full')}
-                                        />
-                                    </label>
-                                    <button
-                                        type="button"
-                                        onClick={() => removeTier(index)}
-                                        aria-label="Retirer ce palier"
-                                        className={cx(button('ghost', 'sm'), 'shrink-0')}
-                                    >
-                                        <Trash2 aria-hidden="true" className="h-4 w-4" />
-                                    </button>
-                                </div>
-                            ))}
-                            <button type="button" onClick={addTier} className={button('ghost', 'sm')}>
-                                <Plus aria-hidden="true" className="h-4 w-4" />
-                                Ajouter un palier
-                            </button>
-                        </div>
                     </div>
                 )}
+
+                {/* Chantier « Re-audit Pressing — édition post-création » (CLAUDE.md) :
+                    couleurs/sécurité/fidélité sont pressing-scoped (AppSetting/LoyaltyTier),
+                    donc sans ambiguïté multi-agence — réellement éditables ici, en création
+                    ET en édition (PATCH /pressings/{id} applique désormais ces champs). */}
+                <div className="space-y-5 border-t border-ink-200/80 pt-5 dark:border-ink-800">
+                    <div className="flex items-center gap-2">
+                        <Palette aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
+                        <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Couleurs de marque</h2>
+                    </div>
+                    <p className="text-xs text-ink-500 dark:text-ink-400">
+                        Modifiables ici à tout moment, ou ensuite par le pressing lui-même (Paramètres → Branding).
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <ColorField label="Couleur principale" value={primaryColor} onChange={setPrimaryColor} />
+                        <ColorField label="Couleur secondaire" value={secondaryColor} onChange={setSecondaryColor} />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Shield aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
+                        <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Sécurité par défaut</h2>
+                    </div>
+                    <p className="text-xs text-ink-500 dark:text-ink-400">
+                        Mêmes réglages que l'écran Sécurité du pressing — modifiables ici à tout moment.
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <label className="block">
+                            <span className={label}>Déconnexion après inactivité (min)</span>
+                            <input
+                                type="number"
+                                min={1}
+                                value={sessionTimeoutMinutes}
+                                onChange={(e) => setSessionTimeoutMinutes(e.target.value)}
+                                className={cx(input, 'w-full')}
+                            />
+                        </label>
+                        <label className="block">
+                            <span className={label}>Longueur minimale du mot de passe</span>
+                            <input
+                                type="number"
+                                min={4}
+                                value={passwordMinLength}
+                                onChange={(e) => setPasswordMinLength(e.target.value)}
+                                className={cx(input, 'w-full')}
+                            />
+                        </label>
+                        <label className="block sm:col-span-2">
+                            <span className={label}>Expiration du mot de passe (jours, vide = jamais)</span>
+                            <input
+                                type="number"
+                                min={1}
+                                value={passwordExpiryDays}
+                                onChange={(e) => setPasswordExpiryDays(e.target.value)}
+                                placeholder="Jamais"
+                                className={cx(input, 'w-full')}
+                            />
+                        </label>
+                    </div>
+                    <div className="space-y-3 rounded-xl bg-ink-50 p-3 dark:bg-ink-950/40">
+                        <Toggle checked={passwordRequireUppercase} onChange={setPasswordRequireUppercase} label="Exiger une majuscule" />
+                        <Toggle checked={passwordRequireNumber} onChange={setPasswordRequireNumber} label="Exiger un chiffre" />
+                        <Toggle checked={passwordRequireSymbol} onChange={setPasswordRequireSymbol} label="Exiger un symbole" />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Workflow aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
+                        <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Workflow atelier par défaut</h2>
+                    </div>
+                    {isEdit ? (
+                        <p className="text-xs text-ink-500 dark:text-ink-400">
+                            Réglage par agence (pas par pressing) — un pressing à plusieurs agences pourrait avoir des réglages
+                            différents d'une agence à l'autre. Modifiable par agence sur Paramètres opérationnels, une fois connecté
+                            côté tenant.
+                        </p>
+                    ) : (
+                        <>
+                            <p className="text-xs text-ink-500 dark:text-ink-400">
+                                S'applique à la première agence — mêmes réglages que Paramètres opérationnels.
+                            </p>
+                            <div className="space-y-3 rounded-xl bg-ink-50 p-3 dark:bg-ink-950/40">
+                                <Toggle checked={washerStepEnabled} onChange={setWasherStepEnabled} label="Étape Laveur activée" />
+                                <Toggle checked={sorterStepEnabled} onChange={setSorterStepEnabled} label="Étape Classeur activée" />
+                            </div>
+                        </>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                        <BadgePercent aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
+                        <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-100">Programme de fidélité par défaut</h2>
+                    </div>
+                    <p className="text-xs text-ink-500 dark:text-ink-400">
+                        {isEdit
+                            ? "Paliers réels de ce pressing — modifiables, retirer une ligne désactive le palier (jamais supprimé, pour ne pas casser l'historique)."
+                            : 'Pré-rempli avec les 3 paliers par défaut — modifiables ou remplaçables ici, avant toute activité du pressing.'}
+                    </p>
+                    <div className="space-y-2">
+                        {loyaltyTiers.map((tier, index) => (
+                            <div key={tier.id ?? index} className="flex flex-wrap items-end gap-2 rounded-xl bg-ink-50 p-3 dark:bg-ink-950/40">
+                                <label className="block min-w-[120px] flex-1">
+                                    <span className={label}>Nom</span>
+                                    <input
+                                        value={tier.name}
+                                        onChange={(e) => updateTier(index, { name: e.target.value })}
+                                        className={cx(input, 'w-full')}
+                                    />
+                                </label>
+                                <label className="block w-28">
+                                    <span className={label}>Seuil (pts)</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        value={tier.minPoints}
+                                        onChange={(e) => updateTier(index, { minPoints: e.target.value })}
+                                        className={cx(input, 'w-full')}
+                                    />
+                                </label>
+                                <label className="block w-28">
+                                    <span className={label}>Remise (%)</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        value={tier.discountPercent}
+                                        onChange={(e) => updateTier(index, { discountPercent: e.target.value })}
+                                        className={cx(input, 'w-full')}
+                                    />
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => removeTier(index)}
+                                    aria-label="Retirer ce palier"
+                                    className={cx(button('ghost', 'sm'), 'shrink-0')}
+                                >
+                                    <Trash2 aria-hidden="true" className="h-4 w-4" />
+                                </button>
+                            </div>
+                        ))}
+                        <button type="button" onClick={addTier} className={button('ghost', 'sm')}>
+                            <Plus aria-hidden="true" className="h-4 w-4" />
+                            Ajouter un palier
+                        </button>
+                    </div>
+                </div>
 
                 {isEdit && (
                     <div className="flex items-center gap-2 border-t border-ink-200/80 pt-4 dark:border-ink-800">

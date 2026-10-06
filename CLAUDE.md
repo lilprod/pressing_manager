@@ -3640,3 +3640,175 @@ d'un pressing ; Chantier D : correctif d'isolation `loyalty_tiers` +
 valeurs par défaut à la provision) sont maintenant tous faits. L'item 5
 (écran Agences cross-tenant) reste délibérément non construit — voir
 l'intro de cet audit ci-dessus.
+
+**Re-audit « Configuration du pressing » + « Pressing détail » — 4 chantiers**
+— fait le 2026-10-06, sur deux captures Figma renvoyées une seconde fois par
+l'utilisateur (« Configuration du pressing », assistant 5 étapes Identité/
+Branding/Licence/Règles métier/Sécurité ; « Pressing — Détail », vue enrichie
+Santé tenant/Agences/Utilisateurs/Licence/Santé technique/Journal d'audit) avec
+le signalement explicite « certaines zones manquent par rapport à ce qui est
+construit ». Audit zone par zone (lecture directe de `PressingFormPage.tsx`,
+`PressingDetailPage.tsx`, `PressingController.php`, `StorePressingRequest`/
+`UpdatePressingRequest`, `AppSetting`/`AgencySetting`/`LoyaltyTier`/
+`LoyaltyPointMovement`/`LoyaltyService`, `PlatformPlan`/`License`/
+`LicensePayment`) confirmant 4 écarts réels, soumis via `AskUserQuestion` (le
+volume le justifiait) — l'utilisateur a choisi à chaque fois l'option la plus
+ambitieuse : rendre les sections couleurs/sécurité/workflow/fidélité éditables
+après création (pas seulement create-only), construire les quotas de licence
+avec consommation réelle, tout construire sur le Journal d'audit (export +
+sous-onglets inclus), et aligner le modèle de fidélité sur ce que montre la
+capture plutôt que de le différer. Plan détaillé en mode plan avant tout code,
+vu l'ampleur combinée des 4 réponses.
+
+**Découverte en cours d'exploration, qui a changé le chantier Fidélité** : la
+colonne `agency_settings.loyalty_amount_per_point` existait déjà (chantier
+Opérationnel, 2026-10-02, déjà éditable sur `/settings/operational` côté
+tenant) mais `LoyaltyService::creditPointsForPayment()` lisait toujours
+`config('loyalty.amount_per_point')` (global `.env`) — **le réglage par agence
+n'avait jamais été branché**. Même bug de câblage que `block_pickup_if_unpaid`
+déjà corrigé au même chantier Opérationnel. La bonne réponse à « points par
+1000 FCFA dépensés » de la capture était donc de corriger ce câblage, pas
+d'ajouter une nouvelle colonne.
+
+- **Chantier 1 — Fidélité : câblage réel + expiration des points.**
+  `LoyaltyService::creditPointsForPayment()` lit désormais
+  `AgencySetting::forAgency($payment->agency_id)->loyalty_amount_per_point ??
+  config('loyalty.amount_per_point')` (repli explicite, jamais une agence sans
+  réglage personnalisé laissée sans taux). `LoyaltyPage.tsx` même correctif
+  côté affichage (préfère le réglage de l'agence active, repli sur le réglage
+  global). Nouveau `agency_settings.loyalty_point_expiry_months` (nullable,
+  `null` = jamais — comportement actuel inchangé pour tout pressing existant)
+  et `loyalty_point_movements.expired_at` (append-only, une ligne de gain est
+  active ou expirée en bloc — pas de consommation partielle possible
+  aujourd'hui, `points_consumed` reste à 0, confirmé par grep avant d'écrire
+  la migration). Nouvelle commande planifiée `loyalty:expire-points`
+  (quotidienne 02h00) : pour chaque agence avec expiration configurée, somme
+  les mouvements `reason=payment` non expirés antérieurs au délai, décrémente
+  `clients.loyalty_points` **jamais sous 0** (`min()`, garantie déjà vraie par
+  construction faute d'autre mécanisme de débit, désormais testée
+  explicitement), crée un mouvement `reason=expired` à points négatifs (le
+  type `unsignedInteger` de la colonne Postgres est en réalité un entier
+  signé ordinaire — Postgres n'a pas de type unsigned natif, Laravel abandonne
+  silencieusement ce modificateur sur ce driver — aucune migration de
+  changement de type n'a donc été nécessaire pour autoriser des valeurs
+  négatives). **Explicitement omis** : « valeur par point en FCFA » (aucun
+  mécanisme de conversion points→remise cash n'existe, le modèle actuel est à
+  paliers/%, pas un rachat point par point — recoupe le gap déjà documenté
+  « Convertir en remise ») ; bonus anniversaire (aucune colonne `birthdate`
+  sur `Client`) ; cumul avec promotions (aucun modèle `Promotion` n'existe) —
+  les deux recoupent le chantier déjà documenté « Moteur de règles marketing
+  génériques », hors scope ici.
+- **Chantier 2 — Quotas de licence.** `platform_plans` gagne
+  `agencies_limit`/`users_limit`/`storage_limit_gb` (tous nullable = illimité/
+  non précisé, préserve le comportement des 6 plans déjà seedés).
+  `PressingController::show()` ajoute `loadCount('users')` à côté de
+  `loadCount('agencies')` déjà présent (même décision qu'au Chantier C : compte
+  réel, pas la colonne dénormalisée des rapports périodiques, pour cette vue à
+  un seul pressing uniquement). `PressingDetailPage.tsx` affiche 2 nouvelles
+  `QuotaBar` (barres de consommation réelle agences/utilisateurs vs limite du
+  plan, jamais rendues sans une vraie limite — pas de « ∞ » fabriqué) + une
+  ligne informative « Stockage inclus : X Go » sans barre. **Consommation de
+  stockage explicitement omise** : confirmé par exploration qu'aucun
+  mécanisme d'agrégation d'usage disque par pressing n'existe (seuls des
+  uploads ponctuels : logos, photos, justificatifs) — en afficher une barre
+  aurait été fabriqué. Pas d'enforcement bloquant (création d'agence/
+  utilisateur refusée au-delà du quota) dans cette passe, uniquement
+  l'affichage — décision de scope documentée.
+- **Chantier 3 — `PressingFormPage.tsx` éditable après création.** Décision
+  de modélisation : les 4 sections ne sont pas de même nature.
+  `primary_color`/`secondary_color`/`security_policy` (`AppSetting`) et
+  `loyalty_tiers` (`LoyaltyTier`) sont **pressing-scopées** — éditables
+  post-création sans ambiguïté. `workshop_steps`
+  (`AgencySetting.washer_step_enabled`/`sorter_step_enabled`) est
+  **agency-scopée** — même raison déjà invoquée pour l'absence d'onglet
+  « Configuration » sur la fiche détail (« un résumé tenant unique serait
+  trompeur pour un pressing à plusieurs agences ») : reste create-only (ne
+  s'applique qu'à la première agence), avec une note explicative en édition
+  renvoyant vers `/settings/operational` côté tenant. Nouveau `GET
+  /pressings/{pressing}/settings` (lit `AppSetting::current()` et les
+  `LoyaltyTier` actifs, jamais la ligne `Pressing` elle-même).
+  `UpdatePressingRequest` gagne les mêmes règles que `StorePressingRequest`
+  pour ces champs, plus `loyalty_tiers.*.id` (optionnel). `update()` applique
+  les champs `AppSetting` fournis puis synchronise les paliers par upsert
+  (id connu → `update()`, sans id → `create()`, actif existant absent du
+  payload → `is_active=false`, **jamais supprimé** — même convention que
+  `TreatmentTypeController`/`LoyaltyTierController`) ; un id de palier
+  appartenant à un autre pressing est rejeté (404). `PressingFormPage.tsx` :
+  les 3 sections sortent du bloc create-only, se préremplissent depuis
+  `/settings` en édition, Workflow atelier affiche la note informative au
+  lieu des bascules.
+- **Chantier 4 — Journal d'audit enrichi.**
+  `PlatformAuditLogController::filteredQuery()` factorise désormais
+  `index()`/`exportCsv()`/`exportPdf()`, eager-charge
+  `platformUser.platformRole` (`ip_address`/`user_agent` étaient déjà
+  sérialisés par `PlatformAuditLog`, aucun `$hidden` — zéro changement
+  backend pour les exposer, seulement côté type frontend). Nouveau
+  `category=security|configuration`, **scopé au `pressing_id` courant
+  uniquement** (sous-catégorisation propre à la vue d'un seul pressing) :
+  aucune action littérale « pressing.suspended »/« pressing.reactivated »/
+  « pressing.renewed » n'existe en base (suspend/reactivate/rotation de jeton/
+  renouvellement passent tous par `$pressing->update()` ou `->save()`, donc
+  journalisés comme le générique `App\Models\Pressing.updated`) — la
+  catégorisation du plan initial supposait à tort des libellés d'action
+  distincts ; corrigée pendant l'implémentation pour inspecter le contenu
+  réel de `new_values` : `security` = `pressing.impersonated` OU
+  `Pressing.updated` dont `new_values` contient la clé `status` (suspend/
+  reactivate) ou `report_token_hash` (rotation) ; `configuration` = tout le
+  reste (création, modification de champs ordinaires, `license_expires_at`
+  posé par un renouvellement). Nouveau `search` (action + nom de l'acteur,
+  `ilike`). `GET /audit-logs/export/csv` (`fputcsv` en flux direct — ce
+  projet n'avait encore jamais eu besoin de CSV, seulement Excel/PDF, donc
+  pas de patron existant à copier, et `fputcsv` suffit sans nouvelle
+  dépendance) et `/export/pdf` (DomPDF, nouveau
+  `resources/views/platform/audit-pdf.blade.php` calqué sur
+  `cash/ledger-pdf.blade.php`) — **`pressing_id` obligatoire sur les deux**,
+  jamais un export sans borne sur tout le journal plateforme (même garde que
+  `CashController::exportLedger*`). `platformApi.blob()` ajouté (mirrors
+  `api.ts` tenant) pour ces téléchargements authentifiés par jeton Bearer.
+  `AuditTab` réécrit : 3 onglets internes (Toutes les actions/Sécurité/
+  Configuration), barre de filtres (recherche débouncée 300ms, 2 dates),
+  tableau à colonnes fixes (Action/Acteur · Rôle/Ressource/Date/Adresse IP)
+  dans `overflow-x-auto`, boutons CSV/PDF. **Explicitement omis** :
+  sous-onglets « Impressions »/« Synchronisation offline » (aucune entrée
+  `PlatformAuditLog` ne peut jamais s'y rattacher pour un pressing — concepts
+  côté appareil/tenant, jamais journalisés à ce niveau ; deux onglets vides
+  en permanence seraient aussi trompeurs que d'en fabriquer le contenu) ;
+  colonne « Résultat » (succès/échec) — une action plateforme qui échoue
+  lève une exception HTTP, elle n'est jamais journalisée en échec, aucune
+  donnée réelle derrière une telle colonne pour ce périmètre.
+- **Piège Playwright rencontré en validant le Chantier 3, pas un bug
+  applicatif** : le script de smoke test naviguait d'abord vers l'écran
+  d'édition sans jeton, posait le jeton en `localStorage`, puis appelait
+  `page.reload()` — mais `AuthProvider` redirige côté client (React Router)
+  vers `/superadmin/login` dès le premier rendu sans jeton, souvent avant
+  même que `page.evaluate()` ne s'exécute ; `reload()` recharge alors l'URL
+  courante (`/login`, pas l'écran d'édition visé), qui elle-même redirige
+  vers le tableau de bord une fois authentifiée. Corrigé en adoptant le
+  patron « se rendre d'abord sur `/superadmin/login` (page neutre, pas de
+  redirection), poser le jeton, puis `goto()` directement l'URL cible » —
+  élimine la course plutôt que de la masquer par un délai arbitraire. À
+  réutiliser pour tout futur script de smoke test superadmin qui doit
+  injecter un jeton avant d'atteindre un écran protégé.
+- Tests : `LoyaltyTest.php` (+2 : taux par agence réellement appliqué, repli
+  sur le config global si non personnalisé), `LoyaltyPointExpiryTest.php`
+  (nouveau, 5 : expiration après délai configuré, solde jamais négatif,
+  agence sans configuration non affectée, mouvement encore dans le délai non
+  expiré, isolation inter-agences), `PlatformPlanManagementTest.php` (+2 :
+  limites acceptées, nullable), `PressingDetailTest.php` (+1 : `users_count`
+  réel, pas la valeur dénormalisée), `PressingSettingsUpdateTest.php`
+  (nouveau, 8 : lecture réelle depuis les tables, application réelle
+  couleurs/sécurité, omission sans effet, upsert par id, création sans id,
+  désactivation — pas suppression — d'un palier retiré, 404 cross-pressing,
+  `workshop_steps` ignoré en édition), `PlatformAuditLogTest.php` (+6 :
+  catégorisation exacte sur le contenu réel de `new_values`, recherche
+  positive/négative, export sans `pressing_id` rejeté 422, export hors
+  périmètre transverse rejeté 403, CSV et PDF réellement générés). Suite
+  complète 576/576 après les 4 chantiers (aucune régression). `tsc --noEmit`
+  et `npm run build` propres. Vérifié par Playwright à 1440px et 390px pour
+  chacun des 3 chantiers frontend : couleurs/sécurité/fidélité préremplies
+  en édition et parcours réel (changer couleur + retirer un palier + ajouter
+  un palier + enregistrer, confirmé persisté en base) pour le Chantier 3 ;
+  onglet Sécurité isolant bien une entrée d'impersonation sans fuite vers
+  Configuration, recherche filtrant réellement la liste, export CSV/PDF
+  déclenchant chacun un téléchargement réel pour le Chantier 4 ; aucun
+  débordement horizontal constaté aux deux largeurs sur les deux écrans.

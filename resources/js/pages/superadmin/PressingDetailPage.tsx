@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Building2, CreditCard, Pencil, Power, ScrollText, ShieldAlert, ShieldCheck, UsersRound } from 'lucide-react';
+import {
+    ArrowLeft,
+    Building2,
+    CreditCard,
+    Download,
+    Pencil,
+    Power,
+    ScrollText,
+    Search,
+    ShieldAlert,
+    ShieldCheck,
+    UsersRound,
+} from 'lucide-react';
 import { platformApi, PlatformApiError } from '../../lib/platformApi';
 import { useFormat } from '../../lib/format';
 import RenewLicenseModal from '../../components/superadmin/RenewLicenseModal';
@@ -8,8 +20,19 @@ import { Alert, EmptyState, LoadingState } from '../../components/ui/Feedback';
 import { StatCard } from '../../components/ui/Metrics';
 import Pagination from '../../components/ui/Pagination';
 import { Pill } from '../../components/ui/StatusBadge';
-import { button, card, cx, textLink } from '../../components/ui/styles';
+import { button, card, cx, input, textLink } from '../../components/ui/styles';
 import type { Paginated, PlatformAuditLog, Pressing, PressingAgency, PlatformUser } from '../../types';
+
+function downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
 
 /* Fiche détail d'un pressing (CLAUDE.md « Audit de conformité Figma — interfaces
  * superadmin », Chantier C). Pas d'onglet « Configuration » (décision actée pendant
@@ -349,6 +372,15 @@ function LicenseTab({ pressing, onRenew }: { pressing: Pressing; onRenew: () => 
     );
 }
 
+type AuditCategory = '' | 'security' | 'configuration';
+
+/**
+ * Chantier « Re-audit Pressing détail » (CLAUDE.md) : 3 sous-onglets (Toutes les
+ * actions/Sécurité/Configuration), recherche + plage de dates, export CSV/PDF.
+ * Pas de sous-onglets « Impressions »/« Synchronisation offline » ni de colonne
+ * « Résultat » (succès/échec) — aucune entrée PlatformAuditLog ne peut jamais s'y
+ * rattacher pour un pressing, voir CLAUDE.md pour le détail de cette décision.
+ */
 function AuditTab({ pressingId }: { pressingId: number }) {
     const { dateTime } = useFormat();
     const [logs, setLogs] = useState<PlatformAuditLog[]>([]);
@@ -359,34 +391,172 @@ function AuditTab({ pressingId }: { pressingId: number }) {
     });
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(true);
+    const [category, setCategory] = useState<AuditCategory>('');
+    const [searchInput, setSearchInput] = useState('');
+    const [search, setSearch] = useState('');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
+
+    useEffect(() => {
+        const timer = setTimeout(() => setSearch(searchInput), 300);
+        return () => clearTimeout(timer);
+    }, [searchInput]);
+
+    function buildParams(withPage: boolean): URLSearchParams {
+        const params = new URLSearchParams({ pressing_id: String(pressingId) });
+        if (withPage) params.set('page', String(page));
+        if (category) params.set('category', category);
+        if (search) params.set('search', search);
+        if (from) params.set('from', from);
+        if (to) params.set('to', to);
+        return params;
+    }
 
     useEffect(() => {
         setLoading(true);
         platformApi
-            .get<Paginated<PlatformAuditLog>>(`/audit-logs?pressing_id=${pressingId}&page=${page}`)
+            .get<Paginated<PlatformAuditLog>>(`/audit-logs?${buildParams(true)}`)
             .then((res) => {
                 setLogs(res.data);
                 setMeta({ current_page: res.current_page, last_page: res.last_page, total: res.total });
             })
             .finally(() => setLoading(false));
-    }, [pressingId, page]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pressingId, page, category, search, from, to]);
 
-    if (loading) return <LoadingState />;
-    if (logs.length === 0) return <EmptyState icon={ScrollText} title="Aucune activité enregistrée" />;
+    async function exportAs(format: 'csv' | 'pdf') {
+        setExporting(format);
+        try {
+            const blob = await platformApi.blob(`/audit-logs/export/${format}?${buildParams(false)}`);
+            downloadBlob(blob, `audit-pressing-${pressingId}.${format}`);
+        } finally {
+            setExporting(null);
+        }
+    }
 
     return (
-        <div className={cx(card, 'overflow-hidden')}>
-            <ul className="divide-y divide-ink-100 dark:divide-ink-800">
-                {logs.map((log) => (
-                    <li key={log.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5">
-                        <div className="min-w-0">
-                            <p className="text-sm font-semibold text-ink-900 dark:text-ink-50">{describeActivity(log)}</p>
-                            <p className="text-xs text-ink-500 dark:text-ink-400">{log.platform_user?.name ?? 'Système'} · {dateTime(log.created_at)}</p>
-                        </div>
-                    </li>
+        <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+                {([
+                    ['', 'Toutes les actions'],
+                    ['security', 'Sécurité'],
+                    ['configuration', 'Configuration'],
+                ] as [AuditCategory, string][]).map(([key, labelText]) => (
+                    <button
+                        key={key}
+                        type="button"
+                        onClick={() => {
+                            setPage(1);
+                            setCategory(key);
+                        }}
+                        className={cx(
+                            'rounded-full px-3.5 py-1.5 text-sm font-semibold transition',
+                            category === key
+                                ? 'bg-brand-600 text-white dark:bg-brand-500'
+                                : 'bg-ink-100 text-ink-700 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-200 dark:hover:bg-ink-700',
+                        )}
+                    >
+                        {labelText}
+                    </button>
                 ))}
-            </ul>
-            <Pagination meta={meta} onPageChange={setPage} />
+            </div>
+
+            <div className={cx(card, 'flex flex-wrap items-end gap-3 p-4')}>
+                <label className="min-w-[200px] flex-1 text-sm">
+                    <span className="mb-1 block font-medium text-ink-700 dark:text-ink-200">Recherche</span>
+                    <span className="relative block">
+                        <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
+                        <input
+                            value={searchInput}
+                            onChange={(e) => {
+                                setPage(1);
+                                setSearchInput(e.target.value);
+                            }}
+                            placeholder="Action ou acteur…"
+                            className={cx(input, 'pl-9')}
+                        />
+                    </span>
+                </label>
+                <label className="text-sm">
+                    <span className="mb-1 block font-medium text-ink-700 dark:text-ink-200">Du</span>
+                    <input
+                        type="date"
+                        value={from}
+                        onChange={(e) => {
+                            setPage(1);
+                            setFrom(e.target.value);
+                        }}
+                        className={input}
+                    />
+                </label>
+                <label className="text-sm">
+                    <span className="mb-1 block font-medium text-ink-700 dark:text-ink-200">Au</span>
+                    <input
+                        type="date"
+                        value={to}
+                        onChange={(e) => {
+                            setPage(1);
+                            setTo(e.target.value);
+                        }}
+                        className={input}
+                    />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => exportAs('csv')} disabled={exporting !== null} className={button('secondary', 'sm')}>
+                        <Download aria-hidden="true" className="h-4 w-4" />
+                        {exporting === 'csv' ? 'Export…' : 'CSV'}
+                    </button>
+                    <button type="button" onClick={() => exportAs('pdf')} disabled={exporting !== null} className={button('secondary', 'sm')}>
+                        <Download aria-hidden="true" className="h-4 w-4" />
+                        {exporting === 'pdf' ? 'Export…' : 'PDF'}
+                    </button>
+                </div>
+            </div>
+
+            {loading ? (
+                <LoadingState />
+            ) : logs.length === 0 ? (
+                <EmptyState icon={ScrollText} title="Aucune activité enregistrée" />
+            ) : (
+                <div className={cx(card, 'overflow-hidden')}>
+                    <div className="overflow-x-auto">
+                        <div className="min-w-[760px]">
+                            <div
+                                role="row"
+                                className="flex items-center gap-4 border-b border-ink-100 px-5 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-500 dark:border-ink-800 dark:text-ink-400"
+                            >
+                                <span className="flex-1">Action</span>
+                                <span className="w-44 shrink-0">Acteur · Rôle</span>
+                                <span className="w-24 shrink-0">Ressource</span>
+                                <span className="w-36 shrink-0">Date</span>
+                                <span className="w-32 shrink-0">Adresse IP</span>
+                            </div>
+                            <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                                {logs.map((log) => (
+                                    <li key={log.id} role="row" className="flex items-center gap-4 px-5 py-3.5 text-sm">
+                                        <span className="flex-1 truncate font-semibold text-ink-900 dark:text-ink-50">{describeActivity(log)}</span>
+                                        <span className="w-44 shrink-0 truncate text-ink-600 dark:text-ink-300">
+                                            {log.platform_user?.name ?? 'Système'}
+                                            {log.platform_user?.platform_role && (
+                                                <span className="text-ink-400 dark:text-ink-500"> · {log.platform_user.platform_role.name}</span>
+                                            )}
+                                        </span>
+                                        <span className="w-24 shrink-0 text-ink-500 dark:text-ink-400">
+                                            {log.auditable_type.split('\\').pop()}
+                                        </span>
+                                        <span className="w-36 shrink-0 text-ink-500 dark:text-ink-400">{dateTime(log.created_at)}</span>
+                                        <span className="w-32 shrink-0 font-mono text-xs text-ink-500 dark:text-ink-400">
+                                            {log.ip_address ?? '—'}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                    <Pagination meta={meta} onPageChange={setPage} />
+                </div>
+            )}
         </div>
     );
 }

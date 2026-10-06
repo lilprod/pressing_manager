@@ -97,6 +97,8 @@ Route::prefix('platform')->group(function () {
         Route::get('/users/{platformUser}/photo', [PlatformProfileController::class, 'photo']);
 
         Route::get('/dashboard', [PlatformDashboardController::class, 'show']);
+        Route::get('/audit-logs/export/csv', [PlatformAuditLogController::class, 'exportCsv']);
+        Route::get('/audit-logs/export/pdf', [PlatformAuditLogController::class, 'exportPdf']);
         Route::get('/audit-logs', [PlatformAuditLogController::class, 'index']);
 
         Route::get('/settings', [PlatformSettingController::class, 'show']);

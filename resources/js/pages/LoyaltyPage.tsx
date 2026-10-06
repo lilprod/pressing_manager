@@ -12,7 +12,7 @@ import { Alert, EmptyState, LoadingState, Spinner } from '../components/ui/Feedb
 import { SectionCard, StatCard } from '../components/ui/Metrics';
 import { Pill } from '../components/ui/StatusBadge';
 import { button, cx, input, inputSm, label, textLink } from '../components/ui/styles';
-import type { LoyaltyTier } from '../types';
+import type { AgencySettings, LoyaltyTier } from '../types';
 
 /* Écran « Promotions et fidélité » (Figma SPARK PRESSING, section 09, node 72:20021).
  * Seule la partie fidélité existe côté backend (paliers de points + remise automatique,
@@ -22,10 +22,11 @@ import type { LoyaltyTier } from '../types';
 
 export default function LoyaltyPage() {
     const { t } = useI18n();
-    const { user } = useAuth();
+    const { user, activeAgencyId } = useAuth();
     const { settings } = useSettings();
     const { money } = useFormat();
     const [tiers, setTiers] = useState<LoyaltyTier[]>([]);
+    const [agencySettings, setAgencySettings] = useState<AgencySettings | null>(null);
     const [loading, setLoading] = useState(true);
 
     function reload() {
@@ -36,9 +37,25 @@ export default function LoyaltyPage() {
 
     useEffect(reload, []);
 
+    // Chantier « Re-audit Pressing — fidélité » (CLAUDE.md) : le taux d'acquisition
+    // est réellement personnalisable par agence (`agency_settings.loyalty_amount_per_point`,
+    // câblé dans LoyaltyService) — afficher la valeur de l'agence active plutôt que
+    // toujours le défaut global, sans quoi cette carte redeviendrait fausse pour
+    // toute agence qui a personnalisé son taux.
+    const agencyId = user?.agency_id ?? activeAgencyId;
+    useEffect(() => {
+        if (!agencyId) {
+            setAgencySettings(null);
+            return;
+        }
+        api.get<AgencySettings>(`/agencies/${agencyId}/settings`)
+            .then(setAgencySettings)
+            .catch(() => setAgencySettings(null));
+    }, [agencyId]);
+
     const active = tiers.filter((tier) => tier.is_active);
     const maxDiscount = active.reduce((max, tier) => Math.max(max, tier.discount_rate), 0);
-    const amountPerPoint = settings?.loyalty_amount_per_point ?? 100;
+    const amountPerPoint = agencySettings?.loyalty_amount_per_point ?? settings?.loyalty_amount_per_point ?? 100;
 
     return (
         <div className="space-y-6">

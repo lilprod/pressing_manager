@@ -88,6 +88,7 @@ export interface AgencySettings {
     minimum_order_amount: number | null;
     loyalty_amount_per_point: number | null;
     loyalty_redemption_threshold: number | null;
+    loyalty_point_expiry_months: number | null;
     offline_sync_interval_minutes: number | null;
     offline_retention_days: number | null;
     updated_at: string | null;

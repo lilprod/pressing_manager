@@ -3,6 +3,7 @@
 namespace Tests\Feature\Loyalty;
 
 use App\Models\Agency;
+use App\Models\AgencySetting;
 use App\Models\Client;
 use App\Models\LoyaltyPointMovement;
 use App\Models\LoyaltyTier;
@@ -35,6 +36,44 @@ class LoyaltyTest extends TestCase
             'points' => 12,
             'reason' => 'payment',
         ]);
+    }
+
+    /**
+     * Chantier « Re-audit Pressing — fidélité » : `agency_settings.loyalty_amount_per_point`
+     * existait déjà (éditable sur /settings/operational) mais n'était jamais lu par
+     * LoyaltyService — corrigé, ce test prouve qu'un taux personnalisé par agence
+     * est désormais réellement appliqué.
+     */
+    public function test_a_custom_agency_loyalty_rate_is_actually_applied(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        AgencySetting::forAgency($agency->id)->update(['loyalty_amount_per_point' => 50]);
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 0]);
+
+        $response = $this->actingAs($accueil)->postJson('/api/payments/cash', [
+            'client_id' => $client->id,
+            'amount' => 1000, // 50 FCFA / point => 20 points (pas 10 au taux global)
+        ]);
+
+        $response->assertCreated();
+        $this->assertSame(20, $client->refresh()->loyalty_points);
+    }
+
+    public function test_the_global_rate_still_applies_when_an_agency_has_not_customized_it(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 0]);
+
+        $this->actingAs($accueil)->postJson('/api/payments/cash', [
+            'client_id' => $client->id,
+            'amount' => 1000,
+        ])->assertCreated();
+
+        $this->assertSame(10, $client->refresh()->loyalty_points);
     }
 
     public function test_replaying_the_same_webhook_does_not_double_credit_points(): void

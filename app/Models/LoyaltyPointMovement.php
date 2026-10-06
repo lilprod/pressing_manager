@@ -10,13 +10,14 @@ class LoyaltyPointMovement extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['client_id', 'agency_id', 'payment_id', 'points', 'reason', 'created_at'];
+    protected $fillable = ['client_id', 'agency_id', 'payment_id', 'points', 'reason', 'expired_at', 'created_at'];
 
     protected function casts(): array
     {
         return [
             'points' => 'integer',
             'created_at' => 'datetime',
+            'expired_at' => 'datetime',
         ];
     }
 

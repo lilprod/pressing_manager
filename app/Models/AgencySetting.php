@@ -21,7 +21,7 @@ class AgencySetting extends Model
         'allow_immediate_pickup', 'block_pickup_if_unpaid',
         'washer_step_enabled', 'sorter_step_enabled',
         'collection_fee', 'delivery_fee', 'minimum_order_amount',
-        'loyalty_amount_per_point', 'loyalty_redemption_threshold',
+        'loyalty_amount_per_point', 'loyalty_redemption_threshold', 'loyalty_point_expiry_months',
         'offline_sync_interval_minutes', 'offline_retention_days',
     ];
 
@@ -41,6 +41,7 @@ class AgencySetting extends Model
             'minimum_order_amount' => 'integer',
             'loyalty_amount_per_point' => 'integer',
             'loyalty_redemption_threshold' => 'integer',
+            'loyalty_point_expiry_months' => 'integer',
             'offline_sync_interval_minutes' => 'integer',
             'offline_retention_days' => 'integer',
         ];

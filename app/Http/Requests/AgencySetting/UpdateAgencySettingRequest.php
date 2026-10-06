@@ -29,6 +29,7 @@ class UpdateAgencySettingRequest extends FormRequest
             'minimum_order_amount' => ['nullable', 'integer', 'min:0', 'max:1000000'],
             'loyalty_amount_per_point' => ['nullable', 'integer', 'min:1', 'max:1000000'],
             'loyalty_redemption_threshold' => ['nullable', 'integer', 'min:0', 'max:1000000'],
+            'loyalty_point_expiry_months' => ['nullable', 'integer', 'min:1', 'max:120'],
             'offline_sync_interval_minutes' => ['nullable', 'integer', 'min:1', 'max:1440'],
             'offline_retention_days' => ['nullable', 'integer', 'min:1', 'max:365'],
         ];

@@ -15,10 +15,11 @@ class ClientLifecycleTest extends TestCase
 
     public function test_an_accueil_can_create_a_client_without_specifying_loyalty_points(): void
     {
-        // Régression : Client::create() ne reflète pas le défaut DB de loyalty_points (0) en
-        // mémoire, ce qui faisait planter l'accesseur loyaltyDiscountRate() (where('min_points',
-        // '<=', null) → "Illegal operator and value combination") lors de la sérialisation JSON
-        // de la réponse. Voir ClientController::store() (->refresh() après create()).
+        // Régression : Client::create() ne reflète pas les défauts DB de loyalty_points/
+        // loyalty_spend_12m (0) en mémoire, ce qui faisait planter l'accesseur
+        // loyaltyDiscountRate() (where('min_spend_amount', '<=', null) → "Illegal operator
+        // and value combination") lors de la sérialisation JSON de la réponse. Voir
+        // ClientController::store() (->refresh() après create()).
         $this->seedRbac();
         $agency = Agency::factory()->create();
         $accueil = $this->makeUser('accueil', $agency);

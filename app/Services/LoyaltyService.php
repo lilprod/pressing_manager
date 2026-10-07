@@ -10,12 +10,26 @@ use App\Models\Payment;
 /**
  * Crédite automatiquement les points de fidélité d'un client à chaque paiement
  * complété (espèces ou distant). Le palier atteint (et sa remise) se déduit
- * ensuite du total de points via `Client::currentLoyaltyTier()`.
+ * ensuite des dépenses glissantes sur 12 mois via `Client::currentLoyaltyTier()`
+ * (audit « Promotions et fidélité », CLAUDE.md — bascule du critère de palier,
+ * les points restent une monnaie séparée, acquisition/valeur de redemption).
  */
 class LoyaltyService
 {
     public function creditPointsForPayment(Payment $payment): void
     {
+        $client = Client::query()->lockForUpdate()->find($payment->client_id);
+        if ($client === null) {
+            return;
+        }
+
+        // Incrément en direct de la fenêtre glissante — correction nocturne par
+        // `loyalty:recalculate-spend` pour faire sortir les paiements de plus de 12
+        // mois (voir migration `add_loyalty_spend_12m_to_clients_table`). Toute
+        // dépense compte pour le palier, même un paiement trop petit pour créditer
+        // au moins 1 point (contrairement au solde de points ci-dessous).
+        $client->increment('loyalty_spend_12m', $payment->amount);
+
         // Chantier « Re-audit Pressing — fidélité » (CLAUDE.md) : `agency_settings.
         // loyalty_amount_per_point` existait déjà (éditable sur /settings/operational
         // depuis le chantier Opérationnel du 2026-10-02) mais n'était jamais lu ici —
@@ -26,11 +40,6 @@ class LoyaltyService
             ?? config('loyalty.amount_per_point');
         $points = intdiv($payment->amount, max(1, $amountPerPoint));
         if ($points <= 0) {
-            return;
-        }
-
-        $client = Client::query()->lockForUpdate()->find($payment->client_id);
-        if ($client === null) {
             return;
         }
 

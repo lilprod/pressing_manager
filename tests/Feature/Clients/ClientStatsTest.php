@@ -36,19 +36,20 @@ class ClientStatsTest extends TestCase
         $agency = Agency::factory()->create();
         $accueil = $this->makeUser('accueil', $agency);
 
-        LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05, 'is_active' => true]);
-        LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Or', 'min_points' => 150, 'discount_rate' => 0.10, 'is_active' => true]);
-        LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Platine (inactif)', 'min_points' => 500, 'discount_rate' => 0.20, 'is_active' => false]);
+        LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Argent', 'min_spend_amount' => 50000, 'discount_rate' => 0.05, 'is_active' => true]);
+        LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Or', 'min_spend_amount' => 150000, 'discount_rate' => 0.10, 'is_active' => true]);
+        LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Platine (inactif)', 'min_spend_amount' => 500000, 'discount_rate' => 0.20, 'is_active' => false]);
 
-        Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 200]);
-        Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 80]);
-        Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 600]);
+        Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 200, 'loyalty_spend_12m' => 200000]);
+        Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 80, 'loyalty_spend_12m' => 80000]);
+        Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 600, 'loyalty_spend_12m' => 600000]);
 
         $response = $this->actingAs($accueil)->getJson('/api/clients/stats');
 
         $response->assertOk();
-        // Le palier « Platine » est inactif : le plus haut palier actif est « Or » (150 pts),
-        // donc les clients à 200 et 600 points sont VIP, celui à 80 points ne l'est pas.
+        // Le palier « Platine » est inactif : le plus haut palier actif est « Or » (150 000 FCFA
+        // de dépenses sur 12 mois), donc les clients à 200 000 et 600 000 sont VIP, celui à
+        // 80 000 ne l'est pas.
         $response->assertJsonPath('vip_count', 2);
         $response->assertJsonPath('points_issued', 880);
     }

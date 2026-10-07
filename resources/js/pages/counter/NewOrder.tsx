@@ -102,6 +102,9 @@ export default function NewOrder() {
     const [notes, setNotes] = useState('');
     const [discount, setDiscount] = useState(0);
     const [discountEdited, setDiscountEdited] = useState(false);
+    // Audit « Promotions et fidélité » (CLAUDE.md) : validé et appliqué côté serveur
+    // uniquement (jamais recalculé ici) — voir OrderController::store().
+    const [promotionCode, setPromotionCode] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -303,6 +306,8 @@ export default function NewOrder() {
             is_express: isExpress,
             notes: notes || null,
             discount_amount: discount > 0 ? discount : undefined,
+            discount_is_loyalty_auto: discount > 0 && !discountEdited,
+            promotion_code: promotionCode.trim() || undefined,
             items: cart.map((l) => ({
                 service_id: l.service_id,
                 quantity: l.quantity,
@@ -365,6 +370,7 @@ export default function NewOrder() {
         setExpandedLine(null);
         setDiscount(0);
         setDiscountEdited(false);
+        setPromotionCode('');
         setPayNow(false);
         setPaymentMethod('espece');
         setAmountReceived(0);
@@ -831,6 +837,18 @@ export default function NewOrder() {
                                     className={cx(inputSm, 'h-9 w-28 text-right tabular-nums')}
                                 />
                             </span>
+                        </label>
+
+                        <label className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-semibold text-ink-700 dark:text-ink-200">{t('order.promotionCode')}</span>
+                            <input
+                                type="text"
+                                value={promotionCode}
+                                onChange={(e) => setPromotionCode(e.target.value.toUpperCase())}
+                                placeholder={t('order.promotionCodePlaceholder')}
+                                className={cx(inputSm, 'h-9 w-28 text-right font-mono uppercase')}
+                                maxLength={30}
+                            />
                         </label>
 
                         {taxRate > 0 && (

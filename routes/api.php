@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\MultiAgencyController;
 use App\Http\Controllers\Api\NotificationLogController;
 use App\Http\Controllers\Api\NotificationSettingController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\PromotionController;
 use App\Http\Controllers\Api\PickupController;
 use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PaymentController;
@@ -191,6 +192,13 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::get('/loyalty-tiers', [LoyaltyTierController::class, 'index']);
     Route::post('/loyalty-tiers', [LoyaltyTierController::class, 'store']);
     Route::patch('/loyalty-tiers/{loyaltyTier}', [LoyaltyTierController::class, 'update']);
+    Route::get('/loyalty/stats', [LoyaltyTierController::class, 'stats']);
+    Route::get('/loyalty/movements', [LoyaltyTierController::class, 'movements']);
+    Route::get('/loyalty/segments', [LoyaltyTierController::class, 'segments']);
+
+    Route::get('/promotions', [PromotionController::class, 'index']);
+    Route::post('/promotions', [PromotionController::class, 'store']);
+    Route::patch('/promotions/{promotion}', [PromotionController::class, 'update']);
 
     Route::get('/treatment-types', [TreatmentTypeController::class, 'index']);
     Route::post('/treatment-types', [TreatmentTypeController::class, 'store']);

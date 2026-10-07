@@ -43,8 +43,10 @@ class UpdatePressingRequest extends FormRequest
             'loyalty_tiers' => ['nullable', 'array'],
             'loyalty_tiers.*.id' => ['nullable', 'integer'],
             'loyalty_tiers.*.name' => ['required', 'string', 'max:255'],
-            'loyalty_tiers.*.min_points' => ['required', 'integer', 'min:0', 'distinct'],
+            'loyalty_tiers.*.min_spend_amount' => ['required', 'integer', 'min:0', 'distinct'],
             'loyalty_tiers.*.discount_rate' => ['required', 'numeric', 'min:0', 'max:1'],
+            'loyalty_tiers.*.point_multiplier' => ['sometimes', 'numeric', 'min:1', 'max:9.99'],
+            'loyalty_tiers.*.benefit_description' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

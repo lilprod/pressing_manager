@@ -16,8 +16,10 @@ class StoreLoyaltyTierRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'min_points' => ['required', 'integer', 'min:0', Rule::unique('loyalty_tiers', 'min_points')->where('pressing_id', $this->user()->pressing_id)],
+            'min_spend_amount' => ['required', 'integer', 'min:0', Rule::unique('loyalty_tiers', 'min_spend_amount')->where('pressing_id', $this->user()->pressing_id)],
             'discount_rate' => ['required', 'numeric', 'min:0', 'max:1'],
+            'point_multiplier' => ['sometimes', 'numeric', 'min:1', 'max:9.99'],
+            'benefit_description' => ['nullable', 'string', 'max:255'],
             'is_active' => ['boolean'],
         ];
     }

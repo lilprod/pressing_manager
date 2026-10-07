@@ -30,7 +30,13 @@ class Client extends Model
         ];
     }
 
-    /** Le palier le plus élevé atteint par le nombre de points actuel du client, s'il y en a un. */
+    /**
+     * Le palier le plus élevé atteint par les dépenses du client sur les 12 derniers
+     * mois glissants (`loyalty_spend_12m`, voir audit « Promotions et fidélité »,
+     * CLAUDE.md) — plus le solde de points (`loyalty_points`), qui est une monnaie
+     * séparée (acquisition/valeur de redemption), pas le critère de palier depuis
+     * cette bascule.
+     */
     public function currentLoyaltyTier(): ?LoyaltyTier
     {
         return LoyaltyTier::query()
@@ -38,8 +44,8 @@ class Client extends Model
             // modèle agence-scopé — loyalty_tiers est pressing-scopé, pas agence-scopé.
             ->where('pressing_id', $this->agency->pressing_id)
             ->where('is_active', true)
-            ->where('min_points', '<=', $this->loyalty_points)
-            ->orderByDesc('min_points')
+            ->where('min_spend_amount', '<=', $this->loyalty_spend_12m)
+            ->orderByDesc('min_spend_amount')
             ->first();
     }
 

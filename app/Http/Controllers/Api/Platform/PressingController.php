@@ -147,8 +147,10 @@ class PressingController extends PlatformApiController
                 LoyaltyTier::create([
                     'pressing_id' => $pressing->id,
                     'name' => $tier['name'],
-                    'min_points' => $tier['min_points'],
+                    'min_spend_amount' => $tier['min_spend_amount'],
                     'discount_rate' => $tier['discount_rate'],
+                    'point_multiplier' => $tier['point_multiplier'] ?? 1.0,
+                    'benefit_description' => $tier['benefit_description'] ?? null,
                     'is_active' => true,
                 ]);
             }
@@ -223,7 +225,7 @@ class PressingController extends PlatformApiController
         $this->authorizePressing($request->user(), $pressing->id);
 
         $appSetting = AppSetting::current($pressing->id);
-        $tiers = LoyaltyTier::where('pressing_id', $pressing->id)->where('is_active', true)->orderBy('min_points')->get();
+        $tiers = LoyaltyTier::where('pressing_id', $pressing->id)->where('is_active', true)->orderBy('min_spend_amount')->get();
 
         return response()->json([
             'primary_color' => $appSetting->primary_color,
@@ -289,7 +291,7 @@ class PressingController extends PlatformApiController
      * palier). Un tier absent du tableau soumis (retiré côté UI) est désactivé, pas
      * supprimé.
      *
-     * @param  array<int,array{id?:int,name:string,min_points:int,discount_rate:float}>  $tiers
+     * @param  array<int,array{id?:int,name:string,min_spend_amount:int,discount_rate:float,point_multiplier?:float,benefit_description?:?string}>  $tiers
      */
     private function syncLoyaltyTiers(Pressing $pressing, array $tiers): void
     {
@@ -303,8 +305,10 @@ class PressingController extends PlatformApiController
         foreach ($tiers as $tier) {
             $fields = [
                 'name' => $tier['name'],
-                'min_points' => $tier['min_points'],
+                'min_spend_amount' => $tier['min_spend_amount'],
                 'discount_rate' => $tier['discount_rate'],
+                'point_multiplier' => $tier['point_multiplier'] ?? 1.0,
+                'benefit_description' => $tier['benefit_description'] ?? null,
                 'is_active' => true,
             ];
 

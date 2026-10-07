@@ -54,13 +54,13 @@ class ClientController extends ApiController
         $topTier = LoyaltyTier::query()
             ->where('pressing_id', $request->user()->pressing_id)
             ->where('is_active', true)
-            ->orderByDesc('min_points')
+            ->orderByDesc('min_spend_amount')
             ->first();
 
         return response()->json([
             'active_count' => $base()->where('is_active', true)->count(),
             'new_this_month' => $base()->where('created_at', '>=', now()->startOfMonth())->count(),
-            'vip_count' => $topTier ? $base()->where('loyalty_points', '>=', $topTier->min_points)->count() : 0,
+            'vip_count' => $topTier ? $base()->where('loyalty_spend_12m', '>=', $topTier->min_spend_amount)->count() : 0,
             'points_issued' => (int) $base()->sum('loyalty_points'),
         ]);
     }

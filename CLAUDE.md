@@ -150,7 +150,7 @@ restylage (panneau inline + modale), à appliquer d'emblée pour les prochains
 | 09 Paramètres | Branding du pressing | `pages/settings/BrandingSettingsPage.tsx` (route `/settings/branding`) | **fait, renforcement livré** (2026-10-02) — workflow brouillon/publication/versions restaurables, palette avec validateur de contraste AA (aperçu seul), monogramme, site web, mentions légales, pied/conditions de ticket réellement imprimés. Détail complet en §2 |
 | 09 Paramètres | Sécurité (politique de mots de passe) | `pages/settings/SecuritySettingsPage.tsx` (route `/settings/security`) | **fait** (2026-09-30) — pas d'écran dédié dans la maquette : mise en page calquée sur « Paramètres opérationnels » (node `25:12525`, champs suffixés + bascules) |
 | 09 Paramètres | Paramètres opérationnels | `pages/settings/OperationalSettingsPage.tsx` (route `/settings/operational`) | **fait** (2026-10-02) — réglages par agence (codes dépôt, délais plancher, cycle atelier, tarification, fidélité), tous réellement câblés côté backend (pas un formulaire cosmétique). Détail complet en §2 |
-| 09 Paramètres | Promotions et fidélité | `pages/LoyaltyPage.tsx` (route `/loyalty`) | **fait** (2026-09-30) — volet fidélité seulement : KPI dérivés de la config (paliers actifs, remise max, règle d'acquisition réelle via `loyalty_amount_per_point` exposé par `GET /settings`), paliers éditables en ligne (le `PATCH /loyalty-tiers/{id}` existait sans UI d'édition). Volet promotions entièrement absent du backend (§2) |
+| 09 Paramètres | Promotions et fidélité | `pages/LoyaltyPage.tsx` (route `/loyalty`) | **fait, renforcement complet livré** (2026-10-07) — KPI d'activité réels (membres/points/remises/campagnes), règles du programme éditables (taux de gain, valeur du point, seuil, expiration — jusque-là sans UI), historique des mouvements, groupes de fidélité, paliers basés sur les dépenses glissantes sur 12 mois (bascule depuis un solde de points), **volet promotions construit intégralement** (modèle, CRUD, application réelle dans le flux de commande). Détail complet plus bas dans ce fichier (« Audit de conformité Figma « Promotions et fidélité » ») |
 | 09 Paramètres | Notifications | `pages/NotificationsPage.tsx` (route `/notifications`) | **fait** (2026-09-30) — cartes d'état des canaux (comptes réels d'évènements activés, passerelle SMS « non connectée » = état réel), matrice évènement × SMS/e-mail avec interrupteurs, journal filtrable |
 | 11 Équipe | Utilisateurs et équipe | `pages/UsersPage.tsx` (route `/users`) | **fait** (2026-09-30) — annuaire en tableau (`table-fixed`, `overflow-x-auto`) + panneau latéral création/édition (la maquette montre un panneau à côté de la liste, **pas** un écran dédié : la convention `/<ressource>/new` ne s'applique donc pas ; l'ancienne modale d'édition est remplacée par ce panneau), filtre par rôle (serveur), colonne « Dernière activité » = `last_active_at` (max de `personal_access_tokens.last_used_at`, déjà tenu par Sanctum, exposé par `GET /users?full=1`, testé) |
 | 11 Équipe | Rôles et permissions | `pages/RolesPermissionsPage.tsx` (route `/roles-permissions`) | **fait** (2026-09-30) — cartes de rôles (`users_count` via `withCount('users')`, testé), configuration du rôle sélectionné en ligne (remplace la modale), duplication (création pré-remplie via `POST /roles`), matrice domaines × rôles (complet / partiel k/n / aucun), utilisateurs concernés (`/users?role=`) |
@@ -448,24 +448,23 @@ existe, pas de sélecteur de stratégie tarifaire), aperçu du workflow à 6 ét
 - Aperçu « mobile client » : toujours **omis**, l'app mobile client (section 14)
   n'existe pas.
 
-**09 Promotions et fidélité** (node `72:20021`)
-- Tout le volet **promotions** : formulaire de création (code, type/valeur de remise,
-  période début/fin, quota global/par client, agences, cumulable), tableau des
-  promotions (code, remise, période, quota, utilisation avec progression, agences,
-  statut) et filtres. Il faudrait un modèle `Promotion` (+ pivot agences, table
-  d'utilisations) et son application dans `OrderController::store`.
-- Indicateurs membres / points émis / points utilisés / taux de remise / campagnes :
-  il faudrait `GET /loyalty/stats` (nb clients par palier, somme des points, points
-  crédités/consommés sur la période — la consommation de points n'existe pas : la
-  remise de palier est appliquée sans débit de points).
-- Carte « Règles » éditable (montant par point, seuils, bascule) : la règle est
-  `config('loyalty.amount_per_point')` (env), affichée en lecture seule.
-- « Activité fidélité » (mouvements de points par client, motif, date) : aucun
-  historique, seul `clients.loyalty_points` (cumul) est stocké. Il faudrait une table
-  `loyalty_point_movements` écrite par `LoyaltyService`.
-- « Répartition des membres par palier » : agrégat clients par palier à ajouter à
-  `/loyalty/stats`.
-- Bouton « Exporter » : pas d'export fidélité.
+**09 Promotions et fidélité** (node `72:20021`) — **fait, construction complète**
+(2026-10-07, détail intégral plus bas dans ce fichier). Tout ce qui suit était vrai
+jusqu'à ce chantier, conservé ici comme trace de l'état avant/après :
+- ~~Tout le volet **promotions**~~ **fait** — modèle `Promotion` (+ pivot agences,
+  table d'utilisations) + application réelle dans `OrderController::store`.
+- ~~Indicateurs membres / points émis / points consommés / campagnes~~ **fait** —
+  `GET /loyalty/stats`, réutilise `KpiService::loyaltySummary()`. Le taux de remise
+  et le ROI campagnes par campagne restent omis (pas de série temporelle par
+  campagne individuelle).
+- ~~Carte « Règles » éditable~~ **fait** — taux de gain, valeur du point, seuil,
+  expiration, tous réellement éditables sur cet écran.
+- ~~« Activité fidélité »~~ **fait** — `GET /loyalty/movements`, `loyalty_point_
+  movements` alimenté depuis le 2026-10-06.
+- ~~« Répartition des membres par palier »~~ **fait** — `by_tier` dans `/loyalty/
+  stats`.
+- ~~Bouton « Exporter »~~ **fait** — export CSV généré côté client à partir des
+  données déjà chargées sur l'écran.
 
 **09 Notifications** (node `72:21413`)
 - 4 évènements supplémentaires sur 7 dans la maquette : seuls `order_ready`,
@@ -3812,3 +3811,156 @@ d'ajouter une nouvelle colonne.
   Configuration, recherche filtrant réellement la liste, export CSV/PDF
   déclenchant chacun un téléchargement réel pour le Chantier 4 ; aucun
   débordement horizontal constaté aux deux largeurs sur les deux écrans.
+
+**Audit de conformité Figma « Promotions et fidélité » + construction complète du
+volet (skill `figma-conformity-audit`)** — mené le 2026-10-07, capture fournie via
+la skill. Périmètre tranché explicitement avec l'utilisateur via `AskUserQuestion` :
+construire l'intégralité des écarts (b), démarrer le chantier Promotions (c) dans la
+même passe, et basculer le modèle de palier vers les dépenses glissantes sur 12 mois
+(dérogation à la discipline « un chantier → stop », déjà actée ailleurs dans ce
+fichier pour un périmètre explicitement validé).
+
+- **Audit initial** : l'écran `/loyalty` (`LoyaltyPage.tsx`) ne couvrait que le volet
+  fidélité le plus minimal (3 StatCards de config, liste de paliers, création de
+  palier) — aucun indicateur d'activité (membres/points/remises), aucune règle
+  éditable sur cet écran (taux de gain et seuil vivaient sur `/settings/operational`,
+  l'expiration des points n'avait AUCUNE UI nulle part bien que le mécanisme tourne
+  déjà via `php artisan loyalty:expire-points`), aucun historique de mouvements
+  affiché (alors que `loyalty_point_movements` existe et contient de vraies données
+  depuis le chantier du 2026-10-06), aucun groupe de fidélité, et le volet promotions
+  entièrement absent du backend (aucun modèle `Promotion`).
+
+- **Bascule du modèle de palier (points cumulés → dépenses glissantes 12 mois)** :
+  décision structurante, actée explicitement avec l'utilisateur après avoir signalé
+  le risque de performance d'un calcul en direct (voir plus bas). `loyalty_tiers.
+  min_points` renommé `min_spend_amount` (migration `renameColumn`, backfill des 3
+  paliers par défaut vers des seuils FCFA réalistes identifiés par nom, un 4e palier
+  « Essentiel » à 0 FCFA ajouté pour chaque pressing — absent avant ce chantier).
+  Deux colonnes réellement nouvelles alignées sur la maquette : `point_multiplier`
+  (pondération de l'acquisition par palier — stockée et éditable, **pas encore lue**
+  par `LoyaltyService` : chantier séparé, chantier omis honnêtement plutôt que de
+  prétendre qu'elle agit déjà) et `benefit_description` (texte libre saisi par
+  l'administrateur, une donnée réelle qu'il configure, pas un avantage mécanique
+  inventé par l'app).
+  - La migration historique `2026_10_06_120000_add_pressing_id_to_loyalty_tiers_
+    table.php` référençait `LoyaltyTierSeeder::TIERS` pour son backfill — comme ce
+    chantier change la forme de cette constante, la migration a été corrigée pour
+    figer son propre instantané en dur plutôt que de dépendre d'un code applicatif
+    mutable (une migration historique ne doit jamais dépendre d'une constante qui
+    peut changer de forme après coup).
+  - Points de fidélité (`loyalty_points`, solde, acquisition/valeur de redemption) et
+    palier (dépenses glissantes) sont désormais deux dimensions séparées — avant ce
+    chantier le palier se déduisait directement du solde de points, conflatant les
+    deux concepts alors que la maquette les sépare clairement (« Conversion : 200
+    points = 1 000 FCFA » vs « Niveaux de fidélité » basés sur les dépenses).
+  - **Décision de performance** : `Client::currentLoyaltyTier()` est un attribut
+    `appends`, donc évalué à CHAQUE sérialisation d'un client, y compris en liste
+    (recherche client dans `NewOrder.tsx`, `ClientsList.tsx`…). Un calcul en direct
+    (`SUM(payments.amount) WHERE paid_at >= now()-12mois`) à chaque sérialisation
+    aurait ajouté un N+1 d'agrégats lourds sur tout écran listant des clients — une
+    vraie régression de performance, pas un raccourci anodin. Solution retenue :
+    compteur dénormalisé `clients.loyalty_spend_12m`, incrémenté en direct à chaque
+    paiement (même point d'écriture que `loyalty_points`, dans `LoyaltyService`,
+    **avant** le `if ($points <= 0) return;` — toute dépense compte pour le palier,
+    même un paiement trop petit pour créditer au moins 1 point) puis recalculé
+    chaque nuit par la nouvelle commande `loyalty:recalculate-spend` (02h15, une
+    seule requête SQL agrégée par sous-requête corrélée, jamais une boucle par
+    client) pour faire sortir les paiements de plus de 12 mois de la fenêtre
+    glissante. Hybride optimiste (immédiat) + nocturne (correctif) — même esprit que
+    `loyalty:expire-points` déjà existant.
+
+- **KPI réellement construits, en réutilisant l'existant plutôt qu'en redérivant**
+  (voir §3 de la méthode) : `KpiService::loyaltySummary()` calculait déjà `by_tier`/
+  `points_issued`/`points_consumed` pour la carte Fidélité du KPI (chantier du
+  2026-10-05) — rendue `public` et réutilisée telle quelle par le nouvel endpoint
+  `GET /loyalty/stats` plutôt que redérivée. Nuance d'honnêteté appliquée : exposé
+  ici sous `points_expired` (pas `points_consumed`) — ce total ne contient à ce jour
+  que des expirations (`reason=expired`), aucun mécanisme de rédemption volontaire de
+  points n'existe nulle part dans l'app, un libellé « consommés » aurait suggéré un
+  geste client qui n'existe pas.
+  - « Remises accordées » : **pas** une somme de `orders.discount_amount` (générique,
+    mélangerait remise fidélité, remise manuelle du caissier et remise de promotion —
+    le gap d'honnêteté identifié explicitement pendant l'audit). Trois colonnes
+    dédiées ajoutées à `orders` (`loyalty_discount_amount`, `promotion_id`,
+    `promotion_discount_amount`) pour rendre l'origine de chaque remise interrogeable
+    séparément ; `discount_amount` reste le total facturé (inchangé pour
+    `InvoiceService` et tout écran qui le lit déjà). `OrderController::store` reçoit
+    un nouveau booléen `discount_is_loyalty_auto` (vrai quand le caissier n'a pas
+    modifié la remise auto-calculée dans `NewOrder.tsx`) pour router le montant vers
+    la bonne colonne ; éditer la remise manuellement bascule tout le montant soumis
+    vers un « reliquat manuel » non attribué à la fidélité (même sémantique qu'avant
+    ce chantier, juste maintenant traçable).
+  - « Membres actifs » = somme de `by_tier`. Ni dupliqué ni redérivé.
+
+- **Volet Promotions, construit intégralement (catégorie (c) de l'audit initial)** :
+  modèle `Promotion` + `PromotionUsage` (ledger append-only, même principe que
+  `loyalty_point_movements`/`audit_logs`) + pivot `promotion_agency` (aucune ligne =
+  éligible à toutes les agences du pressing, même convention que « Toutes » dans la
+  maquette). `PromotionController` (CRUD, statut dérivé de `is_active` + dates +
+  quota plutôt que stocké — jamais désynchronisable). Câblé dans
+  `OrderController::store` : validation serveur complète d'un code soumis (existe,
+  actif, période, éligibilité agence, montant minimum, quota global, quota par
+  client — jamais un montant de remise calculé côté client, toujours recalculé et
+  plafonné serveur) avec verrou (`lockForUpdate`) sur la ligne `Promotion` pour éviter
+  une course sur le quota en cas de requêtes concurrentes. Règle de cumul tranchée
+  pendant ce chantier (absente de la maquette) : une promotion non cumulable
+  (`combinable_with_loyalty=false`) écrase la remise fidélité auto-calculée sur ce
+  dépôt plutôt que de cumuler les deux sans contrôle.
+
+- **Catégorie (c) encore omise après ce chantier, documentée honnêtement** :
+  - `point_multiplier` : stocké et éditable, pas encore lu par `LoyaltyService` au
+    moment de créditer les points — chantier séparé, effort non négligeable sur un
+    flux financier-adjacent, volontairement pas mélangé à cette passe déjà large.
+  - Toggle « Créditer après encaissement » : omis sciemment. Le rendre réellement
+    bidirectionnel demanderait un second point de crédit (à la création du dépôt,
+    avant tout paiement) avec un risque réel de double-comptage sur le flux
+    paiement/fidélité déjà critique — disproportionné pour cette passe sans tests
+    dédiés supplémentaires. Le comportement réel actuel (crédit au paiement
+    uniquement) reste inchangé et correct, juste pas exposé comme un interrupteur
+    actionnable sur cet écran.
+  - Motifs de mouvement « bonus de palier » et « rédemption manuelle » (visibles sur
+    la maquette « Historique des mouvements ») : aucun mécanisme réel ne les produit,
+    ils n'apparaissent donc jamais dans la liste plutôt que d'être simulés.
+  - Export « Exporter » : généré côté client en CSV à partir des données déjà
+    chargées sur l'écran (KPI, paliers, mouvements) — pas un nouvel endpoint backend
+    dédié (écart au patron `api.blob()` habituel de l'app, décision pragmatique pour
+    une fonctionnalité secondaire plutôt qu'une nouvelle surface serveur).
+
+- **Bug corrigé en cours de route** : `ClientController::stats()::vip_count` et
+  `Client::currentLoyaltyTier()` lisaient encore `loyalty_points`/`min_points` après
+  la bascule — corrigés pour comparer `loyalty_spend_12m`/`min_spend_amount`,
+  couverts par `LoyaltySpendTierTest.php` (« a client resolves its tier from spend
+  not from point balance », avec un solde de points élevé mais des dépenses faibles,
+  pour prouver la non-régression vers l'ancien critère).
+
+- Tests : `LoyaltySpendTierTest.php` (nouveau, 5 : incrément en direct, accumulation
+  sur plusieurs paiements, résolution par dépenses et pas par points, persistance
+  multiplicateur/avantage, commande de recalcul excluant les paiements >12 mois),
+  `LoyaltyStatsEndpointTest.php` (nouveau, 4 : stats agrégées depuis le ledger,
+  mouvements avec nom client, segments, gating permission), `PromotionManagementTest.
+  php` (nouveau, 6 : création brouillon, publication, statut planifié, unicité du
+  code par pressing, gating permission, isolation agence inter-pressing),
+  `PromotionApplicationTest.php` (nouveau, 9 : remise appliquée + usage enregistré,
+  code inconnu/expiré/quota global/quota client/montant minimum/agence rejetés,
+  suppression de la remise fidélité par une promotion non cumulable, cumul réel par
+  une promotion cumulable). Tests existants mis à jour pour le renommage de champ et
+  la nouvelle sémantique (`ClientStatsTest`, `KpiAdvancedMetricsTest`, `LoyaltyTest`,
+  `LoyaltyTierIsolationTest`, `PressingProvisioningDefaultsTest` — y compris
+  l'assertion sur le premier palier par seuil croissant, désormais « Essentiel » et
+  non plus « Argent »). Suite complète 600/600 après ce chantier (aucune
+  régression). `tsc --noEmit` et `npm run build` propres, parité i18n fr/en stricte
+  (0 écart, vérifiée par script Node). Vérifié par un parcours réel bout en bout
+  (navigateur, session superadmin existante réutilisée) : création d'une promotion
+  (brouillon → publiée), application réelle du code dans `NewOrder.tsx` sur une
+  vraie commande (remise de 100 FCFA correctement attribuée à `promotion_id`,
+  `loyalty_discount_amount=0` puisqu'aucune remise fidélité n'était due, ligne
+  `promotion_usages` créée), compteur « Utilisation » et KPI « Campagnes actives »
+  reflétant la vraie donnée après rechargement. **Limite de validation reconnue** :
+  l'environnement de capture n'a pas permis de forcer un vrai viewport 390px
+  (`resize_window` n'affecte pas la zone de rendu observée, restée à ~1686px quelle
+  que soit la tentative) — le rendu mobile a donc été validé par relecture du code
+  contre les pièges documentés en §5 (grilles `StatCard` en `grid-cols-1` de base,
+  conteneurs `grid lg:grid-cols-[...]`/`sm:grid-cols-2` tous dotés d'un `grid-cols-1`
+  explicite — un oubli corrigé sur `EditTierRow` pendant cette relecture —, pastilles
+  de filtre et chips d'agence en `flex flex-wrap`), pas par une capture empirique à
+  cette largeur. À revérifier par capture réelle dès qu'un environnement le permet.

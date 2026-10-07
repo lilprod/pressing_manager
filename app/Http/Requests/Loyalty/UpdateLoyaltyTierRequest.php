@@ -16,8 +16,10 @@ class UpdateLoyaltyTierRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'min_points' => ['sometimes', 'required', 'integer', 'min:0', Rule::unique('loyalty_tiers', 'min_points')->where('pressing_id', $this->user()->pressing_id)->ignore($this->route('loyaltyTier'))],
+            'min_spend_amount' => ['sometimes', 'required', 'integer', 'min:0', Rule::unique('loyalty_tiers', 'min_spend_amount')->where('pressing_id', $this->user()->pressing_id)->ignore($this->route('loyaltyTier'))],
             'discount_rate' => ['sometimes', 'required', 'numeric', 'min:0', 'max:1'],
+            'point_multiplier' => ['sometimes', 'numeric', 'min:1', 'max:9.99'],
+            'benefit_description' => ['nullable', 'string', 'max:255'],
             'is_active' => ['boolean'],
         ];
     }

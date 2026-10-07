@@ -8,18 +8,21 @@ import { button, cardPadded, cx, input, label, select, textLink } from '../../co
 import Toggle from '../../components/ui/Toggle';
 import type { PlatformPlan, Pressing } from '../../types';
 
-/** Mêmes 3 paliers que `database/seeders/LoyaltyTierSeeder.php` — reflet du seeder,
- * pré-remplis ici plutôt que lus depuis un nouvel endpoint de défauts. */
+/** Mêmes 4 paliers que `database/seeders/LoyaltyTierSeeder.php` — reflet du seeder,
+ * pré-remplis ici plutôt que lus depuis un nouvel endpoint de défauts. Seuils en FCFA
+ * de dépenses sur 12 mois glissants (audit « Promotions et fidélité », CLAUDE.md —
+ * bascule depuis un solde de points). */
 const DEFAULT_LOYALTY_TIERS: TierFormRow[] = [
-    { name: 'Argent', minPoints: '50', discountPercent: '5' },
-    { name: 'Or', minPoints: '150', discountPercent: '10' },
-    { name: 'Platine', minPoints: '300', discountPercent: '15' },
+    { name: 'Essentiel', minSpendAmount: '0', discountPercent: '0' },
+    { name: 'Argent', minSpendAmount: '100000', discountPercent: '5' },
+    { name: 'Or', minSpendAmount: '300000', discountPercent: '10' },
+    { name: 'Platine', minSpendAmount: '700000', discountPercent: '15' },
 ];
 
 interface TierFormRow {
     id?: number;
     name: string;
-    minPoints: string;
+    minSpendAmount: string;
     discountPercent: string;
 }
 
@@ -34,7 +37,7 @@ interface PressingSettings {
         password_require_symbol: boolean | null;
         password_expiry_days: number | null;
     };
-    loyalty_tiers: Array<{ id: number; name: string; min_points: number; discount_rate: number }>;
+    loyalty_tiers: Array<{ id: number; name: string; min_spend_amount: number; discount_rate: number }>;
 }
 
 export default function PressingFormPage() {
@@ -126,7 +129,7 @@ export default function PressingFormPage() {
                     settings.loyalty_tiers.map((tier) => ({
                         id: tier.id,
                         name: tier.name,
-                        minPoints: String(tier.min_points),
+                        minSpendAmount: String(tier.min_spend_amount),
                         discountPercent: String(Math.round(tier.discount_rate * 100)),
                     })),
                 );
@@ -166,7 +169,7 @@ export default function PressingFormPage() {
                 loyalty_tiers: loyaltyTiers.map((tier) => ({
                     id: tier.id,
                     name: tier.name,
-                    min_points: Number(tier.minPoints),
+                    min_spend_amount: Number(tier.minSpendAmount),
                     discount_rate: Number(tier.discountPercent) / 100,
                 })),
                 ...(isEdit
@@ -211,7 +214,7 @@ export default function PressingFormPage() {
     }
 
     const tiersValid = loyaltyTiers.every(
-        (tier) => tier.name.trim() !== '' && tier.minPoints.trim() !== '' && tier.discountPercent.trim() !== '',
+        (tier) => tier.name.trim() !== '' && tier.minSpendAmount.trim() !== '' && tier.discountPercent.trim() !== '',
     );
 
     const canSubmit =
@@ -234,7 +237,7 @@ export default function PressingFormPage() {
     }
 
     function addTier() {
-        setLoyaltyTiers((tiers) => [...tiers, { name: '', minPoints: '', discountPercent: '' }]);
+        setLoyaltyTiers((tiers) => [...tiers, { name: '', minSpendAmount: '', discountPercent: '' }]);
     }
 
     const backLink = (
@@ -526,13 +529,13 @@ export default function PressingFormPage() {
                                         className={cx(input, 'w-full')}
                                     />
                                 </label>
-                                <label className="block w-28">
-                                    <span className={label}>Seuil (pts)</span>
+                                <label className="block w-32">
+                                    <span className={label}>Seuil (FCFA/12 mois)</span>
                                     <input
                                         type="number"
                                         min={0}
-                                        value={tier.minPoints}
-                                        onChange={(e) => updateTier(index, { minPoints: e.target.value })}
+                                        value={tier.minSpendAmount}
+                                        onChange={(e) => updateTier(index, { minSpendAmount: e.target.value })}
                                         className={cx(input, 'w-full')}
                                     />
                                 </label>

@@ -55,8 +55,8 @@ class LoyaltyTierIsolationTest extends TestCase
 
     public function test_a_tier_created_in_one_pressing_is_invisible_in_another(): void
     {
-        LoyaltyTier::factory()->create(['pressing_id' => $this->pressingA->id, 'name' => 'Argent A', 'min_points' => 50]);
-        LoyaltyTier::factory()->create(['pressing_id' => $this->pressingB->id, 'name' => 'Argent B', 'min_points' => 50]);
+        LoyaltyTier::factory()->create(['pressing_id' => $this->pressingA->id, 'name' => 'Argent A', 'min_spend_amount' => 50000]);
+        LoyaltyTier::factory()->create(['pressing_id' => $this->pressingB->id, 'name' => 'Argent B', 'min_spend_amount' => 50000]);
 
         $responseA = $this->actingAs($this->managerA)->getJson('/api/loyalty-tiers');
         $responseB = $this->actingAs($this->managerB)->getJson('/api/loyalty-tiers');
@@ -70,28 +70,28 @@ class LoyaltyTierIsolationTest extends TestCase
         $responseB->assertJsonPath('0.name', 'Argent B');
     }
 
-    public function test_two_pressings_can_each_use_the_same_min_points_threshold(): void
+    public function test_two_pressings_can_each_use_the_same_min_spend_amount_threshold(): void
     {
-        LoyaltyTier::factory()->create(['pressing_id' => $this->pressingA->id, 'min_points' => 50]);
+        LoyaltyTier::factory()->create(['pressing_id' => $this->pressingA->id, 'min_spend_amount' => 50000]);
 
         // Même seuil, pressing différent — l'unicité est désormais composite
-        // (pressing_id, min_points), pas globale.
+        // (pressing_id, min_spend_amount), pas globale.
         $response = $this->actingAs($this->managerB)->postJson('/api/loyalty-tiers', [
             'name' => 'Argent B',
-            'min_points' => 50,
+            'min_spend_amount' => 50000,
             'discount_rate' => 0.05,
         ]);
 
         $response->assertCreated();
         $this->assertDatabaseHas('loyalty_tiers', [
             'pressing_id' => $this->pressingB->id,
-            'min_points' => 50,
+            'min_spend_amount' => 50000,
         ]);
     }
 
     public function test_a_manager_cannot_update_a_loyalty_tier_from_another_pressing(): void
     {
-        $tier = LoyaltyTier::factory()->create(['pressing_id' => $this->pressingA->id, 'min_points' => 50]);
+        $tier = LoyaltyTier::factory()->create(['pressing_id' => $this->pressingA->id, 'min_spend_amount' => 50000]);
 
         $response = $this->actingAs($this->managerB)->patchJson("/api/loyalty-tiers/{$tier->id}", [
             'discount_rate' => 0.9,
@@ -106,11 +106,11 @@ class LoyaltyTierIsolationTest extends TestCase
         $agencyA = Agency::factory()->create(['pressing_id' => $this->pressingA->id]);
         $agencyB = Agency::factory()->create(['pressing_id' => $this->pressingB->id]);
 
-        // Pressing A a un palier à 50 points ; pressing B n'en a aucun.
-        LoyaltyTier::factory()->create(['pressing_id' => $this->pressingA->id, 'name' => 'Argent A', 'min_points' => 50, 'discount_rate' => 0.05]);
+        // Pressing A a un palier à 50 000 FCFA de dépenses ; pressing B n'en a aucun.
+        LoyaltyTier::factory()->create(['pressing_id' => $this->pressingA->id, 'name' => 'Argent A', 'min_spend_amount' => 50000, 'discount_rate' => 0.05]);
 
-        $clientA = Client::factory()->for($agencyA, 'agency')->create(['loyalty_points' => 80]);
-        $clientB = Client::factory()->for($agencyB, 'agency')->create(['loyalty_points' => 80]);
+        $clientA = Client::factory()->for($agencyA, 'agency')->create(['loyalty_spend_12m' => 80000]);
+        $clientB = Client::factory()->for($agencyB, 'agency')->create(['loyalty_spend_12m' => 80000]);
 
         $responseA = $this->actingAs($this->managerA)->getJson("/api/clients/{$clientA->id}");
         $responseB = $this->actingAs($this->managerB)->getJson("/api/clients/{$clientB->id}");
@@ -129,13 +129,13 @@ class LoyaltyTierIsolationTest extends TestCase
     {
         $agencyB = Agency::factory()->create(['pressing_id' => $this->pressingB->id]);
 
-        // Pressing A a un palier VIP à 50 points ; pressing B n'a AUCUN palier.
+        // Pressing A a un palier VIP à 50 000 FCFA ; pressing B n'a AUCUN palier.
         // Si ClientController::stats() lisait le mauvais pressing, un client de B
-        // à 80 points serait compté VIP via le seuil de A alors qu'il ne devrait
-        // jamais l'être (B n'a pas de programme de fidélité configuré).
-        LoyaltyTier::factory()->create(['pressing_id' => $this->pressingA->id, 'min_points' => 50]);
+        // à 80 000 FCFA de dépenses serait compté VIP via le seuil de A alors qu'il
+        // ne devrait jamais l'être (B n'a pas de programme de fidélité configuré).
+        LoyaltyTier::factory()->create(['pressing_id' => $this->pressingA->id, 'min_spend_amount' => 50000]);
 
-        Client::factory()->for($agencyB, 'agency')->create(['loyalty_points' => 80, 'is_active' => true]);
+        Client::factory()->for($agencyB, 'agency')->create(['loyalty_spend_12m' => 80000, 'is_active' => true]);
 
         $response = $this->actingAs($this->managerB)->getJson('/api/clients/stats');
 

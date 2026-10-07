@@ -59,6 +59,7 @@ class AgencySettingController extends ApiController
             'loyalty_amount_per_point' => $settings->loyalty_amount_per_point,
             'loyalty_redemption_threshold' => $settings->loyalty_redemption_threshold,
             'loyalty_point_expiry_months' => $settings->loyalty_point_expiry_months,
+            'loyalty_point_value_fcfa' => $settings->loyalty_point_value_fcfa,
             'offline_sync_interval_minutes' => $settings->offline_sync_interval_minutes,
             'offline_retention_days' => $settings->offline_retention_days,
             'updated_at' => $settings->updated_at?->toIso8601String(),

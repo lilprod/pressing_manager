@@ -55,14 +55,24 @@ return new class extends Migration
         }
 
         // Tout pressing sans aucun palier (créé après le pivot, avant que cette
-        // migration n'existe) reçoit le même jeu par défaut que LoyaltyTierSeeder,
-        // pour ne jamais laisser un pressing avec un programme de fidélité vide.
+        // migration n'existe) reçoit le même jeu par défaut que LoyaltyTierSeeder
+        // *à la date de cette migration* — snapshot figé en dur plutôt qu'une
+        // référence à la constante (voir chantier « bascule dépenses FCFA/12 mois »,
+        // CLAUDE.md : la constante a depuis changé de forme ; une migration historique
+        // ne doit jamais dépendre d'un code applicatif mutable, seulement de son propre
+        // instantané au moment où elle a été écrite).
+        $defaultTiersAtThisDate = [
+            ['name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05],
+            ['name' => 'Or', 'min_points' => 150, 'discount_rate' => 0.10],
+            ['name' => 'Platine', 'min_points' => 300, 'discount_rate' => 0.15],
+        ];
+
         $pressingsWithoutTiers = DB::table('pressings')
             ->whereNotIn('id', DB::table('loyalty_tiers')->pluck('pressing_id'))
             ->get();
 
         foreach ($pressingsWithoutTiers as $pressing) {
-            foreach (\Database\Seeders\LoyaltyTierSeeder::TIERS as $tier) {
+            foreach ($defaultTiersAtThisDate as $tier) {
                 DB::table('loyalty_tiers')->insert($tier + [
                     'pressing_id' => $pressing->id,
                     'is_active' => true,

@@ -16,7 +16,8 @@ class Order extends Model
     protected $fillable = [
         'agency_id', 'client_id', 'created_by', 'order_number', 'client_local_uuid',
         'status', 'is_express', 'source', 'sync_status', 'promised_at', 'delivered_at',
-        'total_amount', 'discount_amount', 'notes', 'priority', 'washer_id', 'sorter_id',
+        'total_amount', 'discount_amount', 'loyalty_discount_amount', 'promotion_id', 'promotion_discount_amount',
+        'notes', 'priority', 'washer_id', 'sorter_id',
     ];
 
     protected function casts(): array
@@ -26,6 +27,11 @@ class Order extends Model
             'promised_at' => 'datetime',
             'delivered_at' => 'datetime',
         ];
+    }
+
+    public function promotion(): BelongsTo
+    {
+        return $this->belongsTo(Promotion::class);
     }
 
     public function agency(): BelongsTo

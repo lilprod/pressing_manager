@@ -56,8 +56,8 @@ class PressingProvisioningDefaultsTest extends TestCase
                 'sorter_step_enabled' => true,
             ],
             'loyalty_tiers' => [
-                ['name' => 'Bronze', 'min_points' => 20, 'discount_rate' => 0.02],
-                ['name' => 'Argent', 'min_points' => 60, 'discount_rate' => 0.06],
+                ['name' => 'Bronze', 'min_spend_amount' => 20, 'discount_rate' => 0.02],
+                ['name' => 'Argent', 'min_spend_amount' => 60, 'discount_rate' => 0.06],
             ],
         ]);
         $response->assertCreated();
@@ -75,7 +75,7 @@ class PressingProvisioningDefaultsTest extends TestCase
         $this->assertFalse((bool) $agencySetting->washer_step_enabled);
         $this->assertTrue((bool) $agencySetting->sorter_step_enabled);
 
-        $tiers = LoyaltyTier::where('pressing_id', $pressingId)->orderBy('min_points')->get();
+        $tiers = LoyaltyTier::where('pressing_id', $pressingId)->orderBy('min_spend_amount')->get();
         $this->assertCount(2, $tiers);
         $this->assertSame('Bronze', $tiers[0]->name);
         $this->assertSame('Argent', $tiers[1]->name);
@@ -106,9 +106,9 @@ class PressingProvisioningDefaultsTest extends TestCase
         $this->assertTrue((bool) $agencySetting->sorter_step_enabled);
 
         // Programme de fidélité par défaut : repli sur LoyaltyTierSeeder::TIERS.
-        $tiers = LoyaltyTier::where('pressing_id', $pressingId)->orderBy('min_points')->get();
+        $tiers = LoyaltyTier::where('pressing_id', $pressingId)->orderBy('min_spend_amount')->get();
         $this->assertCount(count(LoyaltyTierSeeder::TIERS), $tiers);
-        $this->assertSame('Argent', $tiers[0]->name);
+        $this->assertSame('Essentiel', $tiers[0]->name);
     }
 
     public function test_default_loyalty_tiers_are_isolated_to_their_own_pressing(): void

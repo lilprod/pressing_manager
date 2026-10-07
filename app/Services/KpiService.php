@@ -160,9 +160,16 @@ class KpiService
      * @param  array<int>  $agencyIds
      * @return array{by_tier:array<int,array{id:int,name:string,count:int}>, points_issued:int, points_consumed:int}
      */
-    private function loyaltySummary(array $agencyIds, Carbon $from, Carbon $to, int $pressingId): array
+    /**
+     * Rendu public (CLAUDE.md, audit « Promotions et fidélité ») : réutilisé tel quel
+     * par `LoyaltyTierController::stats()` pour l'écran Fidélité — mêmes agrégats
+     * `by_tier`/`points_issued`/`points_consumed` que la carte « Fidélité » du KPI,
+     * pas une seconde implémentation divergente du même concept (voir §3 de la
+     * méthode de conformité Figma : une formule déjà standardisée se réutilise).
+     */
+    public function loyaltySummary(array $agencyIds, Carbon $from, Carbon $to, int $pressingId): array
     {
-        $tiers = LoyaltyTier::query()->where('pressing_id', $pressingId)->where('is_active', true)->orderBy('min_points')->get();
+        $tiers = LoyaltyTier::query()->where('pressing_id', $pressingId)->where('is_active', true)->orderBy('min_spend_amount')->get();
 
         $byTier = [];
         foreach ($tiers as $index => $tier) {
@@ -170,9 +177,9 @@ class KpiService
             $query = Client::query()
                 ->whereIn('agency_id', $agencyIds)
                 ->where('is_active', true)
-                ->where('loyalty_points', '>=', $tier->min_points);
+                ->where('loyalty_spend_12m', '>=', $tier->min_spend_amount);
             if ($next) {
-                $query->where('loyalty_points', '<', $next->min_points);
+                $query->where('loyalty_spend_12m', '<', $next->min_spend_amount);
             }
             $byTier[] = ['id' => $tier->id, 'name' => $tier->name, 'count' => $query->count()];
         }

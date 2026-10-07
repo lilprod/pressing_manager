@@ -99,14 +99,14 @@ class LoyaltyTest extends TestCase
         $this->assertSame(50, $client->refresh()->loyalty_points);
     }
 
-    public function test_a_client_resolves_the_highest_tier_reached_by_its_points(): void
+    public function test_a_client_resolves_the_highest_tier_reached_by_its_spend(): void
     {
         $this->seedRbac();
         $agency = Agency::factory()->create();
         $accueil = $this->makeUser('accueil', $agency);
-        LoyaltyTier::factory()->create(['name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05]);
-        LoyaltyTier::factory()->create(['name' => 'Or', 'min_points' => 150, 'discount_rate' => 0.10]);
-        $client = Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 80]);
+        LoyaltyTier::factory()->create(['pressing_id' => $agency->pressing_id, 'name' => 'Argent', 'min_spend_amount' => 50000, 'discount_rate' => 0.05]);
+        LoyaltyTier::factory()->create(['pressing_id' => $agency->pressing_id, 'name' => 'Or', 'min_spend_amount' => 150000, 'discount_rate' => 0.10]);
+        $client = Client::factory()->for($agency, 'agency')->create(['loyalty_spend_12m' => 80000]);
 
         $response = $this->actingAs($accueil)->getJson("/api/clients/{$client->id}");
 
@@ -120,8 +120,8 @@ class LoyaltyTest extends TestCase
         $this->seedRbac();
         $agency = Agency::factory()->create();
         $accueil = $this->makeUser('accueil', $agency);
-        LoyaltyTier::factory()->create(['name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05]);
-        $client = Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 10]);
+        LoyaltyTier::factory()->create(['pressing_id' => $agency->pressing_id, 'name' => 'Argent', 'min_spend_amount' => 50000, 'discount_rate' => 0.05]);
+        $client = Client::factory()->for($agency, 'agency')->create(['loyalty_spend_12m' => 10000]);
 
         $response = $this->actingAs($accueil)->getJson("/api/clients/{$client->id}");
 
@@ -135,8 +135,8 @@ class LoyaltyTest extends TestCase
         $this->seedRbac();
         $agency = Agency::factory()->create();
         $accueil = $this->makeUser('accueil', $agency);
-        LoyaltyTier::factory()->create(['name' => 'Retiré', 'min_points' => 50, 'discount_rate' => 0.05, 'is_active' => false]);
-        $client = Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 80]);
+        LoyaltyTier::factory()->create(['pressing_id' => $agency->pressing_id, 'name' => 'Retiré', 'min_spend_amount' => 50000, 'discount_rate' => 0.05, 'is_active' => false]);
+        $client = Client::factory()->for($agency, 'agency')->create(['loyalty_spend_12m' => 80000]);
 
         $response = $this->actingAs($accueil)->getJson("/api/clients/{$client->id}");
 
@@ -151,7 +151,7 @@ class LoyaltyTest extends TestCase
 
         $created = $this->actingAs($admin)->postJson('/api/loyalty-tiers', [
             'name' => 'Bronze',
-            'min_points' => 20,
+            'min_spend_amount' => 20000,
             'discount_rate' => 0.02,
         ]);
         $created->assertCreated();
@@ -178,15 +178,15 @@ class LoyaltyTest extends TestCase
         $response->assertStatus(403);
     }
 
-    public function test_two_tiers_cannot_share_the_same_min_points_threshold(): void
+    public function test_two_tiers_cannot_share_the_same_min_spend_amount_threshold(): void
     {
         $this->seedRbac();
         $admin = $this->makeUser('admin');
-        LoyaltyTier::factory()->create(['min_points' => 50]);
+        LoyaltyTier::factory()->create(['pressing_id' => $admin->pressing_id, 'min_spend_amount' => 50000]);
 
         $response = $this->actingAs($admin)->postJson('/api/loyalty-tiers', [
             'name' => 'Doublon',
-            'min_points' => 50,
+            'min_spend_amount' => 50000,
             'discount_rate' => 0.05,
         ]);
 

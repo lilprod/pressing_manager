@@ -16,8 +16,10 @@ class LoyaltyTierFactory extends Factory
             // Voir AgencyFactory : même réutilisation du premier pressing du test.
             'pressing_id' => fn () => Pressing::query()->value('id') ?? Pressing::factory()->create()->id,
             'name' => fake()->unique()->word(),
-            'min_points' => fake()->unique()->numberBetween(10, 1000),
+            'min_spend_amount' => fake()->unique()->numberBetween(10000, 1000000),
             'discount_rate' => fake()->randomFloat(2, 0.01, 0.2),
+            'point_multiplier' => 1.0,
+            'benefit_description' => null,
             'is_active' => true,
         ];
     }

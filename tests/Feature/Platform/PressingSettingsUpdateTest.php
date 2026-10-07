@@ -22,7 +22,7 @@ class PressingSettingsUpdateTest extends TestCase
     {
         $pressing = $this->makePressing();
         AppSetting::current($pressing->id)->update(['primary_color' => '#112233', 'session_timeout_minutes' => 45]);
-        LoyaltyTier::create(['pressing_id' => $pressing->id, 'name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05]);
+        LoyaltyTier::create(['pressing_id' => $pressing->id, 'name' => 'Argent', 'min_spend_amount' => 50, 'discount_rate' => 0.05]);
         $user = $this->makePlatformUser();
 
         $response = $this->actingAs($user, 'platform')->getJson("/api/platform/pressings/{$pressing->id}/settings");
@@ -69,12 +69,12 @@ class PressingSettingsUpdateTest extends TestCase
     public function test_updating_an_existing_tier_by_id_does_not_create_a_duplicate(): void
     {
         $pressing = $this->makePressing();
-        $tier = LoyaltyTier::create(['pressing_id' => $pressing->id, 'name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05]);
+        $tier = LoyaltyTier::create(['pressing_id' => $pressing->id, 'name' => 'Argent', 'min_spend_amount' => 50, 'discount_rate' => 0.05]);
         $user = $this->makePlatformUser();
 
         $response = $this->actingAs($user, 'platform')->patchJson("/api/platform/pressings/{$pressing->id}", [
             'loyalty_tiers' => [
-                ['id' => $tier->id, 'name' => 'Argent+', 'min_points' => 60, 'discount_rate' => 0.06],
+                ['id' => $tier->id, 'name' => 'Argent+', 'min_spend_amount' => 60, 'discount_rate' => 0.06],
             ],
         ]);
 
@@ -82,7 +82,7 @@ class PressingSettingsUpdateTest extends TestCase
         $this->assertSame(1, LoyaltyTier::where('pressing_id', $pressing->id)->count());
         $tier->refresh();
         $this->assertSame('Argent+', $tier->name);
-        $this->assertSame(60, $tier->min_points);
+        $this->assertSame(60, $tier->min_spend_amount);
     }
 
     public function test_a_new_tier_without_id_is_created(): void
@@ -92,25 +92,25 @@ class PressingSettingsUpdateTest extends TestCase
 
         $this->actingAs($user, 'platform')->patchJson("/api/platform/pressings/{$pressing->id}", [
             'loyalty_tiers' => [
-                ['name' => 'Bronze', 'min_points' => 20, 'discount_rate' => 0.02],
+                ['name' => 'Bronze', 'min_spend_amount' => 20, 'discount_rate' => 0.02],
             ],
         ])->assertOk();
 
         $this->assertDatabaseHas('loyalty_tiers', [
-            'pressing_id' => $pressing->id, 'name' => 'Bronze', 'min_points' => 20, 'is_active' => true,
+            'pressing_id' => $pressing->id, 'name' => 'Bronze', 'min_spend_amount' => 20, 'is_active' => true,
         ]);
     }
 
     public function test_a_tier_removed_from_the_submitted_array_is_deactivated_not_deleted(): void
     {
         $pressing = $this->makePressing();
-        $kept = LoyaltyTier::create(['pressing_id' => $pressing->id, 'name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05]);
-        $removed = LoyaltyTier::create(['pressing_id' => $pressing->id, 'name' => 'Or', 'min_points' => 150, 'discount_rate' => 0.10]);
+        $kept = LoyaltyTier::create(['pressing_id' => $pressing->id, 'name' => 'Argent', 'min_spend_amount' => 50, 'discount_rate' => 0.05]);
+        $removed = LoyaltyTier::create(['pressing_id' => $pressing->id, 'name' => 'Or', 'min_spend_amount' => 150, 'discount_rate' => 0.10]);
         $user = $this->makePlatformUser();
 
         $this->actingAs($user, 'platform')->patchJson("/api/platform/pressings/{$pressing->id}", [
             'loyalty_tiers' => [
-                ['id' => $kept->id, 'name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05],
+                ['id' => $kept->id, 'name' => 'Argent', 'min_spend_amount' => 50, 'discount_rate' => 0.05],
             ],
         ])->assertOk();
 
@@ -123,12 +123,12 @@ class PressingSettingsUpdateTest extends TestCase
     {
         $pressingA = $this->makePressing('A', 'A-01');
         $pressingB = $this->makePressing('B', 'B-01');
-        $foreignTier = LoyaltyTier::create(['pressing_id' => $pressingB->id, 'name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05]);
+        $foreignTier = LoyaltyTier::create(['pressing_id' => $pressingB->id, 'name' => 'Argent', 'min_spend_amount' => 50, 'discount_rate' => 0.05]);
         $user = $this->makePlatformUser();
 
         $response = $this->actingAs($user, 'platform')->patchJson("/api/platform/pressings/{$pressingA->id}", [
             'loyalty_tiers' => [
-                ['id' => $foreignTier->id, 'name' => 'Vol', 'min_points' => 50, 'discount_rate' => 0.05],
+                ['id' => $foreignTier->id, 'name' => 'Vol', 'min_spend_amount' => 50, 'discount_rate' => 0.05],
             ],
         ]);
 

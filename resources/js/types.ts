@@ -89,6 +89,7 @@ export interface AgencySettings {
     loyalty_amount_per_point: number | null;
     loyalty_redemption_threshold: number | null;
     loyalty_point_expiry_months: number | null;
+    loyalty_point_value_fcfa: number | null;
     offline_sync_interval_minutes: number | null;
     offline_retention_days: number | null;
     updated_at: string | null;
@@ -149,9 +150,58 @@ export interface ClientDetail extends Client {
 export interface LoyaltyTier {
     id: number;
     name: string;
-    min_points: number;
+    min_spend_amount: number;
     discount_rate: number;
+    point_multiplier: number;
+    benefit_description: string | null;
     is_active: boolean;
+}
+
+export interface LoyaltyStats {
+    from: string;
+    to: string;
+    members_active: number;
+    by_tier: LoyaltyTierBreakdown[];
+    points_issued: number;
+    points_expired: number;
+    discounts_granted: number;
+}
+
+export interface LoyaltyMovement {
+    id: number;
+    client_name: string;
+    reason: string;
+    points: number;
+    created_at: string;
+}
+
+export interface LoyaltySegments {
+    top_tier_members: number;
+    reactivation_90d: number;
+    near_reward: number;
+    new_members_30d: number;
+}
+
+export type PromotionDiscountType = 'percentage' | 'fixed';
+export type PromotionStatus = 'draft' | 'scheduled' | 'active' | 'ended';
+
+export interface Promotion {
+    id: number;
+    name: string;
+    code: string;
+    discount_type: PromotionDiscountType;
+    discount_value: number;
+    max_discount_amount: number | null;
+    starts_at: string;
+    ends_at: string;
+    quota_total: number | null;
+    quota_per_client: number | null;
+    minimum_order_amount: number | null;
+    combinable_with_loyalty: boolean;
+    is_active: boolean;
+    status: PromotionStatus;
+    agencies: { id: number; name: string }[];
+    usages_count: number;
 }
 
 export type CashMovementType = 'entree' | 'sortie';
@@ -483,6 +533,11 @@ export interface Order {
     is_express: boolean;
     total_amount: number;
     discount_amount: number;
+    // Répartition honnête de la remise (audit « Promotions et fidélité », CLAUDE.md) :
+    // `discount_amount` reste le total facturé, ces deux champs en précisent l'origine.
+    loyalty_discount_amount?: number;
+    promotion_id?: number | null;
+    promotion_discount_amount?: number;
     notes: string | null;
     created_at: string;
     promised_at: string | null;

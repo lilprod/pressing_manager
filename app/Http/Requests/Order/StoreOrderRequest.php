@@ -22,6 +22,12 @@ class StoreOrderRequest extends FormRequest
             'promised_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
             'discount_amount' => ['nullable', 'integer', 'min:0'],
+            // Audit « Promotions et fidélité » (CLAUDE.md) : distingue la part auto-calculée
+            // de la remise de palier (NewOrder.tsx, non modifiée par le caissier) d'une
+            // remise manuelle — sans quoi `orders.discount_amount` reste un total opaque,
+            // voir migration `add_discount_breakdown_to_orders_table`.
+            'discount_is_loyalty_auto' => ['boolean'],
+            'promotion_code' => ['nullable', 'string', 'max:30'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.service_id' => ['required', 'integer', 'exists:services,id'],
             'items.*.treatment_type_id' => ['nullable', 'integer', 'exists:treatment_types,id'],

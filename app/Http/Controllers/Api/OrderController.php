@@ -229,7 +229,11 @@ class OrderController extends ApiController
                 'source' => ! empty($data['client_local_uuid']) ? 'offline_sync' : 'comptoir',
                 'sync_status' => 'synced',
                 'promised_at' => $data['promised_at'] ?? null,
-                'discount_amount' => $data['discount_amount'] ?? 0,
+                // Remise finale (dont la répartition fidélité/promotion) déterminée plus
+                // bas, une fois `$total` connu — un code promo peut dépendre du montant du
+                // dépôt (`minimum_order_amount`), pas calculable avant d'avoir parcouru les
+                // lignes. Voir migration `add_discount_breakdown_to_orders_table`.
+                'discount_amount' => 0,
                 'notes' => $data['notes'] ?? null,
             ]);
 
@@ -300,6 +304,64 @@ class OrderController extends ApiController
                 throw new HttpException(422, "Le montant du dépôt ({$total} FCFA) est sous le minimum configuré ({$agencySettings->minimum_order_amount} FCFA).");
             }
 
+            // Audit « Promotions et fidélité » (CLAUDE.md) : répartition honnête de la
+            // remise — part fidélité (auto-calculée, non modifiée par le caissier) +
+            // part promotion (code validé serveur, jamais recalculé côté client) + un
+            // éventuel reliquat manuel. `discount_amount` reste le total facturé, inchangé
+            // pour InvoiceService ; les deux nouvelles colonnes rendent l'origine
+            // interrogeable (KPI « Remises accordées », reporting promotions).
+            $loyaltyDiscountAmount = ($data['discount_is_loyalty_auto'] ?? false) ? (int) ($data['discount_amount'] ?? 0) : 0;
+            $manualDiscountAmount = ($data['discount_is_loyalty_auto'] ?? false) ? 0 : (int) ($data['discount_amount'] ?? 0);
+            $promotion = null;
+            $promotionDiscountAmount = 0;
+
+            if (! empty($data['promotion_code'])) {
+                $promotion = \App\Models\Promotion::where('pressing_id', $agency->pressing_id)
+                    ->whereRaw('UPPER(code) = ?', [strtoupper(trim($data['promotion_code']))])
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($promotion === null || ! $promotion->is_active) {
+                    throw new HttpException(422, "Code promotionnel invalide.");
+                }
+                $today = now()->startOfDay();
+                if ($today->lt($promotion->starts_at) || $today->gt($promotion->ends_at)) {
+                    throw new HttpException(422, "Ce code promotionnel n'est pas actif sur la période en cours.");
+                }
+                if (! $promotion->isEligibleForAgency($agencyId)) {
+                    throw new HttpException(422, "Ce code promotionnel n'est pas valide pour cette agence.");
+                }
+                if ($promotion->minimum_order_amount !== null && $total < $promotion->minimum_order_amount) {
+                    throw new HttpException(422, "Ce code promotionnel requiert un dépôt d'au moins {$promotion->minimum_order_amount} FCFA.");
+                }
+                if ($promotion->quota_total !== null && $promotion->usages()->count() >= $promotion->quota_total) {
+                    throw new HttpException(422, "Ce code promotionnel a atteint son quota d'utilisation.");
+                }
+                if ($promotion->quota_per_client !== null && $promotion->usages()->where('client_id', $data['client_id'])->count() >= $promotion->quota_per_client) {
+                    throw new HttpException(422, "Ce client a déjà utilisé ce code promotionnel.");
+                }
+
+                $promotionDiscountAmount = $promotion->discount_type === 'percentage'
+                    ? (int) round($total * $promotion->discount_value / 100)
+                    : $promotion->discount_value;
+                if ($promotion->max_discount_amount !== null) {
+                    $promotionDiscountAmount = min($promotionDiscountAmount, $promotion->max_discount_amount);
+                }
+                $promotionDiscountAmount = min($promotionDiscountAmount, $total);
+
+                // Une promotion non cumulable écrase la remise fidélité auto-calculée sur
+                // ce dépôt (règle métier tranchée pour cet audit, absente de la maquette) —
+                // jamais les deux à la fois sans l'accord explicite de la campagne.
+                if (! $promotion->combinable_with_loyalty) {
+                    $loyaltyDiscountAmount = 0;
+                }
+            }
+
+            $order->loyalty_discount_amount = $loyaltyDiscountAmount;
+            $order->promotion_id = $promotion?->id;
+            $order->promotion_discount_amount = $promotionDiscountAmount;
+            $order->discount_amount = min($total, $loyaltyDiscountAmount + $promotionDiscountAmount + $manualDiscountAmount);
+
             $order->total_amount = $total;
             if ($order->promised_at === null) {
                 // Délai configuré par agence (classique/express) comme PLANCHER, pas un
@@ -311,6 +373,17 @@ class OrderController extends ApiController
                 $order->promised_at = now()->addHours($maxDurationHours);
             }
             $order->save();
+
+            if ($promotion !== null) {
+                \App\Models\PromotionUsage::create([
+                    'promotion_id' => $promotion->id,
+                    'client_id' => $data['client_id'],
+                    'order_id' => $order->id,
+                    'agency_id' => $agencyId,
+                    'discount_amount' => $promotionDiscountAmount,
+                    'used_at' => now(),
+                ]);
+            }
 
             // Paiement intégré à la création (refonte flux comptoir, 2026-10-05) : la
             // facture n'est générée que si un paiement est réellement soumis — un dépôt

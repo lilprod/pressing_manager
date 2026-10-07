@@ -70,13 +70,13 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
 
     const effectiveAgencyId = client ? client.agency_id : agencyIdSelected;
 
-    /** Palier de fidélité par défaut (0 point) affiché pour un nouveau client, avant toute création. */
+    /** Palier de fidélité par défaut (0 FCFA de dépenses) affiché pour un nouveau client, avant toute création. */
     useEffect(() => {
         if (client) return;
         api
             .get<LoyaltyTier[]>('/loyalty-tiers')
             .then((tiers) => {
-                const lowest = tiers.filter((tr) => tr.is_active).sort((a, b) => a.min_points - b.min_points)[0];
+                const lowest = tiers.filter((tr) => tr.is_active).sort((a, b) => a.min_spend_amount - b.min_spend_amount)[0];
                 setDefaultTierName(lowest?.name ?? null);
             })
             .catch(() => {

@@ -119,12 +119,12 @@ class KpiAdvancedMetricsTest extends TestCase
         $agency = Agency::factory()->create();
         $manager = $this->makeUser('manager', $agency);
 
-        $silver = LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Argent', 'min_points' => 50, 'discount_rate' => 0.05, 'is_active' => true]);
-        $gold = LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Or', 'min_points' => 150, 'discount_rate' => 0.10, 'is_active' => true]);
+        $silver = LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Argent', 'min_spend_amount' => 50000, 'discount_rate' => 0.05, 'is_active' => true]);
+        $gold = LoyaltyTier::create(['pressing_id' => $agency->pressing_id, 'name' => 'Or', 'min_spend_amount' => 150000, 'discount_rate' => 0.10, 'is_active' => true]);
 
-        $silverClient = Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 80, 'is_active' => true]);
-        $goldClient = Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 200, 'is_active' => true]);
-        Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 0, 'is_active' => true]);
+        $silverClient = Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 80, 'loyalty_spend_12m' => 80000, 'is_active' => true]);
+        $goldClient = Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 200, 'loyalty_spend_12m' => 200000, 'is_active' => true]);
+        Client::factory()->for($agency, 'agency')->create(['loyalty_points' => 0, 'loyalty_spend_12m' => 0, 'is_active' => true]);
 
         LoyaltyPointMovement::create(['client_id' => $silverClient->id, 'agency_id' => $agency->id, 'points' => 30, 'reason' => 'payment', 'created_at' => now()]);
         LoyaltyPointMovement::create(['client_id' => $goldClient->id, 'agency_id' => $agency->id, 'points' => 20, 'reason' => 'payment', 'created_at' => now()]);

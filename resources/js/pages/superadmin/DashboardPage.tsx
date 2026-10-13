@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, LayoutDashboard, Search, ShieldCheck, Users } from 'lucide-react';
+import { Building2, LayoutDashboard, Search, ShieldCheck, TriangleAlert, Users } from 'lucide-react';
 import { platformApi } from '../../lib/platformApi';
 import { timeAgo } from '../../lib/format';
 import { LoadingState } from '../../components/ui/Feedback';
@@ -80,10 +80,17 @@ export default function DashboardPage() {
                 </div>
             </header>
 
-            <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Tenants actifs" value={dashboard.tenants_actifs} icon={Building2} tone="brand" />
-                <StatCard label="Agences" value={dashboard.agences_total} icon={Building2} tone="sky" hint="Au dernier rapport reçu" />
-                <StatCard label="Utilisateurs" value={dashboard.utilisateurs_total} icon={Users} tone="emerald" hint="Au dernier rapport reçu" />
+                <StatCard label="Agences" value={dashboard.agences_total} icon={Building2} tone="sky" hint="Comptes réels, ou dernier rapport reçu" />
+                <StatCard label="Utilisateurs" value={dashboard.utilisateurs_total} icon={Users} tone="emerald" hint="Comptes réels, ou dernier rapport reçu" />
+                <StatCard
+                    label="Incidents ouverts"
+                    value={dashboard.incidents.open}
+                    icon={TriangleAlert}
+                    tone={dashboard.incidents.open > 0 ? 'rose' : 'neutral'}
+                    hint={`${dashboard.incidents.high_priority} priorité élevée (P1/P2)`}
+                />
             </div>
 
             <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
@@ -185,10 +192,28 @@ export default function DashboardPage() {
                 )}
             </SectionCard>
 
+            <SectionCard id="platform-alerts-heading" title="Alertes récentes" subtitle="Incidents ouverts du registre" action={{ to: '/superadmin/incidents', label: 'Registre' }}>
+                {dashboard.incidents.recent.length === 0 ? (
+                    <p className="text-sm text-ink-600 dark:text-ink-350">Aucun incident ouvert.</p>
+                ) : (
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        {dashboard.incidents.recent.map((incident) => (
+                            <div key={incident.id} className="rounded-xl bg-ink-50 p-3 dark:bg-ink-800/60">
+                                <div className="flex items-center justify-between gap-2">
+                                    <p className="truncate text-sm font-semibold text-ink-900 dark:text-white">{incident.pressing?.name ?? 'Plateforme'}</p>
+                                    <Pill tone={incident.priority === 'P1' ? 'rose' : incident.priority === 'P2' ? 'amber' : 'sky'}>{incident.priority}</Pill>
+                                </div>
+                                <p className="mt-1 text-xs text-ink-600 dark:text-ink-350">{incident.title}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </SectionCard>
+
             <p className={cx(card, 'flex items-start gap-2.5 px-4 py-3 text-xs text-ink-500 dark:text-ink-400')}>
                 <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                Les indicateurs de santé technique (API/synchronisation/impression), la disponibilité et les incidents ne sont pas encore
-                affichés : aucune télémétrie réelle n'existe pour ces signaux côté plateforme.
+                Santé technique (API/synchronisation/impression), disponibilité et latence ne sont pas affichées : aucune télémétrie réelle
+                n'existe pour ces signaux. Les incidents proviennent du registre tenu par l'équipe plateforme.
             </p>
         </div>
     );

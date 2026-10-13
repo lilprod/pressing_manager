@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Building2, LayoutDashboard, Layers, LogOut, ScrollText, Settings, ShieldHalf, UsersRound } from 'lucide-react';
+import { BadgeCheck, Building2, LayoutDashboard, Layers, LogOut, ScrollText, Settings, ShieldHalf, Store, TriangleAlert, UsersRound } from 'lucide-react';
 import { useSuperadminAuth } from '../contexts/SuperadminAuthContext';
 import { PlatformLogo } from './PlatformBrand';
 import { Avatar } from './ui/PageHeader';
@@ -59,6 +59,19 @@ export default function SuperadminLayout() {
                         <Building2 aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
                         <span className="truncate">Pressings</span>
                     </NavLink>
+                    <NavLink to="/superadmin/agencies" className={navLinkClass}>
+                        <Store aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
+                        <span className="truncate">Agences</span>
+                    </NavLink>
+                    <NavLink to="/superadmin/licenses" className={navLinkClass}>
+                        <BadgeCheck aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
+                        <span className="truncate">Licences</span>
+                    </NavLink>
+                    <NavLink to="/superadmin/incidents" className={navLinkClass}>
+                        <TriangleAlert aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
+                        <span className="truncate">Incidents</span>
+                    </NavLink>
+                    <p className="px-3 pb-1 pt-4 text-xs font-bold uppercase tracking-wider text-brand-300/70">Gouvernance</p>
                     <NavLink to="/superadmin/users" className={navLinkClass}>
                         <UsersRound aria-hidden="true" className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
                         <span className="truncate">Utilisateurs transverses</span>

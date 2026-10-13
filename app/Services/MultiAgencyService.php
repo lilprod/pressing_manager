@@ -102,8 +102,10 @@ class MultiAgencyService
                 'opens_at' => $agency->opens_at ? substr($agency->opens_at, 0, 5) : null,
                 'closes_at' => $agency->closes_at ? substr($agency->closes_at, 0, 5) : null,
                 // Ouverte/fermée seulement si des horaires sont configurés (jamais déduit).
+                'opening_days' => $agency->opening_days,
                 'is_open_now' => $agency->opens_at && $agency->closes_at
-                    ? now()->format('H:i') >= substr($agency->opens_at, 0, 5) && now()->format('H:i') < substr($agency->closes_at, 0, 5)
+                    ? (empty($agency->opening_days) || in_array(now()->dayOfWeekIso, $agency->opening_days, true))
+                        && now()->format('H:i') >= substr($agency->opens_at, 0, 5) && now()->format('H:i') < substr($agency->closes_at, 0, 5)
                     : null,
             ],
             'from' => $from->toDateString(),

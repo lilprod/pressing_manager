@@ -25,6 +25,8 @@ class StoreAgencyRequest extends FormRequest
             'workshop_capacity' => ['nullable', 'integer', 'min:1'],
             'opens_at' => ['nullable', 'date_format:H:i'],
             'closes_at' => ['nullable', 'date_format:H:i', 'after:opens_at'],
+            'opening_days' => ['nullable', 'array'],
+            'opening_days.*' => ['integer', 'between:1,7'],
         ];
     }
 }

@@ -26,6 +26,14 @@ class PlatformDashboardController extends PlatformApiController
 
         $scope = fn () => Pressing::query()->when($pressingIds !== null, fn ($q) => $q->whereIn('id', $pressingIds));
 
+        $incidents = fn () => \App\Models\PlatformIncident::query()->where('status', 'open')
+            ->when($pressingIds !== null, fn ($q) => $q->whereIn('pressing_id', $pressingIds));
+
+        $counts = $scope()->where('status', 'active')->withCount([
+            'agencies as live_agencies' => fn ($q) => $q->where('is_active', true),
+            'users as live_users' => fn ($q) => $q->where('is_active', true),
+        ])->get(['id', 'agencies_count', 'users_count']);
+
         $totalPressings = $scope()->count();
         $activePressings = $scope()->where('status', 'active')->count();
         $suspendedPressings = $scope()->where('status', 'suspended')->count();
@@ -37,8 +45,16 @@ class PlatformDashboardController extends PlatformApiController
 
         return response()->json([
             'tenants_actifs' => $activePressings,
-            'agences_total' => (int) $scope()->where('status', 'active')->sum('agencies_count'),
-            'utilisateurs_total' => (int) $scope()->where('status', 'active')->sum('users_count'),
+            // Pressing hébergé sur ce déploiement : comptes réels (base partagée depuis le
+            // pivot multi-tenant). Pressing déployé ailleurs (aucune agence ici) : dernier
+            // compte reçu par rapport périodique. Jamais l'un à la place de l'autre.
+            'agences_total' => $counts->sum(fn ($p) => $p->live_agencies > 0 ? $p->live_agencies : $p->agencies_count),
+            'utilisateurs_total' => $counts->sum(fn ($p) => $p->live_agencies > 0 ? $p->live_users : $p->users_count),
+            'incidents' => [
+                'open' => $incidents()->count(),
+                'high_priority' => $incidents()->whereIn('priority', ['P1', 'P2'])->count(),
+                'recent' => $incidents()->with('pressing:id,name')->orderBy('priority')->latest()->limit(3)->get(['id', 'pressing_id', 'title', 'priority', 'created_at']),
+            ],
             'license_health' => [
                 'total' => $totalPressings,
                 'active_pct' => $this->percentage($activePressings, $totalPressings),

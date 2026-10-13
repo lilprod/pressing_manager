@@ -33,7 +33,14 @@ class PressingController extends PlatformApiController
     {
         $user = $request->user();
 
-        $query = Pressing::query()->with('platformPlan')->latest();
+        $query = Pressing::query()->with('platformPlan')
+            // Comptes réels + incidents ouverts (registre) + responsable (manager bootstrap).
+            ->withCount([
+                'agencies as live_agencies_count' => fn ($q) => $q->where('is_active', true),
+                'users as live_users_count' => fn ($q) => $q->where('is_active', true),
+                'incidents as open_incidents_count' => fn ($q) => $q->where('status', 'open'),
+            ])
+            ->latest();
 
         $pressingIds = $this->resolvePressingFilter($user);
         if ($pressingIds !== null) {
@@ -60,7 +67,66 @@ class PressingController extends PlatformApiController
             $query->where('status', $request->string('status'));
         }
 
-        return response()->json($query->paginate($request->integer('per_page', 15)));
+        $page = $query->paginate($request->integer('per_page', 15));
+        $managers = \App\Models\User::query()
+            ->whereIn('pressing_id', $page->getCollection()->pluck('id'))
+            ->whereNull('agency_id')
+            ->whereHas('role', fn ($r) => $r->where('slug', 'admin'))
+            ->orderBy('id')
+            ->get(['id', 'pressing_id', 'name', 'email'])
+            ->unique('pressing_id')
+            ->keyBy('pressing_id');
+        $page->getCollection()->each(fn (Pressing $p) => $p->setAttribute('manager', $managers[$p->id] ?? null));
+
+        return response()->json($page);
+    }
+
+    /** Export CSV du registre (mêmes filtres que la liste, non paginé). */
+    public function export(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $request->merge(['per_page' => 10000]);
+        $rows = $this->index($request)->getData(true)['data'];
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Code', 'Pressing', 'Pays', 'Responsable', 'Plan', 'Agences', 'Utilisateurs', 'Licence jusqu\'au', 'Statut', 'Incidents ouverts'], ';');
+            foreach ($rows as $r) {
+                fputcsv($out, [
+                    $r['code'], $r['name'], $r['country_code'], $r['manager']['name'] ?? '', $r['platform_plan']['name'] ?? '',
+                    $r['live_agencies_count'], $r['live_users_count'], $r['license_expires_at'] ? substr($r['license_expires_at'], 0, 10) : '',
+                    $r['status'], $r['open_incidents_count'],
+                ], ';');
+            }
+            fclose($out);
+        }, 'pressings-'.now()->format('Y-m-d').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /** Écran « Licences » : licence réelle de chaque pressing + dernier paiement. */
+    public function licenses(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $this->authorizePermission($user, 'reports.view');
+        $pressingIds = $this->resolvePressingFilter($user);
+
+        $rows = Pressing::query()
+            ->with(['platformPlan:id,name,price,currency', 'license.payments' => fn ($q) => $q->latest('paid_at')])
+            ->when($pressingIds !== null, fn ($q) => $q->whereIn('id', $pressingIds))
+            ->orderBy('license_expires_at')
+            ->get()
+            ->map(function (Pressing $p) {
+                $last = $p->license?->payments->first();
+
+                return [
+                    'pressing' => $p->only(['id', 'name', 'code', 'status']),
+                    'plan' => $p->platformPlan?->only(['id', 'name', 'price', 'currency']),
+                    'license_status' => $p->license?->status,
+                    'expires_at' => $p->license?->expires_at ?? $p->license_expires_at,
+                    'days_remaining' => ($p->license?->expires_at ?? $p->license_expires_at) ? (int) now()->diffInDays($p->license?->expires_at ?? $p->license_expires_at, false) : null,
+                    'last_payment' => $last ? ['amount' => $last->amount, 'method' => $last->method, 'paid_at' => $last->paid_at] : null,
+                ];
+            });
+
+        return response()->json($rows->values());
     }
 
     /**

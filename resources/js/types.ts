@@ -1256,6 +1256,10 @@ export interface Pressing {
     license_expires_at: string | null;
     agencies_count: number;
     users_count: number;
+    live_agencies_count?: number;
+    live_users_count?: number;
+    open_incidents_count?: number;
+    manager?: { id: number; name: string; email: string } | null;
     last_report_at: string | null;
     created_at: string;
     report_token?: string;
@@ -1336,6 +1340,11 @@ export interface PlatformDashboard {
     utilisateurs_total: number;
     license_health: PlatformLicenseHealth;
     activity_series: PlatformActivityPoint[];
+    incidents: {
+        open: number;
+        high_priority: number;
+        recent: { id: number; title: string; priority: 'P1' | 'P2' | 'P3'; created_at: string; pressing: { id: number; name: string } | null }[];
+    };
 }
 
 export interface SearchResultItem {

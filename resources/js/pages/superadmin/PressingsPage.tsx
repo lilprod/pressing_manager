@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, CreditCard, Eye, LogIn, Pencil, Plus, Search } from 'lucide-react';
+import { Building2, CreditCard, Download, Eye, LogIn, Pencil, Plus, Search } from 'lucide-react';
 import { platformApi, PlatformApiError } from '../../lib/platformApi';
 import { timeAgo } from '../../lib/format';
 import RenewLicenseModal from '../../components/superadmin/RenewLicenseModal';
@@ -63,7 +63,28 @@ export default function PressingsPage() {
     }, []);
 
     const hasActiveFilter = Boolean(search || countryFilter || planFilter || statusFilter);
-    function clearFilters() {
+    async function exportCsv() {
+        const params = new URLSearchParams();
+        if (search) params.set('search', search);
+        if (countryFilter) params.set('country_code', countryFilter);
+        if (planFilter) params.set('platform_plan_id', planFilter);
+        if (statusFilter) params.set('status', statusFilter);
+        try {
+            const blob = await platformApi.blob(`/pressings/export?${params}`);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pressings-${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            setError("L'export a échoué.");
+        }
+    }
+
+        function clearFilters() {
         setSearch('');
         setCountryFilter('');
         setPlanFilter('');
@@ -143,6 +164,10 @@ export default function PressingsPage() {
                         <option value="suspended">Suspendu</option>
                     </select>
                 </label>
+                <button type="button" onClick={() => void exportCsv()} className={button('secondary', 'sm', 'h-10')}>
+                    <Download aria-hidden="true" className="h-4 w-4" />
+                    Exporter
+                </button>
                 {hasActiveFilter && (
                     <button type="button" onClick={clearFilters} className={button('ghost', 'sm')}>
                         Effacer
@@ -159,17 +184,18 @@ export default function PressingsPage() {
                     <div className="overflow-x-auto">
                         <div
                             role="row"
-                            className="hidden min-w-[1040px] items-center gap-4 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
+                            className="hidden min-w-[1200px] items-center gap-4 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
                         >
                             <span className="min-w-0 flex-1">Pressing</span>
                             <span className="w-20 shrink-0">Pays</span>
+                            <span className="w-40 shrink-0">Responsable</span>
                             <span className="w-24 shrink-0 text-right">Agences</span>
                             <span className="w-24 shrink-0 text-right">Utilisateurs</span>
                             <span className="w-28 shrink-0">Activité</span>
                             <span className="w-28 shrink-0">Statut</span>
                             <span className="w-36 shrink-0">Actions</span>
                         </div>
-                        <ul className="min-w-[1040px] divide-y divide-ink-100 dark:divide-ink-800">
+                        <ul className="min-w-[1200px] divide-y divide-ink-100 dark:divide-ink-800">
                             {pressings.map((pressing) => (
                                 <li key={pressing.id} className="flex flex-wrap items-center gap-4 px-5 py-3.5 sm:flex-nowrap">
                                     <div className="min-w-0 flex-1">
@@ -179,13 +205,19 @@ export default function PressingsPage() {
                                         </p>
                                     </div>
                                     <span className="w-20 shrink-0 text-sm text-ink-600 dark:text-ink-350">{pressing.country_code ?? '—'}</span>
-                                    <span className="w-24 shrink-0 text-right text-sm tabular-nums text-ink-900 dark:text-white">{pressing.agencies_count}</span>
-                                    <span className="w-24 shrink-0 text-right text-sm tabular-nums text-ink-900 dark:text-white">{pressing.users_count}</span>
+                                    <span className="w-40 shrink-0 truncate text-sm text-ink-700 dark:text-ink-200" title={pressing.manager?.email}>{pressing.manager?.name ?? '—'}</span>
+                                    <span className="w-24 shrink-0 text-right text-sm tabular-nums text-ink-900 dark:text-white">{pressing.live_agencies_count ?? pressing.agencies_count}</span>
+                                    <span className="w-24 shrink-0 text-right text-sm tabular-nums text-ink-900 dark:text-white">{pressing.live_users_count ?? pressing.users_count}</span>
                                     <span className="w-28 shrink-0 text-sm text-ink-600 dark:text-ink-350">{timeAgo(pressing.last_report_at)}</span>
                                     <span className="w-28 shrink-0">
                                         <Pill tone={pressing.status === 'active' ? 'emerald' : 'neutral'}>
                                             {pressing.status === 'active' ? 'Actif' : 'Suspendu'}
                                         </Pill>
+                                        {(pressing.open_incidents_count ?? 0) > 0 && (
+                                            <Link to="/superadmin/incidents" className="mt-1 block">
+                                                <Pill tone="rose">{pressing.open_incidents_count} incident(s)</Pill>
+                                            </Link>
+                                        )}
                                     </span>
                                     <span className="flex w-36 shrink-0 items-center gap-1">
                                         <Link

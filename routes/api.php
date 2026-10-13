@@ -124,7 +124,15 @@ Route::prefix('platform')->group(function () {
 
         Route::post('/pressings/{pressing}/renew', [PlatformPressingController::class, 'renew']);
         Route::post('/pressings/{pressing}/impersonate', [PlatformPressingController::class, 'impersonate']);
+        Route::get('/pressings/export', [PlatformPressingController::class, 'export']);
+        Route::get('/licenses', [PlatformPressingController::class, 'licenses']);
         Route::get('/pressings', [PlatformPressingController::class, 'index']);
+        Route::get('/agencies', [\App\Http\Controllers\Api\Platform\PlatformAgencyController::class, 'index']);
+        Route::post('/agencies', [\App\Http\Controllers\Api\Platform\PlatformAgencyController::class, 'store']);
+        Route::patch('/agencies/{agency}', [\App\Http\Controllers\Api\Platform\PlatformAgencyController::class, 'update']);
+        Route::get('/incidents', [\App\Http\Controllers\Api\Platform\PlatformIncidentController::class, 'index']);
+        Route::post('/incidents', [\App\Http\Controllers\Api\Platform\PlatformIncidentController::class, 'store']);
+        Route::patch('/incidents/{incident}', [\App\Http\Controllers\Api\Platform\PlatformIncidentController::class, 'update']);
         Route::post('/pressings', [PlatformPressingController::class, 'store']);
         Route::get('/pressings/{pressing}', [PlatformPressingController::class, 'show']);
         Route::get('/pressings/{pressing}/agencies', [PlatformPressingController::class, 'agencies']);

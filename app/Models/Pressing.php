@@ -113,4 +113,9 @@ class Pressing extends Model
     {
         return static::query()->where('report_token_hash', hash('sha256', $plain))->first();
     }
+
+    public function incidents(): HasMany
+    {
+        return $this->hasMany(PlatformIncident::class);
+    }
 }

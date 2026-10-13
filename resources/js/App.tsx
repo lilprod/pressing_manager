@@ -24,6 +24,9 @@ import PlatformSettingsPage from './pages/superadmin/PlatformSettingsPage';
 import PlatformAuditLogsPage from './pages/superadmin/AuditLogsPage';
 import PlatformRolesPage from './pages/superadmin/RolesPage';
 import PlatformPlansPage from './pages/superadmin/PlansPage';
+import PlatformAgenciesPage from './pages/superadmin/AgenciesPage';
+import PlatformIncidentsPage from './pages/superadmin/IncidentsPage';
+import PlatformLicensesPage from './pages/superadmin/LicensesPage';
 import NewOrder from './pages/counter/NewOrder';
 import OrdersList from './pages/counter/OrdersList';
 import OrderDetail from './pages/counter/OrderDetail';
@@ -125,6 +128,9 @@ export default function App() {
                         <Route path="pressings/new" element={<PressingFormPage />} />
                         <Route path="pressings/:id/edit" element={<PressingFormPage />} />
                         <Route path="pressings/:id" element={<PressingDetailPage />} />
+                        <Route path="agencies" element={<PlatformAgenciesPage />} />
+                        <Route path="incidents" element={<PlatformIncidentsPage />} />
+                        <Route path="licenses" element={<PlatformLicensesPage />} />
                         <Route path="users" element={<PlatformUsersPage />} />
                         <Route path="roles" element={<PlatformRolesPage />} />
                         <Route path="plans" element={<PlatformPlansPage />} />

@@ -17,13 +17,14 @@ class Agency extends Model
 
     protected $fillable = [
         'pressing_id', 'code', 'name', 'city', 'address', 'phone',
-        'unclaimed_item_threshold_days', 'is_active', 'workshop_capacity', 'opens_at', 'closes_at',
+        'unclaimed_item_threshold_days', 'is_active', 'workshop_capacity', 'opens_at', 'closes_at', 'opening_days',
     ];
 
     protected function casts(): array
     {
         return [
             'is_active' => 'boolean',
+            'opening_days' => 'array',
         ];
     }
 

@@ -40,6 +40,7 @@ class PressingController extends PlatformApiController
                 'users as live_users_count' => fn ($q) => $q->where('is_active', true),
                 'incidents as open_incidents_count' => fn ($q) => $q->where('status', 'open'),
             ])
+            ->withMax('orders as last_activity_at', 'orders.created_at')
             ->latest();
 
         $pressingIds = $this->resolvePressingFilter($user);
@@ -63,6 +64,8 @@ class PressingController extends PlatformApiController
             $query->whereNotNull('license_expires_at')
                 ->where('license_expires_at', '>', now())
                 ->where('license_expires_at', '<=', now()->addDays(30));
+        } elseif ($request->string('status')->toString() === 'incident') {
+            $query->whereHas('incidents', fn ($q) => $q->where('status', 'open'));
         } elseif ($request->filled('status')) {
             $query->where('status', $request->string('status'));
         }
@@ -76,7 +79,16 @@ class PressingController extends PlatformApiController
             ->get(['id', 'pressing_id', 'name', 'email'])
             ->unique('pressing_id')
             ->keyBy('pressing_id');
-        $page->getCollection()->each(fn (Pressing $p) => $p->setAttribute('manager', $managers[$p->id] ?? null));
+        $priorities = \App\Models\PlatformIncident::query()->where('status', 'open')
+            ->whereIn('pressing_id', $page->getCollection()->pluck('id'))
+            ->get(['pressing_id', 'priority'])
+            ->groupBy('pressing_id')
+            ->map(fn ($rows) => $rows->min('priority'))
+            ->all();
+        $page->getCollection()->each(function (Pressing $p) use ($managers, $priorities) {
+            $p->setAttribute('manager', $managers[$p->id] ?? null);
+            $this->decorate($p, $priorities);
+        });
 
         return response()->json($page);
     }
@@ -396,6 +408,7 @@ class PressingController extends PlatformApiController
         $this->authorizePressing($request->user(), $pressing->id);
 
         $pressing->update(['status' => 'suspended']);
+        $this->notifyManager($pressing, 'suspended');
 
         return response()->json($pressing->fresh('platformPlan'));
     }
@@ -406,6 +419,7 @@ class PressingController extends PlatformApiController
         $this->authorizePressing($request->user(), $pressing->id);
 
         $pressing->update(['status' => 'active']);
+        $this->notifyManager($pressing, 'reactivated');
 
         return response()->json($pressing->fresh('platformPlan'));
     }
@@ -437,10 +451,80 @@ class PressingController extends PlatformApiController
             $request->validated('external_reference')
         );
 
+        $fresh = $license->fresh();
+        $this->notifyManager($pressing, 'renewed', $fresh?->expires_at ? 'Nouvelle échéance : '.$fresh->expires_at->format('d/m/Y').'.' : null);
+
         return response()->json([
-            'license' => $license->fresh(),
+            'license' => $fresh,
             'payment' => $payment,
         ], 201);
+    }
+
+    /** Compte manager bootstrap du pressing (même règle que la colonne Responsable). */
+    private function managerOf(Pressing $pressing): ?\App\Models\User
+    {
+        return \App\Models\User::query()->where('pressing_id', $pressing->id)->whereNull('agency_id')
+            ->whereHas('role', fn ($r) => $r->where('slug', 'admin'))->where('is_active', true)->orderBy('id')->first();
+    }
+
+    private function notifyManager(Pressing $pressing, string $event, ?string $detail = null): void
+    {
+        $this->managerOf($pressing)?->notify(new \App\Notifications\PressingAccountChangedNotification($event, $pressing->name, $detail));
+    }
+
+    /**
+     * États dérivés d'un pressing, uniquement à partir de données réelles :
+     * - santé : registre d'incidents (P1 ouvert → incident, P2/P3 → dégradé, aucun → sain) ;
+     * - licence : échéance réelle (expirée / à renouveler ≤ 30 j / active) ;
+     * - synchronisation : âge du dernier rapport pour un pressing déployé ailleurs ;
+     *   un pressing hébergé ici n'envoie pas de rapport — ses données sont en direct.
+     */
+    private function decorate(Pressing $p, array $incidentPriorities): void
+    {
+        $priority = $incidentPriorities[$p->id] ?? null;
+        $p->setAttribute('health', $priority === null ? 'sain' : ($priority === 'P1' ? 'incident' : 'degrade'));
+
+        $expires = $p->license_expires_at;
+        $p->setAttribute('license_state', $expires === null ? null : ($expires->isPast() ? 'expired' : ($expires->lte(now()->addDays(30)) ? 'renewal_due' : 'active')));
+
+        $hosted = ($p->live_agencies_count ?? 0) > 0;
+        if ($hosted) {
+            $p->setAttribute('sync_state', 'live');
+        } elseif ($p->last_report_at === null) {
+            $p->setAttribute('sync_state', 'never');
+        } else {
+            $minutes = (int) $p->last_report_at->diffInMinutes(now());
+            $p->setAttribute('sync_state', $minutes <= 30 ? 'synced' : ($minutes <= 24 * 60 ? 'late' : 'offline'));
+            $p->setAttribute('sync_delay_minutes', $minutes);
+        }
+    }
+
+    /** Indicateurs de l'écran Pressings (même périmètre que la liste). */
+    public function stats(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $pressingIds = $this->resolvePressingFilter($user);
+        $scope = fn () => Pressing::query()->when($pressingIds !== null, fn ($q) => $q->whereIn('id', $pressingIds));
+        $incidents = fn () => \App\Models\PlatformIncident::query()->where('status', 'open')->when($pressingIds !== null, fn ($q) => $q->whereIn('pressing_id', $pressingIds));
+        $activeIds = $scope()->where('status', 'active')->pluck('id');
+
+        return response()->json([
+            'tenants_active' => $activeIds->count(),
+            'tenants_new_this_quarter' => $scope()->where('created_at', '>=', now()->firstOfQuarter())->count(),
+            'agencies' => \App\Models\Agency::query()->whereIn('pressing_id', $activeIds)->where('is_active', true)->count(),
+            'countries' => $scope()->where('status', 'active')->whereNotNull('country_code')->distinct()->count('country_code'),
+            'licenses' => $scope()->whereNotNull('license_expires_at')->count(),
+            'licenses_renewal_due' => $scope()->whereNotNull('license_expires_at')->where('license_expires_at', '>', now())->where('license_expires_at', '<=', now()->addDays(30))->count(),
+            'incidents_open' => $incidents()->count(),
+            'incidents_high' => $incidents()->whereIn('priority', ['P1', 'P2'])->count(),
+            'tabs' => [
+                'all' => $scope()->count(),
+                'active' => $scope()->where('status', 'active')->count(),
+                'renewal_due' => $scope()->whereNotNull('license_expires_at')->where('license_expires_at', '>', now())->where('license_expires_at', '<=', now()->addDays(30))->count(),
+                'suspended' => $scope()->where('status', 'suspended')->count(),
+                'incident' => $scope()->whereHas('incidents', fn ($q) => $q->where('status', 'open'))->count(),
+            ],
+        ]);
     }
 
     /**

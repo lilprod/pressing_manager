@@ -1259,6 +1259,11 @@ export interface Pressing {
     live_agencies_count?: number;
     live_users_count?: number;
     open_incidents_count?: number;
+    health?: 'sain' | 'degrade' | 'incident';
+    license_state?: 'active' | 'renewal_due' | 'expired' | null;
+    sync_state?: 'live' | 'synced' | 'late' | 'offline' | 'never';
+    sync_delay_minutes?: number;
+    last_activity_at?: string | null;
     manager?: { id: number; name: string; email: string } | null;
     last_report_at: string | null;
     created_at: string;
@@ -1324,6 +1329,9 @@ export interface PlatformAuditLog {
 
 export interface PlatformLicenseHealth {
     total: number;
+    active: number;
+    renewal_due: number;
+    suspended: number;
     active_pct: number;
     renewal_due_pct: number;
     suspended_pct: number;
@@ -1336,6 +1344,9 @@ export interface PlatformActivityPoint {
 
 export interface PlatformDashboard {
     tenants_actifs: number;
+    tenants_new_this_quarter: number;
+    countries: number;
+    users_active_today: number;
     agences_total: number;
     utilisateurs_total: number;
     license_health: PlatformLicenseHealth;
@@ -1386,4 +1397,16 @@ export interface DashboardOverview {
     pieces_received: number;
     pickups: { count: number; ready_orders: number };
     loyalty: { members: number; new_this_month: number };
+}
+
+export interface PlatformPressingStats {
+    tenants_active: number;
+    tenants_new_this_quarter: number;
+    agencies: number;
+    countries: number;
+    licenses: number;
+    licenses_renewal_due: number;
+    incidents_open: number;
+    incidents_high: number;
+    tabs: { all: number; active: number; renewal_due: number; suspended: number; incident: number };
 }

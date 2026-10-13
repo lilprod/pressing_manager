@@ -125,6 +125,7 @@ Route::prefix('platform')->group(function () {
         Route::post('/pressings/{pressing}/renew', [PlatformPressingController::class, 'renew']);
         Route::post('/pressings/{pressing}/impersonate', [PlatformPressingController::class, 'impersonate']);
         Route::get('/pressings/export', [PlatformPressingController::class, 'export']);
+        Route::get('/pressings/stats', [PlatformPressingController::class, 'stats']);
         Route::get('/licenses', [PlatformPressingController::class, 'licenses']);
         Route::get('/pressings', [PlatformPressingController::class, 'index']);
         Route::get('/agencies', [\App\Http\Controllers\Api\Platform\PlatformAgencyController::class, 'index']);

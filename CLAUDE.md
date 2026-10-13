@@ -4047,6 +4047,26 @@ par lot (`b8891d9`, `3a6a9bd`, `712dfa5`, `2dc756b`, `2aa5c68`, `a1a0c23`, `27eb
   est réellement : par article + nombre de prix locaux). Liste : responsable du
   pressing et mention de tarification par ligne. « Exiger la validation Laveur →
   Classeur » non reproduit (aucune règle de ce type n'existe).
+- **Retour utilisateur « Vue plateforme » et « Pressings »** (captures annotées) : écarts
+  réels comblés. KPI avec sous-libellés réels (créés ce trimestre, nombre de pays,
+  connectés aujourd'hui via `users.last_login_at`, renouvellements proches, incidents
+  P1/P2) ; état des licences avec effectifs ; tableau « Pressings clients » complet
+  (onglets avec compteurs dont Incidents — `GET /platform/pressings/stats`, filtres
+  pays/plan, export, pagination, colonnes Plan, Licence/usage, Activité/sync, Santé,
+  Statut, Ouvrir). **Règles d'état dérivé** (`PressingController::decorate`, jamais
+  inventées) : santé = registre d'incidents (P1 ouvert → Incident, P2/P3 → Dégradé,
+  aucun → Sain) ; statut = suspension puis échéance réelle (À renouveler ≤ 30 j,
+  expirée) ; synchronisation = « En direct » pour un pressing hébergé ici, sinon âge
+  du dernier rapport (≤ 30 min synchronisé, ≤ 24 h retard, au-delà hors ligne, aucun
+  rapport) ; activité d'un pressing hébergé = dernier dépôt réel (`withMax` via
+  `Pressing::orders()` hasManyThrough). **Bug corrigé** : la liste du tableau de bord
+  affichait « 0 agence » pour un pressing hébergé (compteur dénormalisé des rapports).
+  La mention « notifiés au responsable » de la capture est rendue vraie :
+  `PressingAccountChangedNotification` envoyée au manager bootstrap lors d'une
+  suspension, réactivation ou renouvellement. Toujours omis : carte « Santé technique
+  » API/SYNC/PRINT, « 99,94 % disponibilité », taux d'échec/latence, « 93 %
+  connectées », état « Échec » de synchro (aucune donnée d'échec), sélecteur
+  Jour/Semaine/Mois (sémantique indéfinie sur un registre).
 - **Toujours omis, catégorie (c) sans système réel derrière** : santé technique
   API/SYNC/PRINT, disponibilité/latence ; pastille « En ligne/Instable » par agence ;
   WhatsApp/push ; taux d'ouverture e-mail ; passerelle SMS ; projection de CA ;

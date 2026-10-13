@@ -59,6 +59,12 @@ class Pressing extends Model
         return $this->hasMany(Agency::class);
     }
 
+    /** Dépôts de toutes les agences du pressing (activité réelle d'un pressing hébergé). */
+    public function orders(): \Illuminate\Database\Eloquent\Relations\HasManyThrough
+    {
+        return $this->hasManyThrough(Order::class, Agency::class);
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class);

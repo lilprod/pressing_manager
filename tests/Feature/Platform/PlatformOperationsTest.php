@@ -13,7 +13,7 @@ use Tests\TestCase;
 /** Console superadmin (audit Figma du 2026-10-13) : agences cross-tenant, incidents, licences, registre enrichi. */
 class PlatformOperationsTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, \Tests\Concerns\SeedsRbac;
 
     private function superadmin(): PlatformUser
     {
@@ -88,5 +88,41 @@ class PlatformOperationsTest extends TestCase
         $this->actingAs($admin, 'platform')->getJson('/api/platform/licenses')->assertOk()->assertJsonStructure([['pressing', 'plan', 'expires_at', 'days_remaining', 'last_payment']]);
         $csv = $this->actingAs($admin, 'platform')->get('/api/platform/pressings/export')->assertOk();
         $this->assertStringContainsString('Éclat Royal', $csv->streamedContent());
+    }
+
+    public function test_rows_expose_real_health_license_and_sync_states_and_stats(): void
+    {
+        $hosted = Pressing::factory()->create(['license_expires_at' => now()->addDays(10)]);
+        Agency::factory()->create(['pressing_id' => $hosted->id]);
+        $remote = Pressing::factory()->create(['last_report_at' => now()->subHours(3), 'license_expires_at' => now()->addYear()]);
+        $admin = $this->superadmin();
+        PlatformIncident::create(['pressing_id' => $hosted->id, 'title' => 'Panne', 'priority' => 'P1', 'status' => 'open']);
+        PlatformIncident::create(['pressing_id' => $remote->id, 'title' => 'Lenteur', 'priority' => 'P3', 'status' => 'open']);
+
+        $rows = collect($this->actingAs($admin, 'platform')->getJson('/api/platform/pressings')->json('data'))->keyBy('id');
+        $this->assertSame('incident', $rows[$hosted->id]['health']);
+        $this->assertSame('renewal_due', $rows[$hosted->id]['license_state']);
+        $this->assertSame('live', $rows[$hosted->id]['sync_state']);
+        $this->assertSame('degrade', $rows[$remote->id]['health']);
+        $this->assertSame('late', $rows[$remote->id]['sync_state']);
+
+        $this->assertCount(2, $this->actingAs($admin, 'platform')->getJson('/api/platform/pressings?status=incident')->json('data'));
+        $stats = $this->actingAs($admin, 'platform')->getJson('/api/platform/pressings/stats')->assertOk();
+        $stats->assertJsonPath('incidents_open', 2)->assertJsonPath('incidents_high', 1)->assertJsonPath('licenses_renewal_due', 1)->assertJsonPath('tabs.incident', 2);
+    }
+
+    public function test_suspension_notifies_the_pressing_manager(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+        $this->seedRbac();
+        $pressing = Pressing::factory()->create();
+        $manager = \App\Models\User::factory()->create([
+            'pressing_id' => $pressing->id, 'agency_id' => null, 'is_active' => true,
+            'role_id' => \App\Models\Role::where('slug', 'admin')->value('id'),
+        ]);
+        $admin = $this->superadmin();
+
+        $this->actingAs($admin, 'platform')->postJson("/api/platform/pressings/{$pressing->id}/suspend")->assertOk();
+        \Illuminate\Support\Facades\Notification::assertSentTo($manager, \App\Notifications\PressingAccountChangedNotification::class);
     }
 }

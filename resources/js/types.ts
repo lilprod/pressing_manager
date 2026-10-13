@@ -1194,3 +1194,21 @@ export interface StaffAlertsResponse {
     alerts: StaffAlert[];
     total: number;
 }
+
+export interface DashboardOverview {
+    pipeline: { status: OrderStatus; orders: number; pieces: number }[];
+    deadlines: {
+        approaching_count: number;
+        approaching: { id: number; order_number: string; promised_at: string }[];
+        overdue_count: number;
+        due_today_count: number;
+    };
+    aging: {
+        total: number;
+        count: number;
+        buckets: Record<'0_30' | '31_89' | '90_plus', { amount: number; count: number }>;
+    };
+    pieces_received: number;
+    pickups: { count: number; ready_orders: number };
+    loyalty: { members: number; new_this_month: number };
+}

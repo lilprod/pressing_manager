@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\DocumentController;
 use App\Http\Controllers\Api\DeliveryZoneController;
 use App\Http\Controllers\Api\IntakeConditionController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\KpiController;
 use App\Http\Controllers\Api\LicenseController;
 use App\Http\Controllers\Api\LoyaltyTierController;
@@ -314,6 +315,7 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
 
     Route::get('/hr/performance', [PerformanceController::class, 'index']);
 
+    Route::get('/dashboard/overview', [DashboardController::class, 'overview']);
     Route::get('/kpi', [KpiController::class, 'index']);
     Route::get('/kpi/export/pdf', [KpiController::class, 'exportPdf']);
     Route::get('/kpi/export/excel', [KpiController::class, 'exportExcel']);

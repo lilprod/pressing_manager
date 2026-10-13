@@ -4038,6 +4038,15 @@ par lot (`b8891d9`, `3a6a9bd`, `712dfa5`, `2dc756b`, `2aa5c68`, `a1a0c23`, `27eb
   du registre. Tableau de bord : compte réel pour un pressing hébergé, dernier rapport
   pour un pressing déployé ailleurs (deux tests existants encodaient le second cas —
   conservé, pas remplacé).
+- **Retour utilisateur sur l'écran Agences superadmin** (capture annotée) : le panneau
+  « Modifier l'agence » n'apparaissait qu'au clic sur le crayon. Désormais ouvert par
+  défaut sur la première agence (fermable), sections alignées sur la maquette (préfixe
+  codes dans l'identité, pays du pressing en lecture seule, e-mail d'agence —
+  nouvelle colonne `agencies.email`, format code dépôt calculé, délai par défaut,
+  aperçu Réception → Laveur → Classeur → Prêt, mode de tarification affiché tel qu'il
+  est réellement : par article + nombre de prix locaux). Liste : responsable du
+  pressing et mention de tarification par ligne. « Exiger la validation Laveur →
+  Classeur » non reproduit (aucune règle de ce type n'existe).
 - **Toujours omis, catégorie (c) sans système réel derrière** : santé technique
   API/SYNC/PRINT, disponibilité/latence ; pastille « En ligne/Instable » par agence ;
   WhatsApp/push ; taux d'ouverture e-mail ; passerelle SMS ; projection de CA ;

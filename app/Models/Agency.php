@@ -16,7 +16,7 @@ class Agency extends Model
     use Auditable, HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'pressing_id', 'code', 'name', 'city', 'address', 'phone',
+        'pressing_id', 'code', 'name', 'city', 'address', 'phone', 'email',
         'unclaimed_item_threshold_days', 'is_active', 'workshop_capacity', 'opens_at', 'closes_at', 'opening_days',
     ];
 

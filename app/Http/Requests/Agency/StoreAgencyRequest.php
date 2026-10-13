@@ -20,6 +20,7 @@ class StoreAgencyRequest extends FormRequest
             'city' => ['nullable', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
+            'email' => ['nullable', 'email', 'max:255'],
             'unclaimed_item_threshold_days' => ['nullable', 'integer', 'min:1'],
             'is_active' => ['boolean'],
             'workshop_capacity' => ['nullable', 'integer', 'min:1'],

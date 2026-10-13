@@ -33,6 +33,7 @@ class PlatformAgencyController extends PlatformApiController
             ->withCount([
                 'users as staff_count',
                 'orders as deposits_30d' => fn ($q) => $q->where('created_at', '>=', now()->subDays(self::ACTIVITY_DAYS)),
+                'services as local_price_overrides' => fn ($q) => $q->whereNotNull('agency_services.price_override'),
             ])
             ->when($pressingIds !== null, fn ($q) => $q->whereIn('pressing_id', $pressingIds))
             ->when($request->filled('pressing_id'), fn ($q) => $q->where('pressing_id', $request->integer('pressing_id')))
@@ -50,7 +51,8 @@ class PlatformAgencyController extends PlatformApiController
         };
 
         $page = $query->paginate($request->integer('per_page', 20));
-        $page->getCollection()->transform(fn (Agency $agency) => $this->present($agency));
+        $managers = $this->managersFor($page->getCollection()->pluck('pressing_id')->unique()->all());
+        $page->getCollection()->transform(fn (Agency $agency) => $this->present($agency, $managers[$agency->pressing_id] ?? null));
 
         return response()->json($page);
     }
@@ -96,7 +98,7 @@ class PlatformAgencyController extends PlatformApiController
 
     private function agencyFields(): array
     {
-        return ['code', 'name', 'city', 'address', 'phone', 'opens_at', 'closes_at', 'opening_days', 'is_active'];
+        return ['code', 'name', 'city', 'address', 'phone', 'email', 'opens_at', 'closes_at', 'opening_days', 'is_active'];
     }
 
     private function settingsFrom(array $data): array
@@ -117,6 +119,7 @@ class PlatformAgencyController extends PlatformApiController
             'city' => ['nullable', 'string', 'max:120'],
             'address' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:40'],
+            'email' => ['nullable', 'email', 'max:255'],
             'opens_at' => ['nullable', 'date_format:H:i'],
             'closes_at' => ['nullable', 'date_format:H:i', 'after:opens_at'],
             'opening_days' => ['nullable', 'array'],
@@ -131,9 +134,24 @@ class PlatformAgencyController extends PlatformApiController
         ]);
     }
 
-    private function present(Agency $agency): array
+    /** Responsable de chaque pressing = compte manager bootstrap (même règle que la liste des pressings). */
+    private function managersFor(array $pressingIds): array
+    {
+        return \App\Models\User::query()
+            ->whereIn('pressing_id', $pressingIds)
+            ->whereNull('agency_id')
+            ->whereHas('role', fn ($r) => $r->where('slug', 'admin'))
+            ->orderBy('id')
+            ->get(['id', 'pressing_id', 'name'])
+            ->unique('pressing_id')
+            ->mapWithKeys(fn ($u) => [$u->pressing_id => $u->name])
+            ->all();
+    }
+
+    private function present(Agency $agency, ?string $manager = null): array
     {
         $settings = $agency->settings ?? AgencySetting::forAgency($agency->id);
+        $manager ??= $this->managersFor([$agency->pressing_id])[$agency->pressing_id] ?? null;
 
         return [
             'id' => $agency->id,
@@ -142,6 +160,9 @@ class PlatformAgencyController extends PlatformApiController
             'city' => $agency->city,
             'address' => $agency->address,
             'phone' => $agency->phone,
+            'email' => $agency->email,
+            'manager_name' => $manager,
+            'local_price_overrides' => $agency->local_price_overrides ?? $agency->services()->whereNotNull('agency_services.price_override')->count(),
             'is_active' => $agency->is_active,
             'opens_at' => $agency->opens_at ? substr($agency->opens_at, 0, 5) : null,
             'closes_at' => $agency->closes_at ? substr($agency->closes_at, 0, 5) : null,
@@ -152,6 +173,7 @@ class PlatformAgencyController extends PlatformApiController
             'settings' => [
                 'order_number_prefix' => $settings->order_number_prefix,
                 'order_number_suffix' => $settings->order_number_suffix,
+                'order_number_padding' => $settings->order_number_padding,
                 'standard_delay_hours' => $settings->standard_delay_hours,
                 'express_delay_hours' => $settings->express_delay_hours,
                 'washer_step_enabled' => $settings->washer_step_enabled,

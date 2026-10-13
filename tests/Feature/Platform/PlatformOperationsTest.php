@@ -35,7 +35,11 @@ class PlatformOperationsTest extends TestCase
         $created = $this->actingAs($admin, 'platform')->postJson('/api/platform/agencies', [
             'pressing_id' => $a->id, 'code' => 'AKW2', 'name' => 'Akwa Nord', 'opens_at' => '07:30', 'closes_at' => '19:00',
             'opening_days' => [1, 2, 3, 4, 5, 6], 'order_number_prefix' => 'AKW-', 'standard_delay_hours' => 48,
+            'email' => 'akwa@example.test',
         ])->assertCreated();
+        $this->assertSame('akwa@example.test', $created->json('email'));
+        $this->assertSame(0, $created->json('local_price_overrides'));
+        $this->assertArrayHasKey('manager_name', $created->json());
         $this->assertSame('AKW-', $created->json('settings.order_number_prefix'));
         $this->assertSame([1, 2, 3, 4, 5, 6], $created->json('opening_days'));
 

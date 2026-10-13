@@ -3964,3 +3964,93 @@ fichier pour un périmètre explicitement validé).
   explicite — un oubli corrigé sur `EditTierRow` pendant cette relecture —, pastilles
   de filtre et chips d'agence en `flex flex-wrap`), pas par une capture empirique à
   cette largeur. À revérifier par capture réelle dès qu'un environnement le permet.
+
+**Audit de conformité global — toutes les captures du dossier `captures/` (2026-10-13)**
+— demande utilisateur : « Audite minutieusement chaque capture figma du dossier captures
+avec nos écrans… conformité identique avec l'ensemble des fonctionnalités ». Cadence et
+périmètre tranchés via `AskUserQuestion` : **tout enchaîner sans pause** (une seule
+validation finale), **construire aussi les systèmes de catégorie (c)** (journal des
+connexions + sessions, modèles de notifications, sessions de caisse par caissier,
+registre d'incidents plateforme) plutôt que de les omettre, ordre « écrans staff
+quotidiens d'abord ». Méthode `figma-conformity-audit` appliquée lot par lot, un commit
+par lot (`b8891d9`, `3a6a9bd`, `712dfa5`, `2dc756b`, `2aa5c68`, `a1a0c23`, `27ebe9c`,
+`18385d6`, `44113a8`).
+
+- **Lot 1 — Dashboard staff** : `GET /dashboard/overview` (pipeline en commandes ET
+  pièces restantes, échéances 24 h/retards, ancienneté des impayés 0-30/31-89/90+ sur
+  `issued_at`, pièces reçues, retraits, fidélité), courbe CA (`RevenueLine`, SVG pur),
+  comparaison agences, flux de caisse par moyen, activité via `/audit-logs`.
+- **Lot 2 — Clients** : annuaire filtrable (statut, palier via bornes de dépenses,
+  activité), code client `CLI-xxxxx`, métriques par client sans N+1, export Excel ;
+  fiche client (fidélité détaillée avec palier suivant, préférences **dérivées** de
+  l'historique réel — traitement favori, créneau de retrait —, notes internes
+  `client_notes`, consignes d'entretien).
+- **Lot 3 — Équipe / Profil** : `auth_events` (journal des connexions), MFA TOTP staff
+  avec appareils de confiance et codes de secours, sessions Sanctum listables/
+  révocables (IP + user-agent stockés au login), affectations multi-agences
+  (`agency_user`, centralisées dans `User::accessibleAgencyIds()`/
+  `effectiveAgencyId()` — `canAccessAgency()` et `resolveAgencyFilter()` les utilisent,
+  22 sites de contrôleurs migrés mécaniquement), invitations 72 h (relance/révocation),
+  import CSV tout-ou-rien, préférences réellement appliquées (fuseau horaire du
+  formatage, résumé quotidien par e-mail `staff:send-daily-summaries`, bip d'alerte).
+- **Lot 4 — Notifications** : 9 évènements, modèles par agence × évènement × canal
+  (`notification_templates`, variables réelles, aperçu sur le dernier dépôt réel),
+  envoi de test (exclu des stats), horaires silencieux avec envoi différé
+  (`notifications:flush-deferred`), consentement marketing + lien de désinscription
+  signé, retards (`notifications:send-delays`), stats par canal, export CSV. SMS
+  toujours simulé (aucune passerelle réelle) — affiché comme tel.
+- **Lot 5 — Rapports / Bilan journalier / sessions de caisse** : 8 KPI réels, comparaison
+  période précédente ou N-1, séries ventes/panier, exports CSV/Excel/PDF, **envois
+  programmés** (`report_schedules`, `reports:send-scheduled` 07h00). Sessions de caisse
+  par caissier (`cash_sessions`, ouverture/pause/clôture avec écart et commentaire
+  obligatoire, encaissements rattachés via `payments.cash_session_id`), objectif
+  journalier par caissier (réglage d'agence, colonne masquée s'il n'est pas configuré),
+  remises sensibles (> 10 % du dépôt), rapprochement du jour, PDF du bilan.
+- **Lot 6 — Paramètres, retrait, caisse, multi-agences, article** :
+  - **Bug de fond trouvé par l'audit** : `allow_immediate_pickup`, `finishing_delay_hours`,
+    `delivery_fee` et l'intervalle de synchronisation hors ligne étaient **stockés mais
+    lus nulle part** (même famille que `loyalty_amount_per_point`). Désormais appliqués :
+    retrait immédiat d'articles traités (transition journalisée contrôle qualité → prêt
+    → livré, listés au Centre de retrait), frais de livraison par défaut
+    (`DeliveryService`), délai de finition pour les dépôts « repassage seul »,
+    intervalle de `sync.ts` (`configureSyncInterval`). Nouveaux réglages réels :
+    `loyalty_accrue_on_promotions`, `offline_enabled` (le comptoir refuse la file
+    locale si désactivé). Restent affichage seul, assumés : rétention locale (purger une
+    file non synchronisée perdrait des dépôts), frais de collecte (aucune collecte à
+    domicile n'existe).
+  - Codes dépôt de toutes les agences sur une carte (`GET/PUT
+    /agency-settings/numbering`), aperçu du workflow, « N changements non enregistrés ».
+  - Branding : « Restaurer par défaut » (brouillon seulement), cartes formats ticket
+    80 mm / facture A4, mini-aperçu coloré.
+  - Traiter le retrait : bascule total/partiel, « Notifier » (`POST
+    /orders/{id}/notify-ready`, pipeline réel, throttlé). Mouvement de caisse : carte
+    « Caisse concernée » (session ouverte, solde espèces réel), contrôle « solde
+    suffisant ». Fiche multi-agences : Contacter/Gérer, horaires et jours d'ouverture
+    (`agencies.opens_at/closes_at/opening_days`, statut Ouverte/Fermée seulement si
+    configuré), cartes Dépôts & retraits / Caisse & mouvements.
+  - Fiche article : disponibilité réelle par agence (`GET/PUT
+    /services/{id}/availability`), **états du linge acceptés** par article
+    (`service_intake_condition`, filtrés au comptoir ET refusés en 422 côté serveur),
+    aperçu des prix par traitement, contrôle avant publication.
+- **Lot 7 — Superadmin** : écran Agences cross-tenant (`/platform/agencies`, scopé
+  aux pressings affectés), registre d'incidents (`platform_incidents`) qui alimente
+  KPI/alertes/pastille d'un pressing, écran Licences, colonne Responsable et export CSV
+  du registre. Tableau de bord : compte réel pour un pressing hébergé, dernier rapport
+  pour un pressing déployé ailleurs (deux tests existants encodaient le second cas —
+  conservé, pas remplacé).
+- **Toujours omis, catégorie (c) sans système réel derrière** : santé technique
+  API/SYNC/PRINT, disponibilité/latence ; pastille « En ligne/Instable » par agence ;
+  WhatsApp/push ; taux d'ouverture e-mail ; passerelle SMS ; projection de CA ;
+  « rendus compatibles »/« services associés » d'un article ; mode de tarification par
+  agence (la tarification est portée par l'article) ; signature du réceptionnaire.
+- **Pièges rencontrés** : `User::$appends` fuyait dans la réponse des sessions de caisse
+  (projection explicite id/nom) ; libellé d'audit brut « CashSession » (type
+  `cash_session` ajouté à `AuditLogController::TYPES`/`lib/auditLog.ts`) ; colonne
+  latérale vide laissée par un `lg:grid-cols-[…_380px]` permanent (rendue
+  conditionnelle) ; `Toggle` pleine largeur dans une ligne de liste (grille à colonnes
+  fixes). Redémarrage du worker en cours de lot 7 : serveur de dev relancé
+  (`php artisan serve --port=8731`), aucune perte (travail non commité intact).
+- **Validation** : suite complète **647/647**, `tsc --noEmit` et `npm run build` propres,
+  parité i18n fr/en stricte, Playwright 1440 px et 390 px sans débordement sur chaque
+  écran touché, plus parcours réels (session de caisse ouverte/clôturée via l'API,
+  modification d'agence superadmin persistée en base puis remise à l'état initial).

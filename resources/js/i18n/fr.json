@@ -2026,5 +2026,19 @@
     "multiAgency.cash.expenses": "Décaissements du jour",
     "multiAgency.cash.variance": "Écart de la dernière clôture",
     "multiAgency.cash.open": "Ouvrir la caisse",
-    "audit.type.cashSession": "Session de caisse"
+    "audit.type.cashSession": "Session de caisse",
+    "service.acceptedConditions": "États du linge acceptés",
+    "service.acceptedConditionsHint": "Aucune case cochée = tous les états sont acceptés. Sinon, le comptoir ne propose que ceux-ci et refuse les autres.",
+    "service.availabilityAll": "Disponibilité par agence · {active}/{total}",
+    "service.activateAll": "Tout activer",
+    "service.available": "Disponible",
+    "service.unavailable": "Indisponible",
+    "service.previewDelay": "Délai {hours} h",
+    "service.previewKg": "Tarif au kilo : voir les grilles dégressives.",
+    "service.checklist.title": "Contrôle avant publication",
+    "service.checklist.info": "Informations obligatoires",
+    "service.checklist.prices": "Tarifs renseignés",
+    "service.checklist.delay": "Délai renseigné",
+    "service.checklist.agency": "Au moins une agence active",
+    "service.lastChange": "Dernière modification"
 }

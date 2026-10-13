@@ -15,6 +15,8 @@ class UpdateServiceRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'accepted_condition_ids' => ['sometimes', 'array'],
+            'accepted_condition_ids.*' => ['integer', 'exists:intake_conditions,id'],
             'code' => ['sometimes', 'string', 'max:30', Rule::unique('services', 'code')->where('pressing_id', $this->user()->pressing_id)->ignore($this->route('service'))],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'category' => ['sometimes', 'required', 'in:nettoyage,lavage,repassage,retouche,teinture,autre'],

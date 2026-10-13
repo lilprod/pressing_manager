@@ -495,6 +495,8 @@ export interface ServicePriceHistory {
 
 export interface Service {
     id: number;
+    accepted_conditions?: { id: number; code?: string; label?: string }[];
+    updated_at?: string;
     code: string;
     name: string;
     category: ServiceCategory;
@@ -560,6 +562,14 @@ export interface IntakeCondition {
     code: string;
     label: string;
     is_active: boolean;
+}
+
+export interface ServiceAvailabilityRow {
+    agency_id: number;
+    agency_name: string;
+    city: string | null;
+    is_active: boolean;
+    price_override: number | null;
 }
 
 export interface TreatmentType {

@@ -24,7 +24,7 @@ class ServicePricingService
         return DB::transaction(function () use ($data, $actor) {
             $service = Service::create([
                 'pressing_id' => $actor?->pressing_id,
-                ...Arr::except($data, ['price_tiers']),
+                ...Arr::except($data, ['price_tiers', 'accepted_condition_ids']),
             ]);
 
             if (! empty($data['price_tiers'])) {

@@ -40,7 +40,7 @@ class ServiceController extends ApiController
         $services = $agency->services()
             ->wherePivot('is_active', true)
             ->where('services.is_active', true)
-            ->with('priceTiers')
+            ->with(['priceTiers', 'acceptedConditions:id'])
             ->get()
             ->map(function ($service) {
                 $service->effective_price = $service->pivot->price_override ?? $service->base_price;
@@ -230,12 +230,59 @@ class ServiceController extends ApiController
             $service->agency_pivot = $pivot ? ['price_override' => $pivot->price_override, 'is_active' => $pivot->is_active] : null;
         }
 
-        return response()->json($service->load('priceTiers', 'priceHistories.actor'));
+        return response()->json($service->load('priceTiers', 'priceHistories.actor', 'acceptedConditions:id,code,label'));
+    }
+
+    /** « Disponibilité par agence » : toutes les agences actives du pressing et leur pivot réel. */
+    public function availability(Request $request, Service $service): JsonResponse
+    {
+        $this->authorizeService($request->user(), $service);
+        $pivots = $service->agencies()->get()->keyBy('id');
+
+        $rows = Agency::query()->where('pressing_id', $request->user()->pressing_id)->where('is_active', true)
+            ->whereIn('id', $this->resolveAgencyFilter($request, $request->user()))
+            ->orderBy('name')->get(['id', 'name', 'city'])
+            ->map(fn (Agency $agency) => [
+                'agency_id' => $agency->id,
+                'agency_name' => $agency->name,
+                'city' => $agency->city,
+                'is_active' => (bool) ($pivots[$agency->id]->pivot->is_active ?? false),
+                'price_override' => $pivots[$agency->id]->pivot->price_override ?? null,
+            ]);
+
+        return response()->json($rows->values());
+    }
+
+    /** Mise à jour groupée de la disponibilité (rattache l'article aux agences manquantes). */
+    public function updateAvailability(Request $request, Service $service): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'services.manage');
+        $this->authorizeService($request->user(), $service);
+        $data = $request->validate([
+            'agencies' => ['required', 'array', 'min:1'],
+            'agencies.*.agency_id' => ['required', 'integer'],
+            'agencies.*.is_active' => ['required', 'boolean'],
+            'agencies.*.price_override' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($data, $service, $request) {
+            foreach ($data['agencies'] as $row) {
+                $this->authorizeAgency($request->user(), (int) $row['agency_id']);
+                $service->agencies()->syncWithoutDetaching([
+                    (int) $row['agency_id'] => ['is_active' => $row['is_active'], 'price_override' => $row['price_override'] ?? null],
+                ]);
+            }
+        });
+
+        return $this->availability($request->merge(['agency_id' => null]), $service);
     }
 
     public function store(StoreServiceRequest $request): JsonResponse
     {
         $service = $this->pricing->createService($request->validated(), $request->user());
+        if ($request->has('accepted_condition_ids')) {
+            $service->acceptedConditions()->sync($request->validated()['accepted_condition_ids']);
+        }
 
         return response()->json($service, 201);
     }
@@ -244,7 +291,10 @@ class ServiceController extends ApiController
     {
         $this->authorizeService($request->user(), $service);
 
-        $service = $this->pricing->updateService($service, $request->validated(), $request->user());
+        $service = $this->pricing->updateService($service, \Illuminate\Support\Arr::except($request->validated(), ['accepted_condition_ids']), $request->user());
+        if ($request->has('accepted_condition_ids')) {
+            $service->acceptedConditions()->sync($request->validated()['accepted_condition_ids']);
+        }
 
         return response()->json($service);
     }

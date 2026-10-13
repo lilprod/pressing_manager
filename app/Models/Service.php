@@ -41,4 +41,10 @@ class Service extends Model
     {
         return $this->hasMany(ServicePriceHistory::class)->orderByDesc('changed_at');
     }
+
+    /** États du linge acceptés pour cet article (vide = tous). */
+    public function acceptedConditions(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(IntakeCondition::class, 'service_intake_condition');
+    }
 }

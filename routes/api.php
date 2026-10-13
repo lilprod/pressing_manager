@@ -196,6 +196,8 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::post('/services/import', [ServiceController::class, 'import']);
     Route::get('/services/price-history', [ServiceController::class, 'priceHistory']);
     Route::post('/services/{service}/duplicate', [ServiceController::class, 'duplicate']);
+    Route::get('/services/{service}/availability', [ServiceController::class, 'availability']);
+    Route::put('/services/{service}/availability', [ServiceController::class, 'updateAvailability']);
     Route::get('/services/{service}', [ServiceController::class, 'show']);
     Route::post('/services', [ServiceController::class, 'store']);
     Route::patch('/services/{service}', [ServiceController::class, 'update']);

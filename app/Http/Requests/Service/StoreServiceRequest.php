@@ -15,6 +15,8 @@ class StoreServiceRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'accepted_condition_ids' => ['sometimes', 'array'],
+            'accepted_condition_ids.*' => ['integer', 'exists:intake_conditions,id'],
             'code' => ['required', 'string', 'max:30', Rule::unique('services', 'code')->where('pressing_id', $this->user()->pressing_id)],
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', 'in:nettoyage,lavage,repassage,retouche,teinture,autre'],

@@ -2026,5 +2026,19 @@
     "multiAgency.cash.expenses": "Paid out today",
     "multiAgency.cash.variance": "Last closure variance",
     "multiAgency.cash.open": "Open register",
-    "audit.type.cashSession": "Cash session"
+    "audit.type.cashSession": "Cash session",
+    "service.acceptedConditions": "Accepted garment states",
+    "service.acceptedConditionsHint": "No box ticked = all states accepted. Otherwise the counter only offers these and rejects the others.",
+    "service.availabilityAll": "Availability per agency · {active}/{total}",
+    "service.activateAll": "Enable all",
+    "service.available": "Available",
+    "service.unavailable": "Unavailable",
+    "service.previewDelay": "Lead time {hours} h",
+    "service.previewKg": "Per-kg pricing: see the tiered grid.",
+    "service.checklist.title": "Pre-publication check",
+    "service.checklist.info": "Required information",
+    "service.checklist.prices": "Prices set",
+    "service.checklist.delay": "Lead time set",
+    "service.checklist.agency": "At least one active agency",
+    "service.lastChange": "Last change"
 }

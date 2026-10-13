@@ -9,7 +9,8 @@ import { categoryMeta } from '../../lib/serviceCategory';
 import { Alert, LoadingState, Spinner } from '../../components/ui/Feedback';
 import { Pill, TONES } from '../../components/ui/StatusBadge';
 import { button, cardPadded, cx, input, inputSm, label, select, sectionTitle, textLink } from '../../components/ui/styles';
-import type { Service, ServiceBillingMode, ServiceCategory, ServicePriceTier, ServicePriority } from '../../types';
+import type { IntakeCondition, Service, ServiceAvailabilityRow, ServiceBillingMode, ServiceCategory, ServicePriceTier, ServicePriority, TreatmentType } from '../../types';
+import Toggle from '../../components/ui/Toggle';
 
 const CATEGORIES: ServiceCategory[] = ['nettoyage', 'lavage', 'repassage', 'retouche', 'teinture', 'autre'];
 const BILLING_MODES: ServiceBillingMode[] = ['piece', 'kg', 'mixte'];
@@ -52,6 +53,18 @@ export default function ServiceFormPage() {
 
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    // Fiche article (audit Figma du 2026-10-13) : disponibilité réelle par agence,
+    // états du linge acceptés (appliqués au comptoir), aperçu des prix par traitement.
+    const [availability, setAvailability] = useState<ServiceAvailabilityRow[]>([]);
+    const [conditions, setConditions] = useState<IntakeCondition[]>([]);
+    const [acceptedIds, setAcceptedIds] = useState<number[]>([]);
+    const [treatments, setTreatments] = useState<TreatmentType[]>([]);
+
+    useEffect(() => {
+        api.get<IntakeCondition[]>('/intake-conditions').then(setConditions).catch(() => setConditions([]));
+        api.get<TreatmentType[]>('/treatment-types').then((list) => setTreatments(list.filter((x) => x.is_active))).catch(() => setTreatments([]));
+        if (id) api.get<ServiceAvailabilityRow[]>(`/services/${id}/availability`).then(setAvailability).catch(() => setAvailability([]));
+    }, [id]);
 
     useEffect(() => {
         if (!id) return;
@@ -82,6 +95,7 @@ export default function ServiceFormPage() {
                         })),
                     );
                 }
+                setAcceptedIds((s.accepted_conditions ?? []).map((c) => c.id));
                 setOverride(s.agency_pivot?.price_override?.toString() ?? '');
                 setAgencyActive(s.agency_pivot?.is_active ?? true);
             })
@@ -122,6 +136,7 @@ export default function ServiceFormPage() {
                 allow_discount: allowDiscount,
                 round_to_hundred: roundToHundred,
                 price_editable_at_counter: priceEditableAtCounter,
+                accepted_condition_ids: acceptedIds,
                 price_tiers: needsTiers
                     ? tiers
                           .filter((t) => t.weight_min !== '' && t.price_per_kg !== '')
@@ -135,7 +150,11 @@ export default function ServiceFormPage() {
 
             const saved = isEdit ? await api.patch<Service>(`/services/${id}`, payload) : await api.post<Service>('/services', payload);
 
-            if (isEdit && agencyId) {
+            if (isEdit && availability.length > 0) {
+                await api.put(`/services/${saved.id}/availability`, {
+                    agencies: availability.map((row) => ({ agency_id: row.agency_id, is_active: row.is_active, price_override: row.price_override })),
+                });
+            } else if (isEdit && agencyId) {
                 await api.patch(`/agencies/${agencyId}/services/${saved.id}`, {
                     price_override: override === '' ? null : Number(override),
                     is_active: agencyActive,
@@ -159,6 +178,19 @@ export default function ServiceFormPage() {
         (!needsBasePrice || basePrice !== '') &&
         (!needsTiers || validTiers.length > 0);
     const meta = categoryMeta(category);
+    const base = Number(basePrice || 0);
+    const previewPrice = (ratio: number) => {
+        const raw = Math.round(base * ratio);
+        return roundToHundred ? Math.round(raw / 100) * 100 : raw;
+    };
+    const activeAgencies = availability.filter((row) => row.is_active).length;
+    const checks = [
+        { key: 'info', done: name.trim() !== '' && (isEdit || code.trim() !== '') },
+        { key: 'prices', done: (!needsBasePrice || base > 0) && (!needsTiers || validTiers.length > 0) },
+        { key: 'delay', done: Number(durationHours) > 0 },
+        { key: 'agency', done: !isEdit || availability.length === 0 || activeAgencies > 0 },
+    ];
+    const lastChange = service?.price_histories?.[0] ?? null;
     const Icon = meta.icon;
 
     if (loading) {
@@ -175,7 +207,7 @@ export default function ServiceFormPage() {
     }
 
     return (
-        <div className="max-w-3xl space-y-6">
+        <div className="max-w-6xl space-y-6">
             <BackLink />
 
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -204,6 +236,9 @@ export default function ServiceFormPage() {
             </div>
 
             {error && <Alert tone="error">{error}</Alert>}
+
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="min-w-0 space-y-6">
 
             <section aria-labelledby="service-general-heading" className={cx(cardPadded, 'space-y-4')}>
                 <h2 id="service-general-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
@@ -348,30 +383,65 @@ export default function ServiceFormPage() {
                 </div>
             </section>
 
-            {isEdit && agencyId && (
-                <section aria-labelledby="service-availability-heading" className={cx(cardPadded, 'space-y-4')}>
-                    <h2 id="service-availability-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
-                        <MapPin aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-350" />
-                        {t('service.section.availability')}
-                    </h2>
-                    <p className="text-xs text-ink-600 dark:text-ink-350">{t('service.availabilityHint')}</p>
-
-                    <div className="flex flex-wrap items-end gap-3">
-                        <label className="block">
-                            <span className={label}>{t('service.priceOverride')}</span>
+            <section aria-labelledby="service-conditions-heading" className={cx(cardPadded, 'space-y-3')}>
+                <h2 id="service-conditions-heading" className={sectionTitle}>
+                    {t('service.acceptedConditions')}
+                </h2>
+                <p className="text-xs text-ink-600 dark:text-ink-350">{t('service.acceptedConditionsHint')}</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {conditions.map((condition) => (
+                        <label key={condition.id} className="flex items-center gap-2 text-sm text-ink-800 dark:text-ink-100">
                             <input
-                                type="number"
-                                min={0}
-                                value={override}
-                                onChange={(e) => setOverride(e.target.value)}
-                                placeholder={service?.base_price !== null && service?.base_price !== undefined ? String(service.base_price) : String(basePrice)}
-                                className={cx(inputSm, 'w-36')}
+                                type="checkbox"
+                                checked={acceptedIds.includes(condition.id)}
+                                onChange={(e) => setAcceptedIds((ids) => (e.target.checked ? [...ids, condition.id] : ids.filter((x) => x !== condition.id)))}
+                                className="h-4 w-4 rounded"
                             />
+                            {condition.label}
                         </label>
-                        {agencyActive ? <Pill tone="emerald">{t('service.active')}</Pill> : <Pill tone="amber">{t('service.inactiveForAgency')}</Pill>}
-                        <button type="button" onClick={() => setAgencyActive((v) => !v)} className={button('ghost', 'sm')}>
-                            {agencyActive ? t('service.deactivateForAgency') : t('service.activateForAgency')}
+                    ))}
+                </div>
+            </section>
+
+            {isEdit && availability.length > 0 && (
+                <section aria-labelledby="service-availability-heading" className={cx(cardPadded, 'space-y-3')}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h2 id="service-availability-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
+                            <MapPin aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-350" />
+                            {t('service.availabilityAll', { active: activeAgencies, total: availability.length })}
+                        </h2>
+                        <button type="button" onClick={() => setAvailability((rows) => rows.map((r) => ({ ...r, is_active: true })))} className={button('secondary', 'sm')}>
+                            {t('service.activateAll')}
                         </button>
+                    </div>
+                    <div className="overflow-x-auto">
+                    <ul className="max-h-[420px] min-w-[420px] divide-y divide-ink-100 overflow-auto dark:divide-ink-800">
+                        {availability.map((row) => (
+                            <li key={row.agency_id} className="grid grid-cols-[minmax(0,1fr)_7rem_10rem] items-center gap-3 py-2.5">
+                                <span className="min-w-0">
+                                    <span className="block truncate text-sm font-semibold text-ink-900 dark:text-white">{row.agency_name}</span>
+                                    <span className="block text-xs text-ink-500 dark:text-ink-400">{row.city ?? '—'}</span>
+                                </span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    aria-label={`${t('service.priceOverride')} — ${row.agency_name}`}
+                                    placeholder={basePrice || '—'}
+                                    value={row.price_override ?? ''}
+                                    onChange={(e) =>
+                                        setAvailability((rows) => rows.map((r) => (r.agency_id === row.agency_id ? { ...r, price_override: e.target.value === '' ? null : Number(e.target.value) } : r)))
+                                    }
+                                    className={cx(inputSm, 'w-full')}
+                                />
+                                <Toggle
+                                    className="min-w-0"
+                                    checked={row.is_active}
+                                    onChange={(v) => setAvailability((rows) => rows.map((r) => (r.agency_id === row.agency_id ? { ...r, is_active: v } : r)))}
+                                    label={row.is_active ? t('service.available') : t('service.unavailable')}
+                                />
+                            </li>
+                        ))}
+                    </ul>
                     </div>
                 </section>
             )}
@@ -404,6 +474,57 @@ export default function ServiceFormPage() {
                     </ul>
                 </section>
             )}
+            </div>
+
+            <aside className="space-y-4 lg:sticky lg:top-24">
+                <section className="space-y-3 rounded-2xl bg-brand-950 p-5 text-white">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-brand-100/80">
+                        {t(`service.category.${category}`)} · {t(`service.billingModeOption.${billingMode}`)}
+                    </p>
+                    <p className="font-display text-xl font-bold">{name || t('service.new')}</p>
+                    <p className="text-xs text-brand-100/80">
+                        {code || '—'} · {t('service.previewDelay', { hours: durationHours || '—' })}
+                    </p>
+                    {needsBasePrice && base > 0 ? (
+                        <dl className="space-y-1.5 text-sm">
+                            {(treatments.length > 0 ? treatments : [{ id: 0, code: 'base', name: t('service.basePrice'), price_ratio: 1, is_active: true }]).map((tr) => (
+                                <div key={tr.id} className="flex justify-between gap-3">
+                                    <dt className="text-brand-100/90">{tr.name}</dt>
+                                    <dd className="font-semibold tabular-nums">{money(previewPrice(Number(tr.price_ratio)))}</dd>
+                                </div>
+                            ))}
+                        </dl>
+                    ) : (
+                        <p className="text-sm text-brand-100/90">{t('service.previewKg')}</p>
+                    )}
+                </section>
+
+                <section className={cx(cardPadded, 'space-y-2')}>
+                    <h2 className={cx(sectionTitle, 'text-sm')}>{t('service.checklist.title')}</h2>
+                    <ul className="space-y-1.5 text-sm">
+                        {checks.map((c) => (
+                            <li key={c.key} className={cx('flex items-center gap-2', c.done ? 'text-ink-800 dark:text-ink-100' : 'text-ink-500 dark:text-ink-400')}>
+                                <Check aria-hidden="true" className={cx('h-4 w-4', c.done ? 'text-emerald-600 dark:text-emerald-400' : 'text-ink-300 dark:text-ink-600')} />
+                                {t(`service.checklist.${c.key}`)}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+
+                {isEdit && (
+                    <section className={cx(cardPadded, 'space-y-1')}>
+                        <h2 className={cx(sectionTitle, 'text-sm')}>{t('service.lastChange')}</h2>
+                        <p className="text-xs text-ink-600 dark:text-ink-350">
+                            {lastChange
+                                ? `${lastChange.actor?.name ?? t('order.audit.systemActor')} · ${dateTime(lastChange.changed_at)}`
+                                : service?.updated_at
+                                  ? dateTime(service.updated_at)
+                                  : '—'}
+                        </p>
+                    </section>
+                )}
+            </aside>
+            </div>
         </div>
     );
 }

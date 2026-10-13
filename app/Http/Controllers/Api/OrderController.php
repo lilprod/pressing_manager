@@ -292,6 +292,11 @@ class OrderController extends ApiController
                 ]);
 
                 if (! empty($itemData['intake_condition_ids'])) {
+                    $accepted = $service->acceptedConditions()->pluck('intake_conditions.id')->all();
+                    $refused = $accepted === [] ? [] : array_diff($itemData['intake_condition_ids'], $accepted);
+                    if ($refused !== []) {
+                        throw new HttpException(422, "Un état signalé n'est pas accepté pour « {$service->name} ».");
+                    }
                     $item->intakeConditions()->sync($itemData['intake_condition_ids']);
                 }
 

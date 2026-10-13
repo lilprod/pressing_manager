@@ -709,7 +709,13 @@ export default function NewOrder() {
                                                 <div className="animate-fade-in space-y-2.5 rounded-xl bg-ink-50 p-3 dark:bg-ink-950/50">
                                                     <p className="text-xs text-ink-600 dark:text-ink-350">{t('intake.hint')}</p>
                                                     <div className="flex flex-wrap gap-1.5">
-                                                        {intakeConditions.map((condition) => {
+                                                        {intakeConditions
+                                                            .filter((condition) => {
+                                                                // États acceptés configurés sur l'article (vide = tous), même règle que le serveur.
+                                                                const accepted = service?.accepted_conditions ?? [];
+                                                                return accepted.length === 0 || accepted.some((c) => c.id === condition.id);
+                                                            })
+                                                            .map((condition) => {
                                                             const checked = line.intake_condition_ids.includes(condition.id);
                                                             return (
                                                                 <button

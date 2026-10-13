@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, authEvents, getToken, setToken } from '../lib/api';
+import { TimezoneContext } from '../lib/format';
 import type { Agency, User } from '../types';
 
 const AGENCY_KEY = 'pm.selectedAgencyId';
@@ -9,11 +10,25 @@ interface LoginOptions {
     remember?: boolean;
 }
 
+/** Jeton d'appareil de confiance (dispense du second facteur, voir AuthController::verifyMfa). */
+const DEVICE_TOKEN_KEY = 'pm.deviceToken';
+
+type LoginResult = { token: string; user: User; resolved_agency_id: number | null; device_token?: string };
+
+/** Agences d'un compte local multi-agences : principale + affectations complémentaires. */
+function localAgencies(user: User): Agency[] {
+    if (user.agency_id === null || !user.agency) return [];
+    const extra = user.extra_agencies ?? [];
+    return extra.length > 0 ? [user.agency, ...(extra as Agency[])] : [];
+}
+
 interface AuthContextValue {
     user: User | null;
     agencies: Agency[];
     loading: boolean;
-    login: (email: string, password: string, options?: LoginOptions) => Promise<void>;
+    /** Renvoie un challenge si le compte exige un second facteur (TOTP). */
+    login: (email: string, password: string, options?: LoginOptions) => Promise<{ mfaChallenge: string } | void>;
+    verifyMfa: (challenge: string, code: string, trustDevice: boolean) => Promise<void>;
     logout: () => Promise<void>;
     /** Recharge l'utilisateur courant (ex. après modification du profil ou changement de mot de passe). */
     refreshUser: () => Promise<void>;
@@ -46,7 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const me = await api.get<User>('/me');
             setUser(me);
             if (me.agency_id !== null) {
-                setActiveAgencyIdState(me.agency_id);
+                const own = localAgencies(me);
+                setAgencies(own);
+                const stored = Number(localStorage.getItem(AGENCY_KEY));
+                setActiveAgencyIdState(own.some((a) => a.id === stored) ? stored : me.agency_id);
             }
             if (me.agency_id === null) {
                 const list = await api.get<Agency[]>('/agencies');
@@ -64,18 +82,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loadSession();
     }, [loadSession]);
 
-    const login = useCallback(async (email: string, password: string, options?: LoginOptions) => {
-        const result = await api.post<{ token: string; user: User; resolved_agency_id: number | null }>('/login', {
-            email,
-            password,
-            device_name: navigator.userAgent.slice(0, 100) || 'web',
-            agency_id: options?.agencyId ?? undefined,
-            remember: options?.remember ?? false,
-        });
+    const applySession = useCallback(async (result: LoginResult) => {
         setToken(result.token);
         setUser(result.user);
+        if (result.device_token) {
+            localStorage.setItem(DEVICE_TOKEN_KEY, result.device_token);
+        }
         if (result.user.agency_id !== null) {
-            setActiveAgencyIdState(result.user.agency_id);
+            setAgencies(localAgencies(result.user));
+            setActiveAgencyIdState(result.resolved_agency_id ?? result.user.agency_id);
         } else {
             const list = await api.get<Agency[]>('/agencies');
             setAgencies(list);
@@ -87,6 +102,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         }
     }, []);
+
+    const login = useCallback(
+        async (email: string, password: string, options?: LoginOptions) => {
+            const result = await api.post<LoginResult | { mfa_required: true; challenge: string }>('/login', {
+                email,
+                password,
+                device_name: navigator.userAgent.slice(0, 100) || 'web',
+                agency_id: options?.agencyId ?? undefined,
+                remember: options?.remember ?? false,
+                device_token: localStorage.getItem(DEVICE_TOKEN_KEY) ?? undefined,
+            });
+            if ('mfa_required' in result) {
+                return { mfaChallenge: result.challenge };
+            }
+            await applySession(result);
+        },
+        [applySession],
+    );
+
+    const verifyMfa = useCallback(
+        async (challenge: string, code: string, trustDevice: boolean) => {
+            const result = await api.post<LoginResult>('/login/mfa', { challenge, code, trust_device: trustDevice });
+            await applySession(result);
+        },
+        [applySession],
+    );
 
     const logout = useCallback(async () => {
         try {
@@ -130,11 +171,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const value = useMemo(
-        () => ({ user, agencies, loading, login, logout, refreshUser, activeAgencyId, setActiveAgencyId }),
-        [user, agencies, loading, login, logout, refreshUser, activeAgencyId, setActiveAgencyId],
+        () => ({ user, agencies, loading, login, verifyMfa, logout, refreshUser, activeAgencyId, setActiveAgencyId }),
+        [user, agencies, loading, login, verifyMfa, logout, refreshUser, activeAgencyId, setActiveAgencyId],
     );
 
-    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    return (
+        <AuthContext.Provider value={value}>
+            <TimezoneContext.Provider value={user?.timezone ?? null}>{children}</TimezoneContext.Provider>
+        </AuthContext.Provider>
+    );
 }
 
 export function useAuth(): AuthContextValue {

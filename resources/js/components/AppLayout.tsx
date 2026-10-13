@@ -170,7 +170,10 @@ function SidebarAgencySelector() {
     const { t } = useI18n();
     const { user, agencies, activeAgencyId, setActiveAgencyId } = useAuth();
 
-    if (user?.agency_id !== null || agencies.length === 0) {
+    // Compte global : toutes les agences du pressing. Compte local multi-agences :
+    // agence principale + affectations complémentaires (au moins deux).
+    const isLocal = user?.agency_id !== null;
+    if (agencies.length === 0 || (isLocal && agencies.length < 2)) {
         return null;
     }
 
@@ -184,7 +187,7 @@ function SidebarAgencySelector() {
                     onChange={(e) => setActiveAgencyId(e.target.value ? Number(e.target.value) : null)}
                     className="h-10 w-full rounded-xl border border-white/15 bg-white/5 pl-9 pr-8 text-sm font-medium text-white transition hover:bg-white/10 focus:border-brand-300 focus:outline-none focus:ring-4 focus:ring-brand-300/20"
                 >
-                    <option value="">{t('nav.allAgencies')}</option>
+                    <option value="">{isLocal ? t('nav.allMyAgencies') : t('nav.allAgencies')}</option>
                     {agencies.map((agency) => (
                         <option key={agency.id} value={agency.id}>
                             {agency.name}
@@ -205,7 +208,10 @@ function SidebarNetworkBox() {
     const { t } = useI18n();
     const { user, agencies } = useAuth();
 
-    if (user?.agency_id !== null || agencies.length === 0) {
+    // Compte global : toutes les agences du pressing. Compte local multi-agences :
+    // agence principale + affectations complémentaires (au moins deux).
+    const isLocal = user?.agency_id !== null;
+    if (agencies.length === 0 || (isLocal && agencies.length < 2)) {
         return null;
     }
     if (!hasPermission(user, 'reports.view') && !hasPermission(user, 'agencies.manage')) {

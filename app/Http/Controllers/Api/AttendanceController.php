@@ -33,7 +33,7 @@ class AttendanceController extends ApiController
     public function clockIn(ClockRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $agencyId = $request->user()->agency_id ?? $data['agency_id'];
+        $agencyId = $request->user()->effectiveAgencyId($data['agency_id'] ?? null);
         $this->authorizeAgency($request->user(), $agencyId);
 
         try {

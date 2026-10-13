@@ -21,6 +21,12 @@ class StoreUserRequest extends FormRequest
             'role_id' => ['required', 'integer', 'exists:roles,id'],
             // Ignoré si l'administrateur agit depuis une agence : son agence s'applique alors d'office.
             'agency_id' => ['nullable', 'integer', 'exists:agencies,id'],
+            'extra_agency_ids' => ['sometimes', 'array'],
+            'extra_agency_ids.*' => ['integer', 'exists:agencies,id'],
+            'mfa_required' => ['sometimes', 'boolean'],
+            'job_title' => ['nullable', 'string', 'max:120'],
+            'employee_number' => ['nullable', 'string', 'max:40'],
+            'send_invitation' => ['sometimes', 'boolean'],
             'photo' => ['nullable', 'image', 'max:2048'],
         ];
     }

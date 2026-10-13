@@ -37,7 +37,7 @@ function Commitment({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
 }
 
 export default function Login() {
-    const { user, login, loading } = useAuth();
+    const { user, login, verifyMfa, loading } = useAuth();
     const { t, lang, setLang } = useI18n();
     const { theme, toggleTheme } = useTheme();
     const { settings } = useSettings();
@@ -49,6 +49,9 @@ export default function Login() {
     const [submitting, setSubmitting] = useState(false);
     const [agencyLookup, setAgencyLookup] = useState<AgencyLookup>({ type: 'idle' });
     const [agencyId, setAgencyId] = useState<number | null>(null);
+    const [mfaChallenge, setMfaChallenge] = useState<string | null>(null);
+    const [mfaCode, setMfaCode] = useState('');
+    const [trustDevice, setTrustDevice] = useState(false);
 
     /* Sélecteur d'agence à la connexion (rôles globaux uniquement) : débounce 500ms sur
      * l'e-mail, réponse neutre anti-énumération (voir `AuthController::agenciesForEmail`). */
@@ -94,13 +97,22 @@ export default function Login() {
         setError(null);
         setSubmitting(true);
         try {
-            await login(email, password, { agencyId, remember });
+            if (mfaChallenge) {
+                await verifyMfa(mfaChallenge, mfaCode, trustDevice);
+            } else {
+                const result = await login(email, password, { agencyId, remember });
+                if (result?.mfaChallenge) {
+                    setMfaChallenge(result.mfaChallenge);
+                    return;
+                }
+            }
             if (agencyId) {
                 localStorage.setItem(LAST_AGENCY_KEY, String(agencyId));
             }
         } catch (err) {
-            if (err instanceof ApiError && err.status === 423) {
-                setError(err.message);
+            if (err instanceof ApiError && (err.status === 423 || (mfaChallenge && err.status === 422))) {
+                setError(mfaChallenge && err.status === 422 ? t('login.mfa.invalid') : err.message);
+                if (err.status === 423) setMfaChallenge(null);
             } else {
                 setError(err instanceof ApiError ? t('auth.loginError') : t('common.error'));
             }
@@ -272,6 +284,40 @@ export default function Login() {
                                 </Link>
                             </div>
                         </div>
+
+                        {mfaChallenge ? (
+                            <div className="space-y-4">
+                                <Alert tone="info" icon={ShieldCheck}>
+                                    <p className="font-semibold">{t('login.mfa.title')}</p>
+                                    <p className="font-normal">{t('login.mfa.hint')}</p>
+                                </Alert>
+                                <label className="block">
+                                    <span className={label}>{t('login.mfa.code')}</span>
+                                    <input
+                                        value={mfaCode}
+                                        onChange={(e) => setMfaCode(e.target.value)}
+                                        inputMode="text"
+                                        autoComplete="one-time-code"
+                                        autoFocus
+                                        required
+                                        maxLength={20}
+                                        className={cx(input, 'tracking-[0.3em]')}
+                                    />
+                                </label>
+                                <label className="flex items-center gap-2 text-sm text-ink-700 dark:text-ink-200">
+                                    <input type="checkbox" checked={trustDevice} onChange={(e) => setTrustDevice(e.target.checked)} className="h-4 w-4 rounded border-ink-300" />
+                                    {t('login.mfa.trustDevice')}
+                                </label>
+                                <button type="button" onClick={() => { setMfaChallenge(null); setMfaCode(''); setError(null); }} className="text-sm font-medium text-brand-700 hover:underline dark:text-brand-300">
+                                    {t('login.mfa.back')}
+                                </button>
+                                {error && <Alert tone="error">{error}</Alert>}
+                            </div>
+                        ) : (
+                            <>
+
+                            </>
+                        )}
 
                         <button type="submit" disabled={submitting} className={button('accent', 'md', 'group w-full sm:w-auto')}>
                             {submitting ? (

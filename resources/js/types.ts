@@ -108,6 +108,18 @@ export interface User {
     must_change_password: boolean;
     password_expired: boolean;
     password_expires_at: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    job_title?: string | null;
+    employee_number?: string | null;
+    timezone?: string | null;
+    preferences?: { daily_summary?: boolean; sound_alerts?: boolean; whatsapp_alerts?: boolean } | null;
+    mfa_enabled?: boolean;
+    mfa_required?: boolean;
+    invitation_expires_at?: string | null;
+    last_login_at?: string | null;
+    extra_agencies?: { id: number; name: string }[];
+    created_at?: string;
 }
 
 export type ClientContactPreference = 'whatsapp' | 'call' | 'sms' | 'email';

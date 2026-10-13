@@ -17,7 +17,7 @@ class StockController extends ApiController
      */
     public function index(Request $request): JsonResponse
     {
-        $agencyId = $request->user()->agency_id ?? $request->integer('agency_id');
+        $agencyId = $request->user()->effectiveAgencyId($request->filled('agency_id') ? $request->integer('agency_id') : null);
 
         if (! $agencyId) {
             throw new HttpException(422, "Paramètre 'agency_id' requis pour un rôle global.");

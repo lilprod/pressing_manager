@@ -42,7 +42,14 @@ abstract class ApiController extends Controller
     protected function resolveAgencyFilter(Request $request, User $user): array
     {
         if ($user->agency_id !== null) {
-            return [$user->agency_id];
+            // Compte local : agence principale + affectations complémentaires ; ?agency_id=
+            // restreint à l'une d'elles (jamais au-delà).
+            $allowed = $user->accessibleAgencyIds();
+            if ($request->filled('agency_id') && in_array($request->integer('agency_id'), $allowed, true)) {
+                return [$request->integer('agency_id')];
+            }
+
+            return $allowed;
         }
 
         if ($request->filled('agency_id')) {

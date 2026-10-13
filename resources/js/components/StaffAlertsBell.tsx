@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, CircleDollarSign, PackageX } from 'lucide-react';
 import { useI18n } from '../contexts/I18nContext';
+import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import { cx, iconButton } from './ui/styles';
 import type { StaffAlert, StaffAlertsResponse } from '../types';
@@ -19,11 +20,38 @@ const ALERT_ICON: Record<StaffAlert['type'], typeof Bell> = {
  * impayé), jamais un système de notification générique. Badge = total réel,
  * jamais affiché s'il est à zéro.
  */
+function playBeep() {
+    try {
+        const AudioCtx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        const ctx = new AudioCtx();
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.frequency.value = 880;
+        gain.gain.value = 0.08;
+        oscillator.connect(gain).connect(ctx.destination);
+        oscillator.start();
+        oscillator.stop(ctx.currentTime + 0.18);
+    } catch {
+        // Audio indisponible (navigateur sans interaction préalable) : silence.
+    }
+}
+
 export default function StaffAlertsBell() {
     const { t } = useI18n();
     const containerRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
     const [data, setData] = useState<StaffAlertsResponse>({ alerts: [], total: 0 });
+    const { user } = useAuth();
+    const soundEnabled = !!user?.preferences?.sound_alerts;
+    const previousTotal = useRef<number | null>(null);
+
+    // Préférence « Alertes sonores » (profil) : un bip court quand le nombre d'alertes augmente.
+    useEffect(() => {
+        if (previousTotal.current !== null && data.total > previousTotal.current && soundEnabled) {
+            playBeep();
+        }
+        previousTotal.current = data.total;
+    }, [data.total, soundEnabled]);
 
     useEffect(() => {
         let mounted = true;

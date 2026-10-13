@@ -52,7 +52,7 @@ class ReportController extends ApiController
 
     private function resolveAgencyId(Request $request): int
     {
-        $agencyId = $request->user()->agency_id ?? ($request->filled('agency_id') ? $request->integer('agency_id') : null);
+        $agencyId = $request->user()->effectiveAgencyId($request->filled('agency_id') ? $request->integer('agency_id') : null);
 
         if (! $agencyId) {
             throw new HttpException(422, "Paramètre 'agency_id' requis pour un rôle global.");

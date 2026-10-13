@@ -17,7 +17,7 @@ class PaymentController extends ApiController
     public function storeCash(StoreCashPaymentRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $data['agency_id'] = $request->user()->effectiveAgencyId($data['agency_id'] ?? null);
         $this->authorizeAgency($request->user(), $data['agency_id']);
 
         $payment = $this->payments->recordCashPayment($data, $request->user());
@@ -28,7 +28,7 @@ class PaymentController extends ApiController
     public function initiateRemote(InitiateRemotePaymentRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $data['agency_id'] = $request->user()->effectiveAgencyId($data['agency_id'] ?? null);
         $this->authorizeAgency($request->user(), $data['agency_id']);
 
         $payment = $this->payments->initiateRemotePayment($data);
@@ -45,7 +45,7 @@ class PaymentController extends ApiController
     public function storeManual(StoreManualPaymentRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $data['agency_id'] = $request->user()->effectiveAgencyId($data['agency_id'] ?? null);
         $this->authorizeAgency($request->user(), $data['agency_id']);
 
         $payment = $this->payments->recordManualPayment([

@@ -31,7 +31,7 @@ class ShiftController extends ApiController
     {
         $data = $request->validated();
         $targetUser = User::findOrFail($data['user_id']);
-        $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $data['agency_id'] = $request->user()->effectiveAgencyId($data['agency_id'] ?? null);
         $this->authorizeAgency($request->user(), $data['agency_id']);
         $this->authorizeAgency($request->user(), $targetUser->agency_id ?? $data['agency_id']);
 

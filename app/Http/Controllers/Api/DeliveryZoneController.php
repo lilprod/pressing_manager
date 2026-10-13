@@ -25,7 +25,7 @@ class DeliveryZoneController extends ApiController
     public function store(StoreDeliveryZoneRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $data['agency_id'] = $request->user()->effectiveAgencyId($data['agency_id'] ?? null);
         $this->authorizeAgency($request->user(), $data['agency_id']);
 
         return response()->json(DeliveryZone::create($data), 201);

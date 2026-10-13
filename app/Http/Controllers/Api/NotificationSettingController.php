@@ -18,7 +18,7 @@ class NotificationSettingController extends ApiController
     {
         $this->authorizePermission($request->user(), 'notifications.manage');
 
-        $agencyId = $request->user()->agency_id ?? ($request->filled('agency_id') ? $request->integer('agency_id') : null);
+        $agencyId = $request->user()->effectiveAgencyId($request->filled('agency_id') ? $request->integer('agency_id') : null);
         if (! $agencyId) {
             throw new HttpException(422, "Paramètre 'agency_id' requis pour un rôle global.");
         }
@@ -43,7 +43,7 @@ class NotificationSettingController extends ApiController
     public function store(UpdateNotificationSettingRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $data['agency_id'] = $request->user()->effectiveAgencyId($data['agency_id'] ?? null);
         $this->authorizeAgency($request->user(), $data['agency_id']);
 
         $setting = NotificationSetting::updateOrCreate(

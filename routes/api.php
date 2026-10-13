@@ -58,6 +58,7 @@ use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:6,1');
+Route::post('/login/mfa', [AuthController::class, 'verifyMfa'])->middleware('throttle:10,1');
 Route::post('/login/agencies', [AuthController::class, 'agenciesForEmail'])->middleware('throttle:20,1');
 Route::post('/password/forgot', [PasswordResetController::class, 'forgot'])->middleware('throttle:6,1');
 Route::post('/password/reset', [PasswordResetController::class, 'reset'])->middleware('throttle:10,1');
@@ -141,6 +142,13 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
 
     Route::post('/profile', [ProfileController::class, 'update']);
     Route::post('/profile/password', [ProfileController::class, 'changePassword']);
+    Route::get('/profile/security', [ProfileController::class, 'security']);
+    Route::delete('/profile/sessions', [ProfileController::class, 'revokeOtherSessions']);
+    Route::delete('/profile/sessions/{tokenId}', [ProfileController::class, 'revokeSession'])->whereNumber('tokenId');
+    Route::delete('/profile/devices/{device}', [ProfileController::class, 'revokeDevice']);
+    Route::post('/profile/mfa/setup', [ProfileController::class, 'mfaSetup']);
+    Route::post('/profile/mfa/confirm', [ProfileController::class, 'mfaConfirm']);
+    Route::delete('/profile/mfa', [ProfileController::class, 'mfaDisable']);
     Route::get('/users/{user}/photo', [ProfileController::class, 'photo']);
     Route::get('/agencies', [AgencyController::class, 'index']);
     Route::get('/agencies/manage', [AgencyController::class, 'manage']);
@@ -303,11 +311,16 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::delete('/roles/{role}', [RoleController::class, 'destroy']);
     Route::get('/permissions', [PermissionController::class, 'index']);
 
+    Route::get('/users/stats', [UserController::class, 'stats']);
+    Route::get('/users/activity', [UserController::class, 'activity']);
+    Route::post('/users/import', [UserController::class, 'import']);
     Route::get('/users', [UserController::class, 'index']);
     Route::post('/users', [UserController::class, 'store']);
     Route::patch('/users/{user}', [UserController::class, 'update']);
     Route::post('/users/{user}/photo', [UserController::class, 'updatePhoto']);
     Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
+    Route::post('/users/{user}/invitation', [UserController::class, 'resendInvitation']);
+    Route::delete('/users/{user}/invitation', [UserController::class, 'revokeInvitation']);
 
     Route::get('/shifts', [ShiftController::class, 'index']);
     Route::post('/shifts', [ShiftController::class, 'store']);

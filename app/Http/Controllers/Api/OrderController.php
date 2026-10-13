@@ -185,7 +185,7 @@ class OrderController extends ApiController
     public function store(StoreOrderRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $agencyId = $request->user()->agency_id ?? $data['agency_id'];
+        $agencyId = $request->user()->effectiveAgencyId($data['agency_id'] ?? null);
         $this->authorizeAgency($request->user(), $agencyId);
 
         // Encaissement intégré à la création (refonte flux comptoir) : un rôle personnalisé

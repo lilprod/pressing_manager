@@ -107,7 +107,7 @@ export const api = {
     post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
     postForm: <T>(path: string, formData: FormData) => requestForm<T>(path, formData),
     patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
-    delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+    delete: <T>(path: string, body?: unknown) => request<T>(path, { method: 'DELETE', body }),
     async blob(path: string): Promise<Blob> {
         const token = getToken();
         const response = await fetch(`/api${path}`, {

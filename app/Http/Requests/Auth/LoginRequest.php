@@ -19,6 +19,7 @@ class LoginRequest extends FormRequest
             'device_name' => ['required', 'string', 'max:100'],
             'agency_id' => ['nullable', 'integer'],
             'remember' => ['sometimes', 'boolean'],
+            'device_token' => ['nullable', 'string', 'max:128'],
         ];
     }
 }

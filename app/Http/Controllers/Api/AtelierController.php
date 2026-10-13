@@ -149,7 +149,7 @@ class AtelierController extends ApiController
     private function resolveSingleAgency(Request $request, string $message = 'Sélectionnez une agence.'): int
     {
         $user = $request->user();
-        $agencyId = $user->agency_id ?? ($request->filled('agency_id') ? $request->integer('agency_id') : null);
+        $agencyId = $user->effectiveAgencyId($request->filled('agency_id') ? $request->integer('agency_id') : null);
 
         if ($agencyId === null) {
             throw new HttpException(422, $message);

@@ -53,7 +53,7 @@ class CashController extends ApiController
     public function storeMovement(StoreCashMovementRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $data['agency_id'] = $request->user()->agency_id ?? $data['agency_id'];
+        $data['agency_id'] = $request->user()->effectiveAgencyId($data['agency_id'] ?? null);
         $this->authorizeAgency($request->user(), $data['agency_id']);
         if ($request->hasFile('proof')) {
             $data['proof'] = $request->file('proof');
@@ -111,7 +111,7 @@ class CashController extends ApiController
     public function storeClosure(StoreCashClosureRequest $request): JsonResponse
     {
         $data = $request->validated();
-        $agencyId = $request->user()->agency_id ?? $data['agency_id'];
+        $agencyId = $request->user()->effectiveAgencyId($data['agency_id'] ?? null);
         $this->authorizeAgency($request->user(), $agencyId);
 
         $closure = $this->cash->closeRegister(
@@ -243,7 +243,7 @@ class CashController extends ApiController
 
     private function resolveAgencyId(Request $request): int
     {
-        $agencyId = $request->user()->agency_id ?? ($request->filled('agency_id') ? $request->integer('agency_id') : null);
+        $agencyId = $request->user()->effectiveAgencyId($request->filled('agency_id') ? $request->integer('agency_id') : null);
 
         if (! $agencyId) {
             throw new HttpException(422, "Paramètre 'agency_id' requis pour un rôle global.");

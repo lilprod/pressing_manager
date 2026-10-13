@@ -62,7 +62,7 @@ class KpiController extends ApiController
         $agencyIds = $this->resolveAgencyFilter($request, $request->user());
         // Vue d'une seule agence seulement si explicitement choisie/imposée (un seul
         // id résolu) ; sinon vue consolidée sur toutes les agences du pressing.
-        $agencyId = $request->user()->agency_id ?? ($request->filled('agency_id') ? $request->integer('agency_id') : null);
+        $agencyId = $request->user()->effectiveAgencyId($request->filled('agency_id') ? $request->integer('agency_id') : null);
         if ($agencyId) {
             $this->authorizeAgency($request->user(), $agencyId);
         }

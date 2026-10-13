@@ -20,7 +20,7 @@ class MultiAgencyController extends ApiController
         $user = $request->user();
         $this->authorizePermission($user, 'reports.view');
         [$from, $to] = $this->resolveDateRange($request);
-        $agencyId = $user->agency_id ?? ($request->filled('agency_id') ? $request->integer('agency_id') : null);
+        $agencyId = $user->effectiveAgencyId($request->filled('agency_id') ? $request->integer('agency_id') : null);
         if ($agencyId !== null) {
             $this->authorizeAgency($user, $agencyId);
         }

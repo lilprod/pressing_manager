@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { createContext, useCallback, useContext } from 'react';
 import { useI18n } from '../contexts/I18nContext';
 
 /** Durée écoulée façon "42 min" / "2h 06" / "1h" — utilisé par le tableau Atelier (Kanban). */
@@ -26,9 +26,14 @@ export function timeAgo(value: string | null | undefined): string {
  * Formatage d'affichage uniquement (séparateurs de milliers, dates localisées).
  * Les montants envoyés à l'API restent des nombres bruts.
  */
+/** Fuseau du compte connecté (fourni par AppLayout à partir de user.timezone). */
+export const TimezoneContext = createContext<string | null>(null);
+
 export function useFormat() {
     const { lang, t } = useI18n();
     const locale = lang === 'fr' ? 'fr-FR' : 'en-GB';
+    // Fuseau horaire choisi dans le profil (sinon celui de l'appareil).
+    const timeZone = useContext(TimezoneContext) ?? undefined;
 
     const money = useCallback(
         (amount: number | null | undefined) =>
@@ -39,29 +44,29 @@ export function useFormat() {
 
     const date = useCallback(
         (value: string | null | undefined) =>
-            value ? new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value)) : '—',
-        [locale],
+            value ? new Intl.DateTimeFormat(locale, { ...{ day: '2-digit', month: 'short', year: 'numeric' }, timeZone }).format(new Date(value)) : '—',
+        [locale, timeZone],
     );
 
     const dateTime = useCallback(
         (value: string | null | undefined) =>
             value
-                ? new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+                ? new Intl.DateTimeFormat(locale, { ...{ day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }, timeZone }).format(new Date(value))
                 : '—',
-        [locale],
+        [locale, timeZone],
     );
 
     const time = useCallback(
         (value: string | null | undefined) =>
-            value ? new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(new Date(value)) : '—',
-        [locale],
+            value ? new Intl.DateTimeFormat(locale, { ...{ hour: '2-digit', minute: '2-digit' }, timeZone }).format(new Date(value)) : '—',
+        [locale, timeZone],
     );
 
     /** Jour + mois sans année (ex. « 28 sept. ») — légende d'histogramme. */
     const dayMonth = useCallback(
         (value: string | null | undefined) =>
-            value ? new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short' }).format(new Date(value)) : '—',
-        [locale],
+            value ? new Intl.DateTimeFormat(locale, { ...{ day: '2-digit', month: 'short' }, timeZone }).format(new Date(value)) : '—',
+        [locale, timeZone],
     );
 
     return { money, date, dateTime, time, dayMonth };

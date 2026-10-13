@@ -6,6 +6,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -37,6 +39,14 @@ class User extends Authenticatable
         'is_active',
         'must_change_password',
         'password_changed_at',
+        'first_name',
+        'last_name',
+        'job_title',
+        'employee_number',
+        'timezone',
+        'preferences',
+        'mfa_required',
+        'invitation_expires_at',
     ];
 
     /**
@@ -47,9 +57,11 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'mfa_secret',
+        'mfa_recovery_codes',
     ];
 
-    protected $appends = ['photo_url', 'password_expired', 'password_expires_at'];
+    protected $appends = ['photo_url', 'password_expired', 'password_expires_at', 'mfa_enabled'];
 
     /**
      * Get the attributes that should be cast.
@@ -65,6 +77,13 @@ class User extends Authenticatable
             'must_change_password' => 'boolean',
             'password_changed_at' => 'datetime',
             'locked_until' => 'datetime',
+            'preferences' => 'array',
+            'mfa_secret' => 'encrypted',
+            'mfa_recovery_codes' => 'encrypted:array',
+            'mfa_enabled_at' => 'datetime',
+            'mfa_required' => 'boolean',
+            'invitation_expires_at' => 'datetime',
+            'last_login_at' => 'datetime',
         ];
     }
 
@@ -88,6 +107,90 @@ class User extends Authenticatable
             'failed_login_attempts' => 0,
             'locked_until' => null,
         ])->save();
+    }
+
+    /** @return list<string> codes de secours en clair, affichés une seule fois */
+    public function regenerateRecoveryCodes(): array
+    {
+        $plain = [];
+        $stored = [];
+        foreach (range(1, 8) as $i) {
+            $code = \Illuminate\Support\Str::upper(\Illuminate\Support\Str::random(10));
+            $plain[] = $code;
+            $stored[] = ['hash' => hash('sha256', $code), 'used_at' => null];
+        }
+        $this->forceFill(['mfa_recovery_codes' => $stored])->save();
+
+        return $plain;
+    }
+
+    public function consumeRecoveryCode(string $code): bool
+    {
+        $codes = $this->mfa_recovery_codes ?? [];
+        foreach ($codes as $index => $entry) {
+            if ($entry['used_at'] === null && hash_equals($entry['hash'], hash('sha256', strtoupper($code)))) {
+                $codes[$index]['used_at'] = now()->toIso8601String();
+                $this->forceFill(['mfa_recovery_codes' => $codes])->save();
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function remainingRecoveryCodes(): int
+    {
+        return collect($this->mfa_recovery_codes ?? [])->whereNull('used_at')->count();
+    }
+
+    protected function mfaEnabled(): Attribute
+    {
+        return Attribute::get(fn () => $this->mfa_enabled_at !== null);
+    }
+
+    /** Agences complémentaires (en plus de l'agence principale `agency_id`). */
+    public function extraAgencies(): BelongsToMany
+    {
+        return $this->belongsToMany(Agency::class, 'agency_user');
+    }
+
+    public function authorizedDevices(): HasMany
+    {
+        return $this->hasMany(AuthorizedDevice::class);
+    }
+
+    /**
+     * Agences explicitement accessibles d'un compte local (principale + affectations
+     * complémentaires). `null` pour un compte global (toutes les agences du pressing).
+     *
+     * @return array<int>|null
+     */
+    public function accessibleAgencyIds(): ?array
+    {
+        if ($this->agency_id === null) {
+            return null;
+        }
+
+        $extra = $this->relationLoaded('extraAgencies')
+            ? $this->extraAgencies->pluck('id')->all()
+            : $this->extraAgencies()->pluck('agencies.id')->all();
+
+        return array_values(array_unique([$this->agency_id, ...array_map('intval', $extra)]));
+    }
+
+    /**
+     * Agence effective d'une opération à agence unique : pour un compte global,
+     * l'agence demandée ; pour un compte local, l'agence demandée si elle fait partie
+     * de ses affectations, sinon son agence principale (comportement historique).
+     */
+    public function effectiveAgencyId(?int $requested): ?int
+    {
+        if ($this->agency_id === null) {
+            return $requested;
+        }
+
+        return $requested !== null && in_array($requested, $this->accessibleAgencyIds(), true) ? $requested : $this->agency_id;
     }
 
     protected function photoUrl(): Attribute
@@ -167,9 +270,11 @@ class User extends Authenticatable
      */
     public function canAccessAgency(int $agencyId): bool
     {
-        return Agency::where('id', $agencyId)
-            ->where('pressing_id', $this->pressing_id)
-            ->when($this->agency_id !== null, fn ($q) => $q->where('id', $this->agency_id))
-            ->exists();
+        $allowed = $this->accessibleAgencyIds();
+        if ($allowed !== null && ! in_array($agencyId, $allowed, true)) {
+            return false;
+        }
+
+        return Agency::where('id', $agencyId)->where('pressing_id', $this->pressing_id)->exists();
     }
 }

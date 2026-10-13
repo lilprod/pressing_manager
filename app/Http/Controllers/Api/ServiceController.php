@@ -85,8 +85,19 @@ class ServiceController extends ApiController
                 $q->where(fn ($qq) => $qq->where('is_active', false)
                     ->orWhereDoesntHave('agencies', fn ($aq) => $aq->where('agency_services.is_active', true)));
             })
-            ->withCount(['agencies as available_agencies_count' => fn ($q) => $q->where('agency_services.is_active', true)])
-            ->with(['priceTiers', 'treatmentRates'])
+            // Filtre « Toutes les agences » : disponible (pivot actif) dans l'agence choisie.
+            ->when($request->filled('available_in_agency'), function ($q) use ($request) {
+                $this->authorizeAgency($request->user(), $request->integer('available_in_agency'));
+                $q->whereHas('agencies', fn ($aq) => $aq->where('agencies.id', $request->integer('available_in_agency'))->where('agency_services.is_active', true));
+            })
+            // Puce « Disponible dans N+ agences ».
+            ->when($request->filled('min_agencies'), fn ($q) => $q->has('agencies', '>=', $request->integer('min_agencies'), 'and',
+                fn ($aq) => $aq->where('agency_services.is_active', true)->where('agencies.is_active', true)))
+            ->withCount([
+                'agencies as available_agencies_count' => fn ($q) => $q->where('agency_services.is_active', true),
+                'agencies as local_price_count' => fn ($q) => $q->where('agency_services.is_active', true)->whereNotNull('agency_services.price_override'),
+            ])
+            ->with(['priceTiers', 'treatmentRates', 'agencies' => fn ($q) => $q->where('agency_services.is_active', true)->select('agencies.id', 'agencies.name')->limit(1)])
             ->orderBy($sort, $direction);
 
         $paginated = $query->paginate($request->integer('per_page', 20));
@@ -121,8 +132,18 @@ class ServiceController extends ApiController
                     $tt->code => $this->pricing->priceFor($service, $tt, null, null),
                 ])
                 : null;
+            // Article au kilo : prix au kilo de la première tranche par traitement (explicite, sinon ratio).
+            $firstTier = $service->priceTiers->first();
+            $service->treatment_prices_per_kg = ($service->billing_mode === 'kg' && $firstTier !== null)
+                ? $treatmentTypes->mapWithKeys(fn (TreatmentType $tt) => [
+                    $tt->code => (int) ($firstTier->treatment_prices[(string) $tt->id] ?? round($firstTier->price_per_kg * $tt->price_ratio)),
+                ])
+                : null;
             $service->has_draft = $service->draft_saved_at !== null;
+            // Nom de l'agence quand l'article n'est disponible que dans une seule (« Cocody Angré »).
+            $service->single_agency_name = $service->available_agencies_count === 1 ? $service->agencies->first()?->name : null;
             $service->unsetRelation('treatmentRates');
+            $service->unsetRelation('agencies');
 
             return $service;
         });

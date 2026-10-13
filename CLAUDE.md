@@ -4125,3 +4125,21 @@ brouillon. Fait :
 - Tests : `tests/Feature/Services/ArticleSheetTest.php` (10). Suite 659/659, `tsc`/build
   propres, parité i18n, Playwright 1440/390 sans débordement + parcours brouillon réel
   (autosave → rechargement restauré → annulation).
+
+**Liste « Catalogue articles et tarifs » re-alignée sur la capture (2026-10-13)** — même
+jour, capture renvoyée (« C'est correct chez nous ? ») : la liste divergeait. Fait :
+colonnes de prix **une par traitement actif** (Classique/Express/Repassage, dynamiques ;
+prix réellement facturés via `priceFor()`, « X/kg » pour un article au kilo via
+`treatment_prices_per_kg` = 1re tranche, explicite sinon ratio) ; colonne
+« Catégorie / mode » (famille + pastille Pièce/Kilo/Mixte) ; « Statut / portée »
+(Actif/Inactif + « Toutes les agences (N) » / « N agence(s) » / nom de l'agence unique
+`single_agency_name` + « · tarif local » si `local_price_count` > 0) ; actions =
+interrupteur actif, crayon, dupliquer, menu ⋮ (historique → `/services/{id}/edit?history=1`,
+activer/désactiver dans l'agence courante). Onglets soulignés dans la carte « Catalogue
+principal » ; barre de filtres en listes (catégorie, mode, **agence** =
+`available_in_agency`), puces Modes + « Disponible dans 3+ agences » (`min_agencies`),
+bouton Filtres (tri) ; pied « N résultat(s) sur M » + pagination ; bandeau « Tarifs TTC… »
+avec « Voir les règles » (types de traitement). Le prix local d'agence n'est plus éditable
+dans la liste (il l'est sur la fiche, « Disponibilité par agence »). Toujours omis :
+pastille « Synchronisé » et « 2 partagées » (aucune donnée), bascule Jour/Semaine/Mois
+(un article n'a pas de date de résultat). Tests : `CatalogListConformityTest` (2).

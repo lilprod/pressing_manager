@@ -540,6 +540,9 @@ export interface Service {
     associated_services?: { id: number; code?: string; name?: string }[];
     home_delivery_enabled?: boolean;
     has_draft?: boolean;
+    local_price_count?: number;
+    single_agency_name?: string | null;
+    treatment_prices_per_kg?: Record<string, number> | null;
     draft_data?: Record<string, unknown> | null;
     draft_saved_at?: string | null;
     draft_saver?: { id: number; name: string } | null;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Eye, History, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
@@ -137,7 +137,8 @@ export default function ServiceFormPage() {
 
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    const [showHistory, setShowHistory] = useState(false);
+    const [searchParams] = useSearchParams();
+    const [showHistory, setShowHistory] = useState(searchParams.get('history') === '1');
     const [showClientPreview, setShowClientPreview] = useState(false);
     const [editingLocalPrice, setEditingLocalPrice] = useState<number | null>(null);
 

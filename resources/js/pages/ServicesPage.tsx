@@ -1,28 +1,30 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useFormat } from '../lib/format';
 import { api } from '../lib/api';
-import PageHeader from '../components/ui/PageHeader';
+import Toggle from '../components/ui/Toggle';
 import { EmptyState, LoadingState, Spinner } from '../components/ui/Feedback';
 import Pagination from '../components/ui/Pagination';
 import { Pill, TONES } from '../components/ui/StatusBadge';
-import { button, card, cx, inputLg, inputSm } from '../components/ui/styles';
+import { button, card, cx, input, inputSm, select, textLink } from '../components/ui/styles';
 import { StatCard, ChipToggle, percentChange, trend } from '../components/ui/Metrics';
-import { Download, Layers, Pencil, Plus, Search, Shirt, Sparkles, TrendingUp, TriangleAlert, Upload, Copy, History } from 'lucide-react';
+import { Copy, Download, History, Info, Layers, MoreVertical, Pencil, Plus, Search, Shirt, SlidersHorizontal, TrendingUp, TriangleAlert, Upload } from 'lucide-react';
 import { categoryLabel, categoryMeta } from '../lib/serviceCategory';
-import type { Paginated, Service, ServiceCategory, ServiceBillingMode, ServiceStats, ServicePriceHistory, TreatmentType } from '../types';
+import type { Paginated, Service, ServiceBillingMode, ServiceStats, ServicePriceHistory, TreatmentType } from '../types';
 
 const BILLING_MODES: ServiceBillingMode[] = ['piece', 'kg', 'mixte'];
 const SORTS = ['name', 'updated_at', 'base_price'] as const;
+/** Seuil de la puce « Disponible dans N+ agences ». */
+const MIN_AGENCIES = 3;
 type Sort = (typeof SORTS)[number];
 type Tab = 'all' | 'categories' | 'kg' | 'unavailable' | 'history';
 
 export default function ServicesPage() {
     const { t } = useI18n();
     const { money, dateTime } = useFormat();
-    const { user, activeAgencyId } = useAuth();
+    const { user, activeAgencyId, agencies } = useAuth();
     const agencyId = user?.agency_id ?? activeAgencyId;
 
     const [services, setServices] = useState<Service[]>([]);
@@ -34,11 +36,14 @@ export default function ServicesPage() {
         total: 0,
     });
     const [page, setPage] = useState(1);
-    const [category, setCategory] = useState<ServiceCategory | ''>('');
+    const [category, setCategory] = useState<string>('');
     const [billingMode, setBillingMode] = useState<ServiceBillingMode | ''>('');
     const [search, setSearch] = useState('');
     const [sort, setSort] = useState<Sort>('name');
     const [tab, setTab] = useState<Tab>('all');
+    const [agencyFilter, setAgencyFilter] = useState('');
+    const [minAgencies, setMinAgencies] = useState(false);
+    const [showMore, setShowMore] = useState(false);
     const [loading, setLoading] = useState(true);
     // Familles d'articles réellement utilisées par le pressing (catégories libres).
     const [categories, setCategories] = useState<string[]>([]);
@@ -72,6 +77,8 @@ export default function ServicesPage() {
         if (tab === 'unavailable') params.set('only_unavailable', '1');
         if (tab === 'categories') params.set('per_page', '100');
         if (search) params.set('search', search);
+        if (agencyFilter) params.set('available_in_agency', agencyFilter);
+        if (minAgencies) params.set('min_agencies', String(MIN_AGENCIES));
         api
             .get<Paginated<Service>>(`/services/catalog?${params}`)
             .then((res) => {
@@ -81,7 +88,7 @@ export default function ServicesPage() {
             .finally(() => setLoading(false));
     }
 
-    useEffect(reload, [agencyId, page, category, billingMode, sort, tab]);
+    useEffect(reload, [agencyId, page, category, billingMode, sort, tab, agencyFilter, minAgencies]);
 
     useEffect(() => {
         setPage(1);
@@ -143,6 +150,7 @@ export default function ServicesPage() {
         reload();
     }
 
+    const gridCols = `minmax(220px,2fr) minmax(130px,1fr) ${treatmentTypes.map(() => 'minmax(90px,0.7fr)').join(' ')} minmax(150px,1fr) 170px`;
     const priceDelta = stats ? percentChange(stats.average_base_price, stats.average_base_price_30d_ago) : null;
 
     const groupedByCategory =
@@ -150,15 +158,54 @@ export default function ServicesPage() {
             ? categories.map((c) => ({ category: c, items: services.filter((s) => s.category === c) })).filter((g) => g.items.length > 0)
             : null;
 
+    const modeTone: Record<ServiceBillingMode, 'neutral' | 'sky' | 'amber'> = { piece: 'neutral', kg: 'sky', mixte: 'amber' };
+    const TABS: Tab[] = ['all', 'categories', 'kg', 'unavailable', 'history'];
+    const activeFilters = Boolean(category || billingMode || agencyFilter || minAgencies || search);
+
+    const table = (rows: Service[]) => (
+        <div className="overflow-x-auto">
+            <div className="min-w-[1000px]">
+                <div
+                    role="row"
+                    className="grid items-center gap-3 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
+                    style={{ gridTemplateColumns: gridCols }}
+                >
+                    <span>{t('service.table.article')}</span>
+                    <span>{t('service.table.categoryMode')}</span>
+                    {treatmentTypes.map((tt) => (
+                        <span key={tt.id} className="text-right">
+                            {tt.name}
+                        </span>
+                    ))}
+                    <span>{t('service.table.statusScope')}</span>
+                    <span>{t('service.table.actions')}</span>
+                </div>
+                <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                    {rows.map((service) => (
+                        <ServiceRow
+                            key={service.id}
+                            service={service}
+                            agencyId={agencyId}
+                            treatmentTypes={treatmentTypes}
+                            gridCols={gridCols}
+                            modeTone={modeTone}
+                            onChanged={reload}
+                            onDuplicate={() => void duplicateService(service)}
+                        />
+                    ))}
+                </ul>
+            </div>
+        </div>
+    );
+
     return (
         <div className="space-y-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
-                <PageHeader title={t('service.title')} subtitle={t('service.subtitle')} icon={Shirt} />
+                <div className="min-w-0">
+                    <h1 className="font-display text-2xl font-bold text-ink-900 dark:text-white">{t('service.title')}</h1>
+                    <p className="text-sm text-ink-600 dark:text-ink-350">{t('service.subtitle')}</p>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <Link to="/services/treatment-types" className={button('ghost', 'md')}>
-                        <Sparkles aria-hidden="true" className="h-4 w-4" />
-                        {t('treatmentType.navLink')}
-                    </Link>
                     <button type="button" onClick={() => void exportCatalog()} className={button('secondary', 'md')}>
                         <Download aria-hidden="true" className="h-4 w-4" />
                         {t('service.export')}
@@ -212,32 +259,36 @@ export default function ServicesPage() {
                 </div>
             )}
 
-            <div className={cx(card, 'flex flex-wrap items-center justify-between gap-2 p-4')}>
-                <div>
-                    <p className="font-semibold text-ink-900 dark:text-ink-50">{t('service.catalogCard.title')}</p>
-                    {stats?.catalog_updated_at && (
-                        <p className="text-sm text-ink-600 dark:text-ink-350">{t('service.catalogCard.updatedAt', { date: dateTime(stats.catalog_updated_at) })}</p>
-                    )}
+            <div className={cx(card, 'px-5 pt-4')}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                        <p className="font-semibold text-ink-900 dark:text-ink-50">{t('service.catalogCard.title')}</p>
+                        {stats?.catalog_updated_at && (
+                            <p className="text-xs text-ink-500 dark:text-ink-400">{t('service.catalogCard.updatedAt', { date: dateTime(stats.catalog_updated_at) })}</p>
+                        )}
+                    </div>
+                    <Pill tone="neutral">{t('service.catalogCard.count', { count: stats ? stats.active_count : meta.total })}</Pill>
                 </div>
-                <p className="text-sm text-ink-600 dark:text-ink-350">{t('service.catalogCard.count', { count: meta.total })}</p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-                <ChipToggle active={tab === 'all'} onClick={() => setTab('all')}>
-                    {t('service.tab.all')}
-                </ChipToggle>
-                <ChipToggle active={tab === 'categories'} onClick={() => setTab('categories')}>
-                    {t('service.tab.categories')}
-                </ChipToggle>
-                <ChipToggle active={tab === 'kg'} onClick={() => setTab('kg')}>
-                    {t('service.tab.kg')}
-                </ChipToggle>
-                <ChipToggle active={tab === 'unavailable'} onClick={() => setTab('unavailable')}>
-                    {t('service.tab.unavailable')}
-                </ChipToggle>
-                <ChipToggle active={tab === 'history'} onClick={() => setTab('history')}>
-                    {t('service.tab.history')}
-                </ChipToggle>
+                <div role="tablist" className="mt-3 flex gap-5 overflow-x-auto">
+                    {TABS.map((key) => (
+                        <button
+                            key={key}
+                            type="button"
+                            role="tab"
+                            aria-selected={tab === key}
+                            onClick={() => {
+                                setTab(key);
+                                setPage(1);
+                            }}
+                            className={cx(
+                                '-mb-px shrink-0 border-b-2 pb-2.5 text-sm font-semibold transition',
+                                tab === key ? 'border-brand-700 text-brand-800 dark:border-brand-300 dark:text-brand-200' : 'border-transparent text-ink-500 hover:text-ink-800 dark:text-ink-400',
+                            )}
+                        >
+                            {t(`service.tab.${key}`)}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {tab === 'history' ? (
@@ -253,7 +304,9 @@ export default function ServicesPage() {
                                         <p className="text-sm text-ink-600 dark:text-ink-350">
                                             {entry.field === 'base_price'
                                                 ? t('service.historyBasePrice', { old: entry.old_value ?? '—', new: entry.new_value ?? '—' })
-                                                : t('service.historyTiers')}
+                                                : entry.field === 'treatment_rates'
+                                                  ? t('service.historyTreatmentRates')
+                                                  : t('service.historyTiers')}
                                         </p>
                                     </div>
                                     <div className="text-right text-sm text-ink-500 dark:text-ink-400">
@@ -268,53 +321,88 @@ export default function ServicesPage() {
                 </div>
             ) : (
                 <>
-                    <div className="relative">
-                        <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-500 dark:text-ink-350" />
-                        <input
-                            type="search"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            placeholder={t('service.search')}
-                            className={cx(inputLg, 'pl-12')}
-                        />
-                    </div>
-
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className={cx(card, 'space-y-3 p-4')}>
                         <div className="flex flex-wrap gap-2">
-                            <ChipToggle active={category === ''} onClick={() => setCategory('')}>
-                                {t('service.allCategories')}
-                            </ChipToggle>
-                            {categories.map((c) => (
-                                <ChipToggle key={c} active={category === c} onClick={() => setCategory(c)}>
-                                    {categoryLabel(c, t)}
-                                </ChipToggle>
-                            ))}
-                        </div>
-                        <label className="flex items-center gap-2 text-sm text-ink-600 dark:text-ink-350">
-                            {t('service.sortBy')}
-                            <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className={inputSm}>
-                                {SORTS.map((s) => (
-                                    <option key={s} value={s}>
-                                        {t(`service.sortOption.${s}`)}
+                            <div className="relative min-w-0 flex-1 basis-full md:basis-auto">
+                                <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
+                                <input
+                                    type="search"
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder={t('service.search')}
+                                    aria-label={t('service.search')}
+                                    className={cx(input, 'w-full pl-9')}
+                                />
+                            </div>
+                            <select aria-label={t('service.allCategories')} value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} className={cx(select, 'min-w-0 flex-1 sm:w-48 sm:flex-none')}>
+                                <option value="">{t('service.allCategories')}</option>
+                                {categories.map((c) => (
+                                    <option key={c} value={c}>
+                                        {categoryLabel(c, t)}
                                     </option>
                                 ))}
                             </select>
-                        </label>
+                            {tab !== 'kg' && (
+                                <select aria-label={t('service.filter.modeSelect')} value={billingMode} onChange={(e) => { setBillingMode(e.target.value as ServiceBillingMode | ''); setPage(1); }} className={cx(select, 'min-w-0 flex-1 sm:w-44 sm:flex-none')}>
+                                    <option value="">{t('service.filter.modeSelect')}</option>
+                                    {BILLING_MODES.map((mode) => (
+                                        <option key={mode} value={mode}>
+                                            {t(`service.billingModeOption.${mode}`)}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                            <select aria-label={t('service.filter.allAgencies')} value={agencyFilter} onChange={(e) => { setAgencyFilter(e.target.value); setPage(1); }} className={cx(select, 'min-w-0 flex-1 sm:w-48 sm:flex-none')}>
+                                <option value="">{t('service.filter.allAgencies')}</option>
+                                {agencies.map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.name}
+                                    </option>
+                                ))}
+                            </select>
+                            <button type="button" onClick={() => setShowMore((v) => !v)} aria-expanded={showMore} className={button(showMore ? 'primary' : 'secondary', 'md')}>
+                                <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
+                                {t('service.filter.more')}
+                            </button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {tab !== 'kg' && (
+                                <>
+                                    <span className="text-xs font-semibold text-ink-500 dark:text-ink-400">{t('service.filter.modes')}</span>
+                                    {BILLING_MODES.map((mode) => (
+                                        <ChipToggle key={mode} active={billingMode === mode} onClick={() => { setBillingMode(billingMode === mode ? '' : mode); setPage(1); }}>
+                                            {t(`service.billingModeOption.${mode}`)}
+                                        </ChipToggle>
+                                    ))}
+                                </>
+                            )}
+                            <ChipToggle active={minAgencies} onClick={() => { setMinAgencies((v) => !v); setPage(1); }}>
+                                {t('service.filter.minAgencies', { count: MIN_AGENCIES })}
+                            </ChipToggle>
+                            {activeFilters && (
+                                <button type="button" onClick={() => { setCategory(''); setBillingMode(''); setAgencyFilter(''); setMinAgencies(false); setSearch(''); }} className={cx(textLink, 'text-xs')}>
+                                    {t('service.filter.reset')}
+                                </button>
+                            )}
+                        </div>
+                        {showMore && (
+                            <label className="flex items-center gap-2 border-t border-ink-100 pt-3 text-sm text-ink-600 dark:border-ink-800 dark:text-ink-350">
+                                {t('service.sortBy')}
+                                <select value={sort} onChange={(e) => setSort(e.target.value as Sort)} className={inputSm}>
+                                    {SORTS.map((s) => (
+                                        <option key={s} value={s}>
+                                            {t(`service.sortOption.${s}`)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        )}
                     </div>
 
-                    {tab !== 'kg' && (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-semibold text-ink-700 dark:text-ink-200">{t('service.billingMode')} :</span>
-                            <ChipToggle active={billingMode === ''} onClick={() => setBillingMode('')}>
-                                {t('service.allBillingModes')}
-                            </ChipToggle>
-                            {BILLING_MODES.map((mode) => (
-                                <ChipToggle key={mode} active={billingMode === mode} onClick={() => setBillingMode(mode)}>
-                                    {t(`service.billingModeOption.${mode}`)}
-                                </ChipToggle>
-                            ))}
-                        </div>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-ink-500 dark:text-ink-400">
+                        <span>{t('service.sortShort')}</span>
+                        <span className="font-semibold text-ink-700 dark:text-ink-200">{t(`service.sortOption.${sort}`)}</span>
+                    </div>
 
                     {loading ? (
                         <div className={cx(card, 'overflow-hidden')}>
@@ -331,54 +419,29 @@ export default function ServicesPage() {
                                     <div className="border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 font-semibold text-ink-900 dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-50">
                                         {categoryLabel(group.category, t)} ({group.items.length})
                                     </div>
-                                    <ul className="divide-y divide-ink-100 dark:divide-ink-800">
-                                        {group.items.map((service) => (
-                                            <ServiceRow
-                                                key={service.id}
-                                                service={service}
-                                                agencyId={agencyId}
-                                                treatmentTypes={treatmentTypes}
-                                                onChanged={reload}
-                                                onDuplicate={() => void duplicateService(service)}
-                                            />
-                                        ))}
-                                    </ul>
+                                    {table(group.items)}
                                 </div>
                             ))}
                         </div>
                     ) : (
                         <div className={cx(card, 'overflow-hidden')}>
-                            <div className="overflow-x-auto">
-                                <div
-                                    role="row"
-                                    className="hidden min-w-[980px] items-center gap-4 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
-                                >
-                                    <span className="w-9 shrink-0" aria-hidden="true" />
-                                    <span className="min-w-[160px] flex-1">{t('service.table.article')}</span>
-                                    <span className="w-28 shrink-0">{t('service.categoryLabel')}</span>
-                                    <span className="w-28 shrink-0 text-right">{t('service.table.price')}</span>
-                                    <span className="w-48 shrink-0">{t('service.table.treatmentPrices')}</span>
-                                    <span className="w-32 shrink-0">{t('service.table.availability')}</span>
-                                    <span className="w-24 shrink-0">{t('service.table.status')}</span>
-                                    <span className="w-44 shrink-0">{t('service.table.actions')}</span>
-                                </div>
-
-                                <ul className="divide-y divide-ink-100 sm:min-w-[980px] dark:divide-ink-800">
-                                    {services.map((service) => (
-                                        <ServiceRow
-                                            key={service.id}
-                                            service={service}
-                                            agencyId={agencyId}
-                                            treatmentTypes={treatmentTypes}
-                                            onChanged={reload}
-                                            onDuplicate={() => void duplicateService(service)}
-                                        />
-                                    ))}
-                                </ul>
+                            {table(services)}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ink-100 px-5 py-2 text-xs text-ink-500 dark:border-ink-800 dark:text-ink-400">
+                                <span>{t('service.results', { count: services.length, total: meta.total })}</span>
                             </div>
                             <Pagination meta={meta} onPageChange={setPage} />
                         </div>
                     )}
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-brand-50 px-4 py-3 text-sm text-brand-900 dark:bg-brand-400/10 dark:text-brand-100">
+                        <span className="flex min-w-0 items-start gap-2">
+                            <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                            {t('service.footerInfo')}
+                        </span>
+                        <Link to="/services/treatment-types" className="font-semibold underline-offset-2 hover:underline">
+                            {t('service.viewRules')}
+                        </Link>
+                    </div>
                 </>
             )}
         </div>
@@ -389,138 +452,120 @@ function ServiceRow({
     service,
     agencyId,
     treatmentTypes,
+    gridCols,
+    modeTone,
     onChanged,
     onDuplicate,
 }: {
     service: Service;
     agencyId: number | null;
     treatmentTypes: TreatmentType[];
+    gridCols: string;
+    modeTone: Record<ServiceBillingMode, 'neutral' | 'sky' | 'amber'>;
     onChanged: () => void;
     onDuplicate: () => void;
 }) {
     const { t } = useI18n();
     const { money } = useFormat();
-    const [override, setOverride] = useState(service.agency_pivot?.price_override?.toString() ?? '');
+    const navigate = useNavigate();
+    const [menuOpen, setMenuOpen] = useState(false);
     const [busy, setBusy] = useState(false);
 
     async function toggleActive() {
-        await api.patch(`/services/${service.id}`, { is_active: !service.is_active });
-        onChanged();
-    }
-
-    async function toggleAgencyActive() {
-        if (!agencyId) return;
-        await api.patch(`/agencies/${agencyId}/services/${service.id}`, { is_active: !(service.agency_pivot?.is_active ?? true) });
-        onChanged();
-    }
-
-    async function saveOverride() {
-        if (!agencyId) return;
         setBusy(true);
         try {
-            await api.patch(`/agencies/${agencyId}/services/${service.id}`, {
-                price_override: override === '' ? null : Number(override),
-            });
+            await api.patch(`/services/${service.id}`, { is_active: !service.is_active });
             onChanged();
         } finally {
             setBusy(false);
         }
     }
 
+    async function toggleAgencyActive() {
+        if (!agencyId) return;
+        await api.patch(`/agencies/${agencyId}/services/${service.id}`, { is_active: !(service.agency_pivot?.is_active ?? true) });
+        setMenuOpen(false);
+        onChanged();
+    }
+
     const agencyActive = service.agency_pivot?.is_active ?? true;
     const meta = categoryMeta(service.category);
     const Icon = meta.icon;
-    const availabilityLabel =
-        service.total_agencies_count && service.available_agencies_count !== undefined
-            ? service.available_agencies_count === service.total_agencies_count
+    const available = service.available_agencies_count ?? 0;
+    const scope =
+        available === 0
+            ? t('service.scope.none')
+            : service.single_agency_name
+              ? service.single_agency_name
+              : service.total_agencies_count && available >= service.total_agencies_count
                 ? t('service.availability.all', { total: service.total_agencies_count })
-                : t('service.availability.partial', { count: service.available_agencies_count, total: service.total_agencies_count })
-            : null;
+                : t('service.scope.agencies', { count: available });
+
+    const priceCell = (tt: TreatmentType) => {
+        if (service.billing_mode === 'kg') {
+            const v = service.treatment_prices_per_kg?.[tt.code];
+            return v !== undefined ? t('service.perKgShort', { amount: v.toLocaleString('fr-FR') }) : '—';
+        }
+        const v = service.treatment_prices?.[tt.code];
+        return v !== undefined && v !== null ? v.toLocaleString('fr-FR') : '—';
+    };
 
     return (
-        <li className="flex flex-wrap items-start gap-3 px-4 py-3.5 sm:flex-nowrap sm:items-center sm:gap-4 sm:px-5">
-            <span className={cx('hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset sm:flex', TONES[meta.tone])}>
-                <Icon aria-hidden="true" className="h-4 w-4" />
-            </span>
-
-            <div className="min-w-0 basis-full sm:min-w-[160px] sm:flex-1 sm:basis-auto">
-                <p className="truncate font-semibold text-ink-900 dark:text-ink-50">{service.name}</p>
-                <p className="text-sm text-ink-600 dark:text-ink-350">
-                    {service.code} · {t('service.durationHours', { count: service.estimated_duration_hours })}
-                </p>
+        <li className="grid items-center gap-3 px-5 py-3" style={{ gridTemplateColumns: gridCols }}>
+            <Link to={`/services/${service.id}/edit`} className="flex min-w-0 items-center gap-3">
+                <span className={cx('flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset', TONES[meta.tone])}>
+                    <Icon aria-hidden="true" className="h-4 w-4" />
+                </span>
+                <span className="min-w-0">
+                    <span className="block truncate font-semibold text-ink-900 dark:text-ink-50">{service.name}</span>
+                    <span className="block text-xs text-ink-500 dark:text-ink-400">{service.code}</span>
+                </span>
+            </Link>
+            <div className="flex min-w-0 flex-col items-start gap-1">
+                <span className="truncate text-sm text-ink-700 dark:text-ink-200">{categoryLabel(service.category, t)}</span>
+                <span className="flex flex-wrap gap-1">
+                    <Pill tone={modeTone[service.billing_mode]}>{t(`service.billingModeOption.${service.billing_mode}`)}</Pill>
+                    {service.has_draft && <Pill tone="amber">{t('service.draft.badge')}</Pill>}
+                </span>
             </div>
-
-            <div className="flex w-auto shrink-0 flex-col items-start gap-1 sm:w-28">
-                <Pill tone="neutral">{categoryLabel(service.category, t)}</Pill>
-                {service.has_draft && <Pill tone="amber">{t('service.draft.badge')}</Pill>}
-                {service.billing_mode !== 'piece' && <Pill tone="violet">{t(`service.billingModeOption.${service.billing_mode}`)}</Pill>}
+            {treatmentTypes.map((tt) => (
+                <span key={tt.id} className="text-right text-sm tabular-nums text-ink-800 dark:text-ink-100">
+                    {priceCell(tt)}
+                </span>
+            ))}
+            <div className="flex min-w-0 flex-col items-start gap-1">
+                <span className="flex flex-wrap gap-1">
+                    {service.is_active ? <Pill tone="emerald">{t('service.active')}</Pill> : <Pill tone="neutral">{t('service.inactive')}</Pill>}
+                    {agencyId && !agencyActive && <Pill tone="amber">{t('service.inactiveForAgency')}</Pill>}
+                </span>
+                <span className="truncate text-xs text-ink-500 dark:text-ink-400">
+                    {scope}
+                    {(service.local_price_count ?? 0) > 0 && ` · ${t('service.scope.localPrice')}`}
+                </span>
             </div>
-
-            <div className="w-auto shrink-0 text-left sm:w-28 sm:text-right">
-                {service.billing_mode === 'kg' ? (
-                    <span className="text-sm text-ink-600 dark:text-ink-350">
-                        {service.price_tiers && service.price_tiers.length > 0
-                            ? t('service.fromPerKg', { amount: money(service.price_tiers[0].price_per_kg) })
-                            : '—'}
-                    </span>
-                ) : agencyId ? (
-                    <label className="inline-flex items-center gap-1.5">
-                        <span className="sr-only">{t('service.priceOverride')}</span>
-                        <input
-                            type="number"
-                            min={0}
-                            value={override}
-                            onBlur={() => void saveOverride()}
-                            onChange={(e) => setOverride(e.target.value)}
-                            placeholder={String(service.base_price ?? '')}
-                            className={cx(inputSm, 'h-8 w-24 text-right tabular-nums')}
-                        />
-                        {busy && <Spinner className="h-3.5 w-3.5 shrink-0" />}
-                    </label>
-                ) : (
-                    <span className="font-display font-bold tabular-nums text-ink-900 dark:text-white">{money(service.base_price)}</span>
-                )}
-            </div>
-
-            <div className="flex w-full shrink-0 flex-wrap gap-1.5 sm:w-48">
-                {service.treatment_prices && treatmentTypes.length > 0
-                    ? treatmentTypes.map((tt) =>
-                          service.treatment_prices && tt.code in service.treatment_prices ? (
-                              <span
-                                  key={tt.code}
-                                  className="inline-flex items-center gap-1 rounded-full bg-ink-100 px-2 py-0.5 text-xs font-medium text-ink-700 dark:bg-ink-800 dark:text-ink-200"
-                              >
-                                  {tt.name} · {money(service.treatment_prices[tt.code])}
-                              </span>
-                          ) : null,
-                      )
-                    : <span className="text-sm text-ink-400 dark:text-ink-500">—</span>}
-            </div>
-
-            <div className="w-auto shrink-0 sm:w-32">
-                {availabilityLabel && <span className="text-sm text-ink-600 dark:text-ink-350">{availabilityLabel}</span>}
-            </div>
-
-            <div className="flex w-auto shrink-0 flex-col items-start gap-1 sm:w-24">
-                {service.is_active ? <Pill tone="emerald">{t('service.active')}</Pill> : <Pill tone="rose">{t('service.inactive')}</Pill>}
-                {agencyId && !agencyActive && <Pill tone="amber">{t('service.inactiveForAgency')}</Pill>}
-            </div>
-
-            <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-44">
-                <Link to={`/services/${service.id}/edit`} className={button('secondary', 'sm')}>
-                    <Pencil aria-hidden="true" className="h-3.5 w-3.5" />
-                    {t('common.edit')}
+            <div className="relative flex items-center gap-1">
+                <Toggle className="shrink-0" checked={service.is_active} disabled={busy} onChange={() => void toggleActive()} label={<span className="sr-only">{t('service.toggleActive', { name: service.name })}</span>} />
+                <Link to={`/services/${service.id}/edit`} className={button('ghost', 'sm', 'px-2')} aria-label={t('common.edit')} title={t('common.edit')}>
+                    <Pencil aria-hidden="true" className="h-4 w-4" />
                 </Link>
-                <button type="button" onClick={onDuplicate} title={t('service.duplicate')} className={button('ghost', 'sm')}>
-                    <Copy aria-hidden="true" className="h-3.5 w-3.5" />
+                <button type="button" onClick={onDuplicate} className={button('ghost', 'sm', 'px-2')} aria-label={t('service.duplicate')} title={t('service.duplicate')}>
+                    <Copy aria-hidden="true" className="h-4 w-4" />
                 </button>
-                <button type="button" onClick={() => void toggleActive()} className={button('ghost', 'sm')}>
-                    {service.is_active ? t('service.deactivate') : t('service.activate')}
+                <button type="button" onClick={() => setMenuOpen((v) => !v)} aria-expanded={menuOpen} aria-label={t('service.rowMenu')} className={button('ghost', 'sm', 'px-2')}>
+                    <MoreVertical aria-hidden="true" className="h-4 w-4" />
                 </button>
-                {agencyId && (
-                    <button type="button" onClick={() => void toggleAgencyActive()} className={button('ghost', 'sm')}>
-                        {agencyActive ? t('service.deactivateForAgency') : t('service.activateForAgency')}
-                    </button>
+                {menuOpen && (
+                    <div role="menu" className="absolute right-0 top-9 z-20 w-56 rounded-xl border border-ink-200 bg-white p-1 text-sm shadow-lg dark:border-ink-700 dark:bg-ink-900">
+                        <button type="button" role="menuitem" onClick={() => navigate(`/services/${service.id}/edit?history=1`)} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-ink-50 dark:hover:bg-ink-800">
+                            {t('service.viewHistory')}
+                        </button>
+                        {agencyId && (
+                            <button type="button" role="menuitem" onClick={() => void toggleAgencyActive()} className="block w-full rounded-lg px-3 py-2 text-left hover:bg-ink-50 dark:hover:bg-ink-800">
+                                {agencyActive ? t('service.deactivateForAgency') : t('service.activateForAgency')}
+                            </button>
+                        )}
+                        <span className="block px-3 py-1.5 text-xs text-ink-500">{money(service.base_price ?? 0)}</span>
+                    </div>
                 )}
             </div>
         </li>

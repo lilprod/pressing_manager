@@ -39,6 +39,60 @@ class AgencySettingController extends ApiController
         return response()->json($this->present($settings->refresh()));
     }
 
+    /**
+     * « Codes dépôt par agence » (capture Figma) : préfixe/suffixe de toutes les agences
+     * du pressing sur une seule carte, avec l'aperçu réel du prochain numéro formaté.
+     * Agences accessibles uniquement (un manager local ne voit que les siennes).
+     */
+    public function numbering(Request $request): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'agencies.manage');
+
+        $agencies = Agency::query()
+            ->whereIn('id', $this->resolveAgencyFilter($request->merge(['agency_id' => null]), $request->user()))
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get();
+
+        return response()->json($agencies->map(function (Agency $agency) {
+            $settings = AgencySetting::forAgency($agency->id);
+            $next = (int) \App\Models\Order::query()->where('agency_id', $agency->id)->max('order_number') + 1;
+
+            return [
+                'agency_id' => $agency->id,
+                'agency_name' => $agency->name,
+                'order_number_prefix' => $settings->order_number_prefix,
+                'order_number_suffix' => $settings->order_number_suffix,
+                'order_number_padding' => $settings->order_number_padding,
+                'next_number' => $next,
+            ];
+        })->values());
+    }
+
+    /** Mise à jour groupée des codes dépôt (une transaction, chaque agence vérifiée). */
+    public function updateNumbering(Request $request): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'agencies.manage');
+        $data = $request->validate([
+            'agencies' => ['required', 'array', 'min:1'],
+            'agencies.*.agency_id' => ['required', 'integer'],
+            'agencies.*.order_number_prefix' => ['nullable', 'string', 'max:10', 'regex:/^[A-Za-z0-9\-_\/]*$/'],
+            'agencies.*.order_number_suffix' => ['nullable', 'string', 'max:10', 'regex:/^[A-Za-z0-9\-_\/]*$/'],
+        ]);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($data, $request) {
+            foreach ($data['agencies'] as $row) {
+                $this->authorizeAgency($request->user(), (int) $row['agency_id']);
+                AgencySetting::forAgency((int) $row['agency_id'])->update([
+                    'order_number_prefix' => $row['order_number_prefix'] ?? null,
+                    'order_number_suffix' => $row['order_number_suffix'] ?? null,
+                ]);
+            }
+        });
+
+        return $this->numbering($request);
+    }
+
     private function present(AgencySetting $settings): array
     {
         return [
@@ -54,6 +108,8 @@ class AgencySettingController extends ApiController
             'washer_step_enabled' => $settings->washer_step_enabled,
             'sorter_step_enabled' => $settings->sorter_step_enabled,
             'collection_fee' => $settings->collection_fee,
+            'loyalty_accrue_on_promotions' => $settings->loyalty_accrue_on_promotions,
+            'offline_enabled' => $settings->offline_enabled,
             'delivery_fee' => $settings->delivery_fee,
             'minimum_order_amount' => $settings->minimum_order_amount,
             'loyalty_amount_per_point' => $settings->loyalty_amount_per_point,

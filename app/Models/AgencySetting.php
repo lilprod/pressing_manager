@@ -25,12 +25,15 @@ class AgencySetting extends Model
         'offline_sync_interval_minutes', 'offline_retention_days',
         'notif_quiet_enabled', 'notif_quiet_start', 'notif_quiet_end', 'notif_require_consent', 'notif_unsubscribe_link',
         'cashier_daily_target',
+        'loyalty_accrue_on_promotions', 'offline_enabled',
     ];
 
     protected function casts(): array
     {
         return [
             'notif_quiet_enabled' => 'boolean',
+            'loyalty_accrue_on_promotions' => 'boolean',
+            'offline_enabled' => 'boolean',
             'notif_require_consent' => 'boolean',
             'notif_unsubscribe_link' => 'boolean',
             'order_number_padding' => 'integer',

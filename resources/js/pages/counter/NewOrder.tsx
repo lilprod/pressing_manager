@@ -9,7 +9,7 @@ import { readCachedServices, writeCachedServices } from '../../lib/servicesCache
 import { readCachedIntakeConditions, writeCachedIntakeConditions } from '../../lib/intakeConditionsCache';
 import { readCachedTreatmentTypes, writeCachedTreatmentTypes } from '../../lib/treatmentTypesCache';
 import { readRecentClients, rememberClients } from '../../lib/recentClientsCache';
-import { syncEvents } from '../../lib/sync';
+import { configureSyncInterval, syncEvents } from '../../lib/sync';
 import { categoryMeta } from '../../lib/serviceCategory';
 import PaymentMethodPicker from '../../components/PaymentMethodPicker';
 import PaymentReferenceField from '../../components/PaymentReferenceField';
@@ -132,13 +132,17 @@ export default function NewOrder() {
             });
     }, [agencyId]);
 
-    // Réglages opérationnels par agence (« Paramètres opérationnels ») : seul le seuil
-    // d'utilisation de la fidélité est consommé ici (gate la remise auto ci-dessous).
+    // Réglages opérationnels par agence (« Paramètres opérationnels ») : seuil
+    // d'utilisation de la fidélité (remise auto ci-dessous), mode hors ligne autorisé
+    // ou non, et intervalle de synchronisation de la file locale.
     useEffect(() => {
         if (!agencyId) return;
         api
             .get<AgencySettings>(`/agencies/${agencyId}/settings`)
-            .then(setAgencySettings)
+            .then((settings) => {
+                setAgencySettings(settings);
+                configureSyncInterval(settings.offline_sync_interval_minutes);
+            })
             .catch(() => setAgencySettings(null));
     }, [agencyId]);
 
@@ -340,6 +344,9 @@ export default function NewOrder() {
         } catch (err) {
             if (err instanceof ApiError) {
                 setError(err.message);
+            } else if (agencySettings && agencySettings.offline_enabled === false) {
+                // Mode hors ligne désactivé pour l'agence : rien n'est mis en file locale.
+                setError(t('order.offlineDisabled'));
             } else {
                 await queuePendingOrder({
                     client_local_uuid: clientLocalUuid,

@@ -155,6 +155,8 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::get('/agencies/{agency}', [AgencyController::class, 'show']);
     Route::post('/agencies', [AgencyController::class, 'store']);
     Route::patch('/agencies/{agency}', [AgencyController::class, 'update']);
+    Route::get('/agency-settings/numbering', [AgencySettingController::class, 'numbering']);
+    Route::put('/agency-settings/numbering', [AgencySettingController::class, 'updateNumbering']);
     Route::get('/agencies/{agency}/settings', [AgencySettingController::class, 'show']);
     Route::patch('/agencies/{agency}/settings', [AgencySettingController::class, 'update']);
 

@@ -128,6 +128,17 @@ export default function BrandingSettingsPage() {
         }
     }
 
+    /* « Restaurer par défaut » (capture Figma) : remet dans le BROUILLON l'identité
+     * visuelle par défaut (palette de marque, monogramme, textes du ticket) — jamais le
+     * nom ni les coordonnées du pressing, qui ne possèdent pas de « défaut ». Rien n'est
+     * appliqué tant que l'on ne publie pas. */
+    function restoreDefaults() {
+        const next: DraftFields = { ...form, primary_color: '#24483F', secondary_color: '#C8A54B', monogram: '', ticket_footer: '', ticket_conditions: '' };
+        setForm(next);
+        setFeedback(t('branding.defaultsRestored'));
+        void saveDraft(next);
+    }
+
     async function discardDraft() {
         setBusy(true);
         setError(null);
@@ -210,6 +221,10 @@ export default function BrandingSettingsPage() {
                     <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-350">{t('branding.subtitle')}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={restoreDefaults} disabled={busy} className={button('ghost', 'md', 'h-10')}>
+                        <RotateCcw aria-hidden="true" className="h-4 w-4" />
+                        {t('branding.restoreDefaults')}
+                    </button>
                     <button type="button" onClick={() => void discardDraft()} disabled={!hasPendingDraft || busy} className={button('secondary', 'md', 'h-10')}>
                         <RotateCcw aria-hidden="true" className="h-4 w-4" />
                         {t('branding.reset')}
@@ -234,7 +249,7 @@ export default function BrandingSettingsPage() {
             {error && <Alert tone="error">{error}</Alert>}
             {feedback && <Alert tone="success">{feedback}</Alert>}
 
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
                 <div className="min-w-0 space-y-6">
                     <SectionCard id="branding-identity" title={t('branding.identity')} subtitle={t('branding.identityHint')}>
                         <label className="block">
@@ -310,6 +325,18 @@ export default function BrandingSettingsPage() {
                     </SectionCard>
 
                     <SectionCard id="branding-documents" title={t('branding.documents.title')} subtitle={t('branding.documents.hint')}>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl border-2 border-brand-500 bg-brand-50/60 p-3 dark:border-brand-400 dark:bg-brand-500/10">
+                                <p className="text-sm font-semibold text-ink-900 dark:text-white">{t('branding.documents.ticket')}</p>
+                                <p className="text-xs text-ink-600 dark:text-ink-350">{t('branding.documents.ticketFormat')}</p>
+                                <Pill tone="emerald">{t('branding.documents.default')}</Pill>
+                            </div>
+                            <div className="rounded-xl border border-ink-200 p-3 dark:border-ink-700">
+                                <p className="text-sm font-semibold text-ink-900 dark:text-white">{t('branding.documents.invoice')}</p>
+                                <p className="text-xs text-ink-600 dark:text-ink-350">{t('branding.documents.invoiceFormat')}</p>
+                                <Pill tone="neutral">{t('branding.documents.available')}</Pill>
+                            </div>
+                        </div>
                         <label className="block">
                             <span className={label}>{t('branding.documents.ticketFooter')}</span>
                             <input value={form.ticket_footer ?? ''} onChange={(e) => set('ticket_footer', e.target.value)} className={input} />
@@ -326,6 +353,25 @@ export default function BrandingSettingsPage() {
                 <div className="min-w-0 space-y-6 lg:sticky lg:top-24">
                     <SectionCard id="branding-preview" title={t('branding.preview')} subtitle={t('branding.previewHint')}>
                         <div className="space-y-4">
+                            <div className="flex h-28 overflow-hidden rounded-xl border border-ink-200/80 dark:border-ink-800" aria-hidden="true">
+                                <div className="flex w-1/3 flex-col gap-1.5 p-2" style={{ backgroundColor: form.primary_color || '#24483F' }}>
+                                    <span className="flex h-5 w-5 items-center justify-center rounded text-[9px] font-bold text-white ring-1 ring-white/40">
+                                        {(form.monogram || (form.pressing_name ?? '').slice(0, 2)).toUpperCase()}
+                                    </span>
+                                    <span className="h-1.5 w-3/4 rounded bg-white/40" />
+                                    <span className="h-1.5 w-2/3 rounded bg-white/90" />
+                                    <span className="h-1.5 w-3/4 rounded bg-white/40" />
+                                </div>
+                                <div className="flex flex-1 flex-col gap-1.5 bg-ink-50 p-2 dark:bg-ink-950/40">
+                                    <span className="h-2 w-1/2 rounded bg-ink-300 dark:bg-ink-700" />
+                                    <div className="grid grid-cols-3 gap-1.5">
+                                        <span className="h-6 rounded bg-white dark:bg-ink-900" />
+                                        <span className="h-6 rounded bg-white dark:bg-ink-900" />
+                                        <span className="h-6 rounded bg-white dark:bg-ink-900" />
+                                    </div>
+                                    <span className="mt-auto h-4 w-16 rounded" style={{ backgroundColor: form.secondary_color || '#C8A54B' }} />
+                                </div>
+                            </div>
                             <div className="flex items-center gap-2.5 rounded-xl border border-ink-200/80 bg-ink-50 px-3 py-2.5 dark:border-ink-800 dark:bg-ink-950/40">
                                 {logoPreview ? (
                                     <img src={logoPreview} alt="" className="h-9 w-9 shrink-0 rounded-xl object-cover" />

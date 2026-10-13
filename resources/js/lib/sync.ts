@@ -52,6 +52,36 @@ export function getLastSyncedAt(): string | null {
 window.addEventListener('online', () => void flushPendingOrders());
 
 // Filet de sécurité si l'évènement 'online' est manqué (ex. reprise d'un onglet en veille).
-setInterval(() => void flushPendingOrders(), 20_000);
+// Intervalle réglable par agence (Paramètres opérationnels → « Intervalle de
+// synchronisation ») : appliqué dès que le comptoir charge les réglages de l'agence,
+// mémorisé sur l'appareil pour les rechargements suivants. 20 s par défaut.
+const SYNC_INTERVAL_KEY = 'pm.syncIntervalMinutes';
+let timer: number | undefined;
+
+function startTimer(ms: number) {
+    if (timer !== undefined) window.clearInterval(timer);
+    timer = window.setInterval(() => void flushPendingOrders(), ms);
+}
+
+export function configureSyncInterval(minutes: number | null | undefined): void {
+    try {
+        if (minutes && minutes > 0) localStorage.setItem(SYNC_INTERVAL_KEY, String(minutes));
+        else localStorage.removeItem(SYNC_INTERVAL_KEY);
+    } catch {
+        /* stockage indisponible : on garde l'intervalle courant */
+    }
+    startTimer(minutes && minutes > 0 ? minutes * 60_000 : 20_000);
+}
+
+function storedIntervalMs(): number {
+    try {
+        const minutes = Number(localStorage.getItem(SYNC_INTERVAL_KEY));
+        return minutes > 0 ? minutes * 60_000 : 20_000;
+    } catch {
+        return 20_000;
+    }
+}
+
+startTimer(storedIntervalMs());
 
 void flushPendingOrders();

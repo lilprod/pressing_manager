@@ -90,6 +90,8 @@ export interface AgencySettings {
     loyalty_redemption_threshold: number | null;
     loyalty_point_expiry_months: number | null;
     cashier_daily_target?: number | null;
+    loyalty_accrue_on_promotions?: boolean;
+    offline_enabled?: boolean;
     loyalty_point_value_fcfa: number | null;
     offline_sync_interval_minutes: number | null;
     offline_retention_days: number | null;

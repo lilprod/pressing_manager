@@ -36,7 +36,13 @@ class LoyaltyService
         // le calcul retombait toujours sur le config global, quel que soit le réglage
         // de l'agence. Repli sur le config global uniquement si l'agence n'a rien
         // personnalisé (comportement inchangé pour toute agence existante).
-        $amountPerPoint = AgencySetting::forAgency($payment->agency_id)->loyalty_amount_per_point
+        $agencySettings = AgencySetting::forAgency($payment->agency_id);
+        // « Cumuler sur les promotions » désactivé : un dépôt déjà remisé par une
+        // promotion ne rapporte pas de points (la dépense compte toujours pour le palier).
+        if (! $agencySettings->loyalty_accrue_on_promotions && $payment->invoice?->order?->promotion_id !== null) {
+            return;
+        }
+        $amountPerPoint = $agencySettings->loyalty_amount_per_point
             ?? config('loyalty.amount_per_point');
         $points = intdiv($payment->amount, max(1, $amountPerPoint));
         if ($points <= 0) {

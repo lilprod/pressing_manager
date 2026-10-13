@@ -33,7 +33,11 @@ class DeliveryService
         ?int $fee,
         ?\DateTimeInterface $scheduledAt,
     ): Delivery {
-        $resolvedFee = $fee ?? ($zoneId ? DeliveryZone::find($zoneId)?->fee : 0) ?? 0;
+        // Ordre : frais saisi > frais de la zone > frais de livraison par défaut de l'agence.
+        $resolvedFee = $fee
+            ?? ($zoneId ? DeliveryZone::find($zoneId)?->fee : null)
+            ?? \App\Models\AgencySetting::forAgency($order->agency_id)->delivery_fee
+            ?? 0;
 
         return Delivery::create([
             'order_id' => $order->id,

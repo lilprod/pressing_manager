@@ -368,7 +368,12 @@ class OrderController extends ApiController
                 // remplacement : ne raccourcit jamais une promesse déjà plus longue
                 // dérivée du catalogue (Service::estimated_duration_hours).
                 $isExpress = $data['is_express'] ?? false;
-                $configuredDelay = $isExpress ? $agencySettings->express_delay_hours : $agencySettings->standard_delay_hours;
+                // Dépôt uniquement en « repassage » (traitement de finition) : délai de finition.
+                $finishingOnly = ! $isExpress && $order->items()->exists()
+                    && $order->items()->whereHas('treatmentType', fn ($q) => $q->whereIn('code', ['repassage', 'repassage_seul']))->count() === $order->items()->count();
+                $configuredDelay = $isExpress
+                    ? $agencySettings->express_delay_hours
+                    : ($finishingOnly && $agencySettings->finishing_delay_hours ? $agencySettings->finishing_delay_hours : $agencySettings->standard_delay_hours);
                 $maxDurationHours = max($maxDurationHours, $configuredDelay ?? 0);
                 $order->promised_at = now()->addHours($maxDurationHours);
             }

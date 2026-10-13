@@ -21,9 +21,14 @@ class PickupController extends ApiController
         $this->authorizePermission($request->user(), 'orders.manage');
         $agencyId = $this->resolveAgencyFilter($request, $request->user());
 
+        // Agences en « retrait immédiat » : les dépôts déjà traités (contrôle qualité)
+        // sont aussi remettables (voir PickupService::process).
+        $immediateAgencyIds = \App\Models\AgencySetting::query()->whereIn('agency_id', $agencyId)->where('allow_immediate_pickup', true)->pluck('agency_id')->all();
+
         $orders = Order::query()
-            ->where('status', 'pret')
-            ->with(['client', 'items' => fn ($q) => $q->whereIn('status', ['pret', 'non_recupere']), 'invoice.payments'])
+            ->where(fn ($q) => $q->where('status', 'pret')
+                ->orWhere(fn ($t) => $t->where('status', 'controle_qualite')->whereIn('agency_id', $immediateAgencyIds)))
+            ->with(['client', 'items' => fn ($q) => $q->whereIn('status', ['pret', 'non_recupere', 'controle_qualite']), 'invoice.payments'])
             ->whereIn('agency_id', $agencyId)
             ->when($request->filled('q'), function ($query) use ($request) {
                 $term = $request->string('q')->value();

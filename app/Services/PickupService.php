@@ -126,6 +126,14 @@ class PickupService
                 ]);
 
                 if ($item->quantity_delivered >= $item->quantity && $item->status !== 'livre') {
+                    if ($item->status === 'controle_qualite') {
+                        // Retrait immédiat : le classement est validé au comptoir (contrôle OK),
+                        // transition réelle journalisée — jamais un saut de statut silencieux.
+                        $item = $this->transitioner->transition($item->fresh(), 'pret', $actor, [
+                            'quality_check_result' => 'ok',
+                            'notes' => 'Retrait immédiat autorisé par l\'agence.',
+                        ]);
+                    }
                     $this->transitioner->transition($item->fresh(), 'livre', $actor, [
                         'notes' => "Remis via retrait #{$pickup->id} ({$data['recipient_name']}).",
                     ]);
@@ -152,6 +160,7 @@ class PickupService
         }
 
         $itemsById = $order->items->keyBy('id');
+        $immediate = (bool) \App\Models\AgencySetting::forAgency($order->agency_id)->allow_immediate_pickup;
         $lines = [];
 
         foreach ($requested as $line) {
@@ -160,7 +169,10 @@ class PickupService
                 throw new HttpException(422, "Article #{$line['order_item_id']} introuvable sur ce dépôt.");
             }
 
-            if (! in_array($item->status, ['pret', 'non_recupere'], true)) {
+            // « Autoriser le retrait immédiat » : un article déjà traité (contrôle qualité
+            // passé) peut être remis sans attendre l'étape de classement.
+            $allowed = $immediate ? ['pret', 'non_recupere', 'controle_qualite'] : ['pret', 'non_recupere'];
+            if (! in_array($item->status, $allowed, true)) {
                 throw new HttpException(422, "« {$item->description} » n'est pas prêt pour le retrait.");
             }
 

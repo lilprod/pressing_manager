@@ -973,7 +973,27 @@ export interface RevenueSeriesResponse {
     series: RevenueSeriesPoint[];
 }
 
-export type NotificationEvent = 'order_ready' | 'delivery_completed' | 'delivery_failed' | 'pickup_completed';
+export type NotificationEvent =
+    | 'order_received'
+    | 'order_processing'
+    | 'order_ready'
+    | 'order_delayed'
+    | 'pickup_completed'
+    | 'payment_received'
+    | 'loyalty_points'
+    | 'delivery_completed'
+    | 'delivery_failed';
+
+export interface NotificationTemplate {
+    id: number | null;
+    event: NotificationEvent;
+    channel: NotificationChannel;
+    name: string;
+    subject: string | null;
+    body: string;
+    is_custom: boolean;
+    updated_at: string | null;
+}
 
 export interface NotificationSetting {
     agency_id: number;
@@ -983,7 +1003,7 @@ export interface NotificationSetting {
 }
 
 export type NotificationChannel = 'mail' | 'sms';
-export type NotificationStatus = 'sent' | 'simulated' | 'failed';
+export type NotificationStatus = 'sent' | 'simulated' | 'failed' | 'deferred' | 'skipped';
 
 export interface NotificationLog {
     id: number;
@@ -996,6 +1016,7 @@ export interface NotificationLog {
     message: string;
     status: NotificationStatus;
     sent_at: string;
+    is_test?: boolean;
 }
 
 /* Vue consolidée multi-agences ---------------------------------------------- */

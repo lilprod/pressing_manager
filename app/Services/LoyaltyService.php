@@ -53,5 +53,7 @@ class LoyaltyService
             'reason' => 'payment',
             'created_at' => now(),
         ]);
+
+        app(NotificationService::class)->notifyEvent($payment->agency_id, 'loyalty_points', $client->refresh(), ['points' => $points]);
     }
 }

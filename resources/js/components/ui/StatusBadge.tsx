@@ -97,6 +97,8 @@ const STYLES: Record<StatusKind, Record<string, StatusStyle>> = {
         sent: { tone: 'emerald', icon: CircleCheck },
         simulated: { tone: 'sky', icon: MailWarning },
         failed: { tone: 'rose', icon: XCircle },
+        deferred: { tone: 'amber', icon: MailWarning },
+        skipped: { tone: 'neutral', icon: XCircle },
     },
 };
 

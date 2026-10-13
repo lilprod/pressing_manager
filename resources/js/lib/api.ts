@@ -35,7 +35,7 @@ export function setToken(token: string | null): void {
 }
 
 interface RequestOptions {
-    method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
     body?: unknown;
     signal?: AbortSignal;
 }
@@ -107,6 +107,7 @@ export const api = {
     post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
     postForm: <T>(path: string, formData: FormData) => requestForm<T>(path, formData),
     patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
+    put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body }),
     delete: <T>(path: string, body?: unknown) => request<T>(path, { method: 'DELETE', body }),
     async blob(path: string): Promise<Blob> {
         const token = getToken();

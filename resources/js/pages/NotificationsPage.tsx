@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Bell, Building2, Info, Mail, MessageSquare, PackageCheck, Truck, XCircle } from 'lucide-react';
+import { Activity, ArrowLeft, Award, Banknote, Bell, Building2, Clock, Copy, Download, Inbox, Info, Mail, MessageSquare, PackageCheck, RotateCcw, Save, Send, Truck, WashingMachine, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { useFormat } from '../lib/format';
@@ -12,24 +12,55 @@ import { ChipToggle, SectionCard } from '../components/ui/Metrics';
 import StatusBadge, { Pill, TONES } from '../components/ui/StatusBadge';
 import Pagination from '../components/ui/Pagination';
 import Toggle from '../components/ui/Toggle';
-import { card, cardPadded, cx, sectionTitle, textLink } from '../components/ui/styles';
-import type { NotificationEvent, NotificationLog, NotificationSetting, Paginated } from '../types';
+import { button, card, cardPadded, cx, input, label, sectionTitle, textLink } from '../components/ui/styles';
+import type { NotificationChannel, NotificationEvent, NotificationLog, NotificationSetting, NotificationTemplate, Paginated } from '../types';
 
-/* Écran « Notifications » (Figma SPARK PRESSING, section 09, node 72:21413) : état des
- * canaux, matrice évènement × canal (réglages par agence) et journal des envois.
- * Omis faute de backend (voir CLAUDE.md §2) : envoi de test, éditeur de modèles de
- * message et variables, aperçu SMS, heures calmes, options d'envoi, configuration du
- * fournisseur SMS, mesures agrégées par canal, export du journal, 4 évènements
- * supplémentaires de la maquette. */
+/* Écran « Notifications » (capture Figma, audit du 2026-10-13) : statistiques réelles par
+ * canal (30 jours), matrice évènement × canal, éditeur de modèles avec variables et
+ * aperçu rendu sur le dernier dépôt réel, envoi de test, horaires silencieux,
+ * consentement, vérification de la configuration d'envoi et journal exportable.
+ * Omis : passerelle SMS réelle et WhatsApp (aucun fournisseur intégré — les SMS sont
+ * simulés et journalisés), taux d'ouverture / rebonds (aucun suivi de lecture). */
 
 const EVENT_ICONS: Record<NotificationEvent, typeof Truck> = {
+    order_received: Inbox,
+    order_processing: WashingMachine,
     order_ready: Bell,
+    order_delayed: Clock,
+    pickup_completed: PackageCheck,
+    payment_received: Banknote,
+    loyalty_points: Award,
     delivery_completed: Truck,
     delivery_failed: XCircle,
-    pickup_completed: PackageCheck,
 };
 
-const EVENTS: NotificationEvent[] = ['order_ready', 'delivery_completed', 'delivery_failed', 'pickup_completed'];
+const EVENTS: NotificationEvent[] = [
+    'order_received',
+    'order_processing',
+    'order_ready',
+    'order_delayed',
+    'pickup_completed',
+    'payment_received',
+    'loyalty_points',
+    'delivery_completed',
+    'delivery_failed',
+];
+
+interface NotificationStats {
+    period_days: number;
+    mail: Partial<Record<string, number>>;
+    sms: Partial<Record<string, number>>;
+    mail_driver: string | null;
+    mail_from: string | null;
+}
+
+interface NotificationRules {
+    notif_quiet_enabled: boolean;
+    notif_quiet_start: string;
+    notif_quiet_end: string;
+    notif_require_consent: boolean;
+    notif_unsubscribe_link: boolean;
+}
 
 export default function NotificationsPage() {
     const { user, activeAgencyId, agencies } = useAuth();
@@ -48,6 +79,8 @@ export default function NotificationsPage() {
     const [eventFilter, setEventFilter] = useState<NotificationEvent | ''>('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [stats, setStats] = useState<NotificationStats | null>(null);
+    const [selectedEvent, setSelectedEvent] = useState<NotificationEvent>('order_ready');
 
     function reload() {
         if (!agencyId) {
@@ -61,8 +94,10 @@ export default function NotificationsPage() {
         Promise.all([
             api.get<NotificationSetting[]>(`/notification-settings?agency_id=${agencyId}`),
             api.get<Paginated<NotificationLog>>(`/notification-logs?${logsParams}`),
+            api.get<NotificationStats>(`/notification-stats?agency_id=${agencyId}`),
         ])
-            .then(([settingsRes, logsRes]) => {
+            .then(([settingsRes, logsRes, statsRes]) => {
+                setStats(statsRes);
                 setSettings(settingsRes);
                 setLogs(logsRes.data);
                 setLogsMeta({ current_page: logsRes.current_page, last_page: logsRes.last_page, total: logsRes.total });
@@ -104,7 +139,17 @@ export default function NotificationsPage() {
     return (
         <div className="space-y-6">
             {backLink}
-            <PageHeader title={t('notifications.title')} subtitle={t('notifications.subtitle')} icon={Bell} />
+            <PageHeader
+                title={t('notifications.title')}
+                subtitle={t('notifications.subtitle')}
+                icon={Bell}
+                actions={
+                    <button type="button" onClick={() => document.getElementById('send-test')?.scrollIntoView({ behavior: 'smooth', block: 'center' })} className={button('secondary', 'md', 'h-10')}>
+                        <Send aria-hidden="true" className="h-4 w-4" />
+                        {t('notifications.test.send')}
+                    </button>
+                }
+            />
 
             {error && <Alert tone="error">{error}</Alert>}
 
@@ -112,42 +157,63 @@ export default function NotificationsPage() {
                 <LoadingState />
             ) : (
                 <>
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <ChannelCard
-                            icon={Mail}
-                            title={t('notifications.channelEmail')}
-                            description={t('notifications.card.emailHint')}
-                            status={emailCount > 0 ? { tone: 'emerald', label: t('notifications.card.active') } : { tone: 'neutral', label: t('notifications.card.off') }}
-                            value={`${emailCount}/${settings.length}`}
-                            valueLabel={t('notifications.card.eventsOn')}
-                        />
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <ChannelCard
                             icon={MessageSquare}
-                            title={t('notifications.channelSms')}
+                            title={t('notifications.card.smsTitle')}
                             description={t('notifications.card.smsHint')}
-                            status={smsCount > 0 ? { tone: 'amber', label: t('notifications.status.simulated') } : { tone: 'neutral', label: t('notifications.card.off') }}
-                            value={`${smsCount}/${settings.length}`}
-                            valueLabel={t('notifications.card.eventsOn')}
+                            status={{ tone: 'amber', label: t('notifications.card.simulatedMode') }}
+                            metrics={[
+                                { value: String(stats?.sms.simulated ?? 0), label: t('notifications.card.simulated30') },
+                                { value: String(stats?.sms.skipped ?? 0), label: t('notifications.card.skipped') },
+                                { value: `${smsCount}/${settings.length}`, label: t('notifications.card.eventsOn') },
+                            ]}
+                        />
+                        <ChannelCard
+                            icon={Mail}
+                            title={t('notifications.card.emailTitle')}
+                            description={stats?.mail_from ? `${stats.mail_driver} · ${stats.mail_from}` : t('notifications.card.emailHint')}
+                            status={emailCount > 0 ? { tone: 'emerald', label: t('notifications.card.active') } : { tone: 'neutral', label: t('notifications.card.off') }}
+                            metrics={[
+                                { value: deliveryRate(stats?.mail), label: t('notifications.card.delivered') },
+                                { value: String(stats?.mail.sent ?? 0), label: t('notifications.card.sent30') },
+                                { value: String(stats?.mail.failed ?? 0), label: t('notifications.card.failed') },
+                            ]}
                         />
                         <div className={cx(cardPadded, 'space-y-2')}>
                             <div className="flex items-start justify-between gap-2">
-                                <h2 className={sectionTitle}>{t('notifications.card.gateway')}</h2>
-                                <Pill tone="amber">{t('notifications.card.notConnected')}</Pill>
+                                <h2 className={sectionTitle}>{t('notifications.card.future')}</h2>
+                                <Pill tone="neutral">{t('notifications.card.toIntegrate')}</Pill>
                             </div>
                             <p className="flex items-start gap-2 text-sm text-ink-600 dark:text-ink-350">
                                 <Info aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                                {t('notifications.smsNote')}
+                                {t('notifications.card.futureHint')}
                             </p>
                         </div>
                     </div>
 
-                    <EventsMatrix agencyId={agencyId} agencyName={agencyName} settings={settings} onSaved={reload} />
+                    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+                        <div className="min-w-0 space-y-6">
+                            <EventsMatrix agencyId={agencyId} agencyName={agencyName} settings={settings} onSaved={reload} selected={selectedEvent} onSelect={setSelectedEvent} />
+                            <TemplateEditor key={selectedEvent} agencyId={agencyId} event={selectedEvent} onSent={reload} />
+                        </div>
+                        <div className="min-w-0 space-y-6">
+                            <RulesCard agencyId={agencyId} />
+                            <ProvidersCard agencyId={agencyId} />
+                        </div>
+                    </div>
 
-                    <LogsPanel logs={logs} eventFilter={eventFilter} onEventFilter={changeEventFilter} meta={logsMeta} onPageChange={setLogsPage} />
+                    <LogsPanel agencyId={agencyId} logs={logs} eventFilter={eventFilter} onEventFilter={changeEventFilter} meta={logsMeta} onPageChange={setLogsPage} />
                 </>
             )}
         </div>
     );
+}
+
+function deliveryRate(counts?: Partial<Record<string, number>>): string {
+    const sent = counts?.sent ?? 0;
+    const failed = counts?.failed ?? 0;
+    return sent + failed > 0 ? `${Math.round((sent / (sent + failed)) * 1000) / 10} %` : '—';
 }
 
 function ChannelCard({
@@ -155,15 +221,13 @@ function ChannelCard({
     title,
     description,
     status,
-    value,
-    valueLabel,
+    metrics,
 }: {
     icon: typeof Mail;
     title: string;
     description: string;
     status: { tone: 'emerald' | 'amber' | 'neutral'; label: string };
-    value: string;
-    valueLabel: string;
+    metrics: { value: string; label: string }[];
 }) {
     return (
         <div className={cx(cardPadded, 'space-y-4')}>
@@ -174,16 +238,280 @@ function ChannelCard({
                     </span>
                     <div className="min-w-0">
                         <h2 className={sectionTitle}>{title}</h2>
-                        <p className="text-xs text-ink-600 dark:text-ink-350">{description}</p>
+                        <p className="truncate text-xs text-ink-600 dark:text-ink-350">{description}</p>
                     </div>
                 </div>
                 <Pill tone={status.tone}>{status.label}</Pill>
             </div>
-            <div>
-                <p className="font-display text-2xl font-bold tabular-nums text-ink-900 dark:text-white">{value}</p>
-                <p className="text-xs text-ink-600 dark:text-ink-350">{valueLabel}</p>
-            </div>
+            <dl className="grid grid-cols-3 gap-2 text-center">
+                {metrics.map((m) => (
+                    <div key={m.label}>
+                        <dd className="font-display text-lg font-bold tabular-nums text-ink-900 dark:text-white">{m.value}</dd>
+                        <dt className="text-[11px] text-ink-600 dark:text-ink-350">{m.label}</dt>
+                    </div>
+                ))}
+            </dl>
         </div>
+    );
+}
+
+function TemplateEditor({ agencyId, event, onSent }: { agencyId: number; event: NotificationEvent; onSent: () => void }) {
+    const { t } = useI18n();
+    const [channel, setChannel] = useState<NotificationChannel>('sms');
+    const [templates, setTemplates] = useState<NotificationTemplate[]>([]);
+    const [variables, setVariables] = useState<string[]>([]);
+    const [name, setName] = useState('');
+    const [subject, setSubject] = useState('');
+    const [body, setBody] = useState('');
+    const [preview, setPreview] = useState<{ subject: string; body: string; length: number; sms_segments: number } | null>(null);
+    const [recipient, setRecipient] = useState('');
+    const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+    const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+    useEffect(() => {
+        api.get<{ templates: NotificationTemplate[]; variables: string[] }>(`/notification-templates?agency_id=${agencyId}`).then((res) => {
+            setTemplates(res.templates);
+            setVariables(res.variables);
+        });
+    }, [agencyId]);
+
+    const current = templates.find((tpl) => tpl.event === event && tpl.channel === channel);
+
+    useEffect(() => {
+        if (!current) return;
+        setName(current.name);
+        setSubject(current.subject ?? '');
+        setBody(current.body);
+    }, [current]);
+
+    useEffect(() => {
+        if (!body) return;
+        const timeout = setTimeout(() => {
+            api.post<typeof preview>(`/notification-templates/preview?agency_id=${agencyId}`, { body, subject })
+                .then(setPreview)
+                .catch(() => setPreview(null));
+        }, 400);
+        return () => clearTimeout(timeout);
+    }, [body, subject, agencyId]);
+
+    function insertVariable(variable: string) {
+        const el = bodyRef.current;
+        const token = `{{${variable}}}`;
+        if (!el) return setBody(body + token);
+        const start = el.selectionStart ?? body.length;
+        setBody(body.slice(0, start) + token + body.slice(el.selectionEnd ?? start));
+    }
+
+    async function act(action: () => Promise<void>, success: string) {
+        setMessage(null);
+        try {
+            await action();
+            setMessage({ tone: 'success', text: success });
+        } catch (err) {
+            setMessage({ tone: 'error', text: err instanceof ApiError ? err.message : t('common.error') });
+        }
+    }
+
+    async function save() {
+        const saved = await api.put<NotificationTemplate>(`/notification-templates?agency_id=${agencyId}`, { event, channel, name, subject: channel === 'mail' ? subject : null, body });
+        setTemplates((list) => list.map((tpl) => (tpl.event === event && tpl.channel === channel ? saved : tpl)));
+    }
+
+    async function reset() {
+        const restored = await api.delete<NotificationTemplate>(`/notification-templates?agency_id=${agencyId}&event=${event}&channel=${channel}`);
+        setTemplates((list) => list.map((tpl) => (tpl.event === event && tpl.channel === channel ? restored : tpl)));
+    }
+
+    return (
+        <SectionCard
+            id="notification-template"
+            title={t('notifications.template.title', { event: t(`notifications.event.${event}`) })}
+            subtitle={current?.is_custom ? t('notifications.template.custom') : t('notifications.template.default')}
+            headerExtra={
+                <div className="flex gap-1">
+                    {(['sms', 'mail'] as NotificationChannel[]).map((c) => (
+                        <ChipToggle key={c} active={channel === c} onClick={() => setChannel(c)}>
+                            {c === 'sms' ? t('notifications.channelSms') : t('notifications.channelEmail')}
+                        </ChipToggle>
+                    ))}
+                </div>
+            }
+        >
+            {message && <Alert tone={message.tone}>{message.text}</Alert>}
+            <label className="block">
+                <span className={label}>{t('notifications.template.name')}</span>
+                <input value={name} onChange={(e) => setName(e.target.value)} className={input} />
+            </label>
+            {channel === 'mail' && (
+                <label className="block">
+                    <span className={label}>{t('notifications.template.subject')}</span>
+                    <input value={subject} onChange={(e) => setSubject(e.target.value)} className={input} />
+                </label>
+            )}
+            <label className="block">
+                <span className={label}>{t('notifications.template.message')}</span>
+                <textarea ref={bodyRef} value={body} onChange={(e) => setBody(e.target.value)} rows={4} className={cx(input, 'h-auto py-2.5')} />
+            </label>
+            {preview && channel === 'sms' && (
+                <p className="text-xs text-ink-600 dark:text-ink-350">{t('notifications.template.length', { length: preview.length, segments: preview.sms_segments })}</p>
+            )}
+            <div>
+                <p className="mb-1.5 text-xs font-semibold text-ink-600 dark:text-ink-350">{t('notifications.template.variables')}</p>
+                <div className="flex flex-wrap gap-1.5">
+                    {variables.map((v) => (
+                        <button key={v} type="button" onClick={() => insertVariable(v)} className="rounded-full bg-brand-50 px-2.5 py-1 font-mono text-[11px] font-semibold text-brand-800 hover:bg-brand-100 dark:bg-brand-400/10 dark:text-brand-200">
+                            {`{{${v}}}`}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            {preview && (
+                <div className="rounded-2xl bg-ink-100 p-4 dark:bg-ink-950/60">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-500">{t('notifications.template.preview')}</p>
+                    <div className="max-w-sm rounded-xl bg-white p-3 text-sm text-ink-800 shadow-sm dark:bg-ink-800 dark:text-ink-100">
+                        {channel === 'mail' && preview.subject && <p className="mb-1 font-semibold">{preview.subject}</p>}
+                        <p className="whitespace-pre-line">{preview.body}</p>
+                    </div>
+                </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void act(save, t('notifications.template.saved'))} disabled={!body.trim() || !name.trim()} className={button('primary', 'sm')}>
+                    <Save aria-hidden="true" className="h-4 w-4" />
+                    {t('notifications.template.save')}
+                </button>
+                {current?.is_custom && (
+                    <button type="button" onClick={() => void act(reset, t('notifications.template.resetDone'))} className={button('secondary', 'sm')}>
+                        <RotateCcw aria-hidden="true" className="h-4 w-4" />
+                        {t('notifications.template.reset')}
+                    </button>
+                )}
+                <button
+                    type="button"
+                    onClick={() => {
+                        const other: NotificationChannel = channel === 'sms' ? 'mail' : 'sms';
+                        setChannel(other);
+                        setTimeout(() => setBody(body), 0);
+                    }}
+                    className={button('ghost', 'sm')}
+                >
+                    <Copy aria-hidden="true" className="h-4 w-4" />
+                    {t('notifications.template.duplicate')}
+                </button>
+            </div>
+            <div className="flex flex-wrap items-end gap-2 border-t border-ink-200/80 pt-4 dark:border-ink-800">
+                <label className="block min-w-0 flex-1 basis-full sm:basis-auto">
+                    <span className={label}>{channel === 'mail' ? t('notifications.test.email') : t('notifications.test.phone')}</span>
+                    <input value={recipient} onChange={(e) => setRecipient(e.target.value)} className={input} />
+                </label>
+                <button
+                    type="button"
+                    id="send-test"
+                    disabled={!recipient.trim() || !body.trim()}
+                    onClick={() =>
+                        void act(async () => {
+                            await api.post(`/notifications/test?agency_id=${agencyId}`, { event, channel, recipient, subject: channel === 'mail' ? subject : null, body });
+                            onSent();
+                        }, channel === 'mail' ? t('notifications.test.sent') : t('notifications.test.simulated'))
+                    }
+                    className={button('secondary', 'md')}
+                >
+                    <Send aria-hidden="true" className="h-4 w-4" />
+                    {t('notifications.test.send')}
+                </button>
+            </div>
+        </SectionCard>
+    );
+}
+
+function RulesCard({ agencyId }: { agencyId: number }) {
+    const { t } = useI18n();
+    const [rules, setRules] = useState<NotificationRules | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        api.get<NotificationRules>(`/notification-rules?agency_id=${agencyId}`).then(setRules).catch(() => setRules(null));
+    }, [agencyId]);
+
+    async function update(patch: Partial<NotificationRules>) {
+        if (!rules) return;
+        setError(null);
+        const next = { ...rules, ...patch };
+        setRules(next);
+        try {
+            await api.patch(`/notification-rules?agency_id=${agencyId}`, patch);
+        } catch (err) {
+            setRules(rules);
+            setError(err instanceof ApiError ? err.message : t('common.error'));
+        }
+    }
+
+    if (!rules) return null;
+
+    return (
+        <>
+            <SectionCard id="notification-quiet" title={t('notifications.quiet.title')} subtitle={t('notifications.quiet.subtitle')}>
+                {error && <Alert tone="error">{error}</Alert>}
+                <Toggle checked={rules.notif_quiet_enabled} onChange={(v) => void update({ notif_quiet_enabled: v })} label={t('notifications.quiet.enable')} />
+                <div className="grid grid-cols-2 gap-3">
+                    <label className="block">
+                        <span className={label}>{t('notifications.quiet.start')}</span>
+                        <input type="time" value={rules.notif_quiet_start} onChange={(e) => void update({ notif_quiet_start: e.target.value })} className={input} />
+                    </label>
+                    <label className="block">
+                        <span className={label}>{t('notifications.quiet.end')}</span>
+                        <input type="time" value={rules.notif_quiet_end} onChange={(e) => void update({ notif_quiet_end: e.target.value })} className={input} />
+                    </label>
+                </div>
+                <p className="text-xs text-ink-600 dark:text-ink-350">{t('notifications.quiet.hint')}</p>
+            </SectionCard>
+            <SectionCard id="notification-consent" title={t('notifications.consent.title')}>
+                <Toggle checked={rules.notif_require_consent} onChange={(v) => void update({ notif_require_consent: v })} label={t('notifications.consent.require')} description={t('notifications.consent.requireHint')} />
+                <Toggle checked={rules.notif_unsubscribe_link} onChange={(v) => void update({ notif_unsubscribe_link: v })} label={t('notifications.consent.unsubscribe')} description={t('notifications.consent.unsubscribeHint')} />
+                <p className="flex items-start gap-2 text-xs text-ink-600 dark:text-ink-350">
+                    <Info aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {t('notifications.consent.proofs')}
+                </p>
+            </SectionCard>
+        </>
+    );
+}
+
+function ProvidersCard({ agencyId }: { agencyId: number }) {
+    const { t } = useI18n();
+    const [result, setResult] = useState<{ mail: { ok: boolean; driver: string | null; from: string | null; delivers: boolean }; sms: { ok: boolean } } | null>(null);
+    const [checking, setChecking] = useState(false);
+
+    async function check() {
+        setChecking(true);
+        try {
+            setResult(await api.post(`/notification-config/check?agency_id=${agencyId}`));
+        } finally {
+            setChecking(false);
+        }
+    }
+
+    return (
+        <SectionCard id="notification-providers" title={t('notifications.providers.title')}>
+            <dl className="space-y-2 text-sm">
+                <div className="flex justify-between gap-3">
+                    <dt className="text-ink-600 dark:text-ink-350">{t('notifications.channelSms')}</dt>
+                    <dd className="font-semibold text-ink-900 dark:text-white">{t('notifications.providers.smsNone')}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                    <dt className="text-ink-600 dark:text-ink-350">{t('notifications.channelEmail')}</dt>
+                    <dd className="truncate font-semibold text-ink-900 dark:text-white">{result ? `${result.mail.driver ?? '—'} · ${result.mail.from ?? '—'}` : '—'}</dd>
+                </div>
+            </dl>
+            {result && (
+                <Alert tone={result.mail.ok && result.mail.delivers ? 'success' : 'warning'}>
+                    {result.mail.ok && result.mail.delivers ? t('notifications.providers.mailOk') : t('notifications.providers.mailLogOnly')}
+                </Alert>
+            )}
+            <button type="button" onClick={() => void check()} disabled={checking} className={button('secondary', 'sm', 'self-start')}>
+                <Activity aria-hidden="true" className="h-4 w-4" />
+                {t('notifications.providers.check')}
+            </button>
+        </SectionCard>
     );
 }
 
@@ -192,11 +520,15 @@ function EventsMatrix({
     agencyName,
     settings,
     onSaved,
+    selected,
+    onSelect,
 }: {
     agencyId: number;
     agencyName: string;
     settings: NotificationSetting[];
     onSaved: () => void;
+    selected: NotificationEvent;
+    onSelect: (event: NotificationEvent) => void;
 }) {
     const { t } = useI18n();
     const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -256,9 +588,9 @@ function EventsMatrix({
                             const Icon = EVENT_ICONS[setting.event];
                             const eventLabel = t(`notifications.event.${setting.event}`);
                             return (
-                                <tr key={setting.event}>
+                                <tr key={setting.event} className={cx(selected === setting.event && 'bg-brand-50/60 dark:bg-brand-400/5')}>
                                     <td className="px-5 py-3 sm:px-6">
-                                        <div className="flex items-center gap-3">
+                                        <button type="button" onClick={() => onSelect(setting.event)} className="flex items-center gap-3 text-left" aria-label={t('notifications.template.edit', { event: eventLabel })}>
                                             <span className={cx('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset', TONES.brand)}>
                                                 <Icon aria-hidden="true" className="h-4 w-4" />
                                             </span>
@@ -266,7 +598,7 @@ function EventsMatrix({
                                                 <p className="font-semibold text-ink-900 dark:text-ink-50">{eventLabel}</p>
                                                 <p className="text-xs text-ink-600 dark:text-ink-350">{t(`notifications.eventHint.${setting.event}`)}</p>
                                             </div>
-                                        </div>
+                                        </button>
                                     </td>
                                     <td className="px-4 py-3">
                                         <div className="flex justify-center">
@@ -299,12 +631,14 @@ function EventsMatrix({
 }
 
 function LogsPanel({
+    agencyId,
     logs,
     eventFilter,
     onEventFilter,
     meta,
     onPageChange,
 }: {
+    agencyId: number;
     logs: NotificationLog[];
     eventFilter: NotificationEvent | '';
     onEventFilter: (event: NotificationEvent | '') => void;
@@ -317,11 +651,30 @@ function LogsPanel({
     return (
         <section aria-labelledby="notification-logs-heading" className={cx(card, 'overflow-hidden')}>
             <div className="space-y-3 px-5 pb-3 pt-5 sm:px-6 sm:pt-6">
-                <div>
-                    <h2 id="notification-logs-heading" className={sectionTitle}>
-                        {t('notifications.history')}
-                    </h2>
-                    <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-350">{t('notifications.historyHint')}</p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 id="notification-logs-heading" className={sectionTitle}>
+                            {t('notifications.history')}
+                        </h2>
+                        <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-350">{t('notifications.historyHint')}</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() =>
+                            void api.blob(`/notification-logs/export?agency_id=${agencyId}${eventFilter ? `&event=${eventFilter}` : ''}`).then((blob) => {
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'notifications.csv';
+                                a.click();
+                                URL.revokeObjectURL(url);
+                            })
+                        }
+                        className={button('secondary', 'sm')}
+                    >
+                        <Download aria-hidden="true" className="h-4 w-4" />
+                        {t('notifications.exportLogs')}
+                    </button>
                 </div>
                 <div role="group" aria-label={t('notifications.event')} className="scrollbar-none -mx-5 flex gap-2 overflow-x-auto px-5 sm:mx-0 sm:flex-wrap sm:px-0">
                     <ChipToggle active={eventFilter === ''} onClick={() => onEventFilter('')}>

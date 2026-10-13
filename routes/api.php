@@ -343,5 +343,15 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::get('/notification-settings', [NotificationSettingController::class, 'index']);
     Route::post('/notification-settings', [NotificationSettingController::class, 'store']);
 
+    Route::get('/notification-logs/export', [\App\Http\Controllers\Api\NotificationCenterController::class, 'exportLogs']);
     Route::get('/notification-logs', [NotificationLogController::class, 'index']);
+    Route::get('/notification-templates', [\App\Http\Controllers\Api\NotificationCenterController::class, 'templates']);
+    Route::put('/notification-templates', [\App\Http\Controllers\Api\NotificationCenterController::class, 'saveTemplate']);
+    Route::delete('/notification-templates', [\App\Http\Controllers\Api\NotificationCenterController::class, 'resetTemplate']);
+    Route::post('/notification-templates/preview', [\App\Http\Controllers\Api\NotificationCenterController::class, 'preview']);
+    Route::post('/notifications/test', [\App\Http\Controllers\Api\NotificationCenterController::class, 'sendTest']);
+    Route::get('/notification-rules', [\App\Http\Controllers\Api\NotificationCenterController::class, 'rules']);
+    Route::patch('/notification-rules', [\App\Http\Controllers\Api\NotificationCenterController::class, 'updateRules']);
+    Route::get('/notification-stats', [\App\Http\Controllers\Api\NotificationCenterController::class, 'stats']);
+    Route::post('/notification-config/check', [\App\Http\Controllers\Api\NotificationCenterController::class, 'checkConfiguration']);
 });

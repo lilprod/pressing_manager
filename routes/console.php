@@ -15,3 +15,5 @@ Schedule::command('hr:mark-absences')->dailyAt('23:30');
 Schedule::command('loyalty:expire-points')->dailyAt('02:00');
 Schedule::command('loyalty:recalculate-spend')->dailyAt('02:15');
 Schedule::command('staff:send-daily-summaries')->dailyAt('18:00');
+Schedule::command('notifications:send-delays')->hourly();
+Schedule::command('notifications:flush-deferred')->everyFifteenMinutes();

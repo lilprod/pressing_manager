@@ -433,6 +433,9 @@ class OrderController extends ApiController
             return $order;
         });
 
+        // Notification « Dépôt enregistré » après validation de la transaction.
+        app(\App\Services\NotificationService::class)->notifyEvent($order->agency_id, 'order_received', $order->client, ['order' => $order]);
+
         return response()->json($order->load(['items.intakeConditions', 'invoice.payments']), 201);
     }
 

@@ -41,6 +41,7 @@ class PaymentService
 
             $this->applyToInvoiceIfPaid($payment);
             $this->loyalty->creditPointsForPayment($payment);
+            $this->notifyPaymentReceived($payment);
 
             return $payment;
         });
@@ -78,6 +79,7 @@ class PaymentService
 
             $this->applyToInvoiceIfPaid($payment);
             $this->loyalty->creditPointsForPayment($payment);
+            $this->notifyPaymentReceived($payment);
 
             return $payment;
         });
@@ -141,10 +143,24 @@ class PaymentService
             $this->applyToInvoiceIfPaid($payment);
             if ($payment->status === 'complete') {
                 $this->loyalty->creditPointsForPayment($payment);
+            $this->notifyPaymentReceived($payment);
             }
 
             return $payment;
         });
+    }
+
+    /** Notification « Paiement reçu » (évènement transactionnel, jamais différé). */
+    private function notifyPaymentReceived(Payment $payment): void
+    {
+        $client = $payment->client ?? \App\Models\Client::find($payment->client_id);
+        if ($client === null) {
+            return;
+        }
+        app(NotificationService::class)->notifyEvent($payment->agency_id, 'payment_received', $client, [
+            'payment' => $payment,
+            'order' => $payment->invoice?->order,
+        ]);
     }
 
     private function applyToInvoiceIfPaid(Payment $payment): void

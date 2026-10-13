@@ -40,6 +40,10 @@ class OrderStatusSynchronizer
                 $order->delivered_at = now();
             }
             $order->save();
+
+            if ($status === 'en_traitement') {
+                app(NotificationService::class)->notifyEvent($order->agency_id, 'order_processing', $order->client, ['order' => $order]);
+            }
         }
 
         return $order;

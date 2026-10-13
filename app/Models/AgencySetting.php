@@ -23,11 +23,15 @@ class AgencySetting extends Model
         'collection_fee', 'delivery_fee', 'minimum_order_amount',
         'loyalty_amount_per_point', 'loyalty_redemption_threshold', 'loyalty_point_expiry_months',
         'offline_sync_interval_minutes', 'offline_retention_days',
+        'notif_quiet_enabled', 'notif_quiet_start', 'notif_quiet_end', 'notif_require_consent', 'notif_unsubscribe_link',
     ];
 
     protected function casts(): array
     {
         return [
+            'notif_quiet_enabled' => 'boolean',
+            'notif_require_consent' => 'boolean',
+            'notif_unsubscribe_link' => 'boolean',
             'order_number_padding' => 'integer',
             'standard_delay_hours' => 'integer',
             'express_delay_hours' => 'integer',

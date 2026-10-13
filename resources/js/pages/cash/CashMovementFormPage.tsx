@@ -9,7 +9,7 @@ import { ActionBar, actionBarGhostButton } from '../../components/ui/ActionBar';
 import { Alert, Spinner } from '../../components/ui/Feedback';
 import { Pill } from '../../components/ui/StatusBadge';
 import { button, card, cardPadded, cx, input, label, select, sectionTitle, textLink } from '../../components/ui/styles';
-import type { CashEligibleValidators, CashMovementCategory, CashMovementType } from '../../types';
+import type { CashSession, CashSummary, CashEligibleValidators, CashMovementCategory, CashMovementType } from '../../types';
 
 const CATEGORIES: CashMovementCategory[] = ['fourniture', 'salaire', 'depot_banque', 'retrait_banque', 'remboursement', 'autre'];
 
@@ -48,6 +48,10 @@ export default function CashMovementFormPage() {
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [validators, setValidators] = useState<CashEligibleValidators | null>(null);
+    // « Caisse concernée » (capture Figma) : solde espèces théorique réel de l'agence et
+    // session de caisse ouverte de l'opérateur, s'il en a une.
+    const [summary, setSummary] = useState<CashSummary | null>(null);
+    const [session, setSession] = useState<CashSession | null>(null);
 
     const agencyId = user?.agency_id ?? activeAgencyId;
     const agencyCode = user?.agency?.code ?? agencies.find((a) => a.id === agencyId)?.code ?? null;
@@ -61,6 +65,8 @@ export default function CashMovementFormPage() {
             .get<CashEligibleValidators>(`/cash/movements/eligible-validators?agency_id=${agencyId}`)
             .then(setValidators)
             .catch(() => setValidators(null));
+        api.get<CashSummary>(`/cash/summary?agency_id=${agencyId}`).then(setSummary).catch(() => setSummary(null));
+        api.get<CashSession | null>('/cash/sessions/mine').then(setSession).catch(() => setSession(null));
     }, [agencyId]);
 
     async function handleSubmit() {
@@ -97,6 +103,7 @@ export default function CashMovementFormPage() {
     const canSubmit = amountFilled && reasonFilled;
     const threshold = validators?.threshold ?? null;
     const isSensitive = threshold !== null && Number(amount || 0) >= threshold;
+    const balanceOk = type === 'entree' || summary === null || !amountFilled || Number(amount) <= summary.expected_balance;
     const signedAmount = amountFilled ? (type === 'entree' ? Number(amount) : -Number(amount)) : null;
 
     return (
@@ -237,6 +244,9 @@ export default function CashMovementFormPage() {
                             <CheckItem done={amountFilled} label={t('cash.movementForm.checklist.amount')} />
                             <CheckItem done={reasonFilled} label={t('cash.movementForm.checklist.reason')} />
                             <CheckItem done={proof !== null} label={t('cash.movementForm.checklist.proof')} />
+                            {type === 'sortie' && summary && (
+                                <CheckItem done={balanceOk} label={balanceOk ? t('cash.movementForm.checklist.balanceOk') : t('cash.movementForm.checklist.balanceLow')} />
+                            )}
                         </ul>
                     </section>
 
@@ -246,9 +256,17 @@ export default function CashMovementFormPage() {
                     </section>
 
                     {agencyCode && (
-                        <section className={cx(card, 'px-4 py-3')}>
-                            <p className="text-xs text-ink-500 dark:text-ink-400">{t('cash.movementForm.agencyCode')}</p>
-                            <p className="font-display text-sm font-bold text-ink-900 dark:text-white">{agencyCode}</p>
+                        <section className={cx(card, 'space-y-1 px-4 py-3')}>
+                            <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs text-ink-500 dark:text-ink-400">{t('cash.movementForm.register')}</p>
+                                {session && <Pill tone={session.status === 'open' ? 'emerald' : 'amber'}>{t(`cashSession.status.${session.status}`)}</Pill>}
+                            </div>
+                            <p className="font-display text-sm font-bold text-ink-900 dark:text-white">
+                                {agencyCode}
+                                {session ? ` · ${session.register_label}` : ''}
+                            </p>
+                            {summary && <p className="text-xs text-ink-600 dark:text-ink-350">{t('cash.movementForm.availableCash', { amount: money(summary.expected_balance) })}</p>}
+                            <p className="text-xs text-ink-500 dark:text-ink-400">{t('cash.movementForm.cashOnly')}</p>
                         </section>
                     )}
                 </aside>

@@ -125,4 +125,42 @@ class OperationalWiringTest extends TestCase
         $this->actingAs($admin)->patchJson("/api/agencies/{$agency->id}/settings", ['offline_enabled' => false, 'loyalty_accrue_on_promotions' => false])
             ->assertOk()->assertJson(['offline_enabled' => false, 'loyalty_accrue_on_promotions' => false]);
     }
+
+    public function test_notify_ready_resends_through_the_notification_pipeline(): void
+    {
+        \Illuminate\Support\Facades\Notification::fake();
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create(['email' => 'ready@example.test']);
+        $order = Order::factory()->create(['agency_id' => $agency->id, 'client_id' => $client->id, 'status' => 'pret']);
+
+        $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/notify-ready")->assertOk()->assertJson(['sent' => 1]);
+        $this->assertDatabaseHas('notification_logs', ['order_id' => $order->id, 'event' => 'order_ready']);
+
+        $other = Order::factory()->create(['agency_id' => Agency::factory()->create(['pressing_id' => $agency->pressing_id])->id]);
+        $this->actingAs($accueil)->postJson("/api/orders/{$other->id}/notify-ready")->assertForbidden();
+    }
+
+    public function test_agency_detail_exposes_hours_cash_and_deposit_summaries(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $admin = $this->makeUser('admin');
+
+        $this->actingAs($admin)->patchJson("/api/agencies/{$agency->id}", ['opens_at' => '00:00', 'closes_at' => '23:59'])->assertOk();
+        $this->actingAs($admin)->patchJson("/api/agencies/{$agency->id}", ['opens_at' => '18:00', 'closes_at' => '08:00'])->assertStatus(422);
+
+        $client = Client::factory()->for($agency, 'agency')->create();
+        Order::factory()->create(['agency_id' => $agency->id, 'client_id' => $client->id, 'is_express' => true, 'total_amount' => 4000]);
+        Order::factory()->create(['agency_id' => $agency->id, 'client_id' => $client->id, 'is_express' => false, 'total_amount' => 2000]);
+
+        $detail = $this->actingAs($admin)->getJson("/api/multi-agencies/{$agency->id}")->assertOk();
+        $detail->assertJsonPath('agency.opens_at', '00:00');
+        $detail->assertJsonPath('agency.is_open_now', true);
+        $detail->assertJsonPath('deposits_summary.deposits', 2);
+        $detail->assertJsonPath('deposits_summary.express', 1);
+        $detail->assertJsonPath('deposits_summary.average_basket', 3000);
+        $this->assertArrayHasKey('expected_balance', $detail->json('cash_today'));
+    }
 }

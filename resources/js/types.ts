@@ -66,6 +66,8 @@ export interface Agency {
     phone: string | null;
     unclaimed_item_threshold_days: number;
     workshop_capacity: number | null;
+    opens_at?: string | null;
+    closes_at?: string | null;
     is_active: boolean;
     users_count?: number;
     clients_count?: number;
@@ -1160,7 +1162,18 @@ export interface MultiAgencyTeamMember {
 }
 
 export interface MultiAgencyDetail {
-    agency: { id: number; code: string; name: string; city: string | null; address: string | null; phone: string | null; is_active: boolean };
+    agency: {
+        id: number;
+        code: string;
+        name: string;
+        city: string | null;
+        address: string | null;
+        phone: string | null;
+        is_active: boolean;
+        opens_at: string | null;
+        closes_at: string | null;
+        is_open_now: boolean | null;
+    };
     from: string;
     to: string;
     kpis: MultiAgencyRow;
@@ -1170,6 +1183,16 @@ export interface MultiAgencyDetail {
     clients: { active: number; new_this_period: number };
     team_present: MultiAgencyTeamMember[];
     recent_activity: AuditLog[];
+    cash_today: { expected_balance: number; collected_today: number; expenses_today: number; last_closure: { variance: number; closed_at: string } | null };
+    deposits_summary: {
+        deposits: number;
+        express: number;
+        express_rate: number;
+        pickups: number;
+        on_time_rate: number | null;
+        average_basket: number;
+        deliveries: number;
+    };
 }
 
 /* Console superadmin plateforme (Spark) — royaume d'authentification et de données

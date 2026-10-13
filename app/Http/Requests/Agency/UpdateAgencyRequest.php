@@ -23,6 +23,8 @@ class UpdateAgencyRequest extends FormRequest
             'unclaimed_item_threshold_days' => ['sometimes', 'integer', 'min:1'],
             'is_active' => ['sometimes', 'boolean'],
             'workshop_capacity' => ['nullable', 'integer', 'min:1'],
+            'opens_at' => ['nullable', 'date_format:H:i'],
+            'closes_at' => ['nullable', 'date_format:H:i', 'after:opens_at'],
         ];
     }
 }

@@ -11,6 +11,8 @@ import {
     UsersRound,
     Wallet,
     Workflow,
+    Phone,
+    Settings2,
 } from 'lucide-react';
 import { useI18n } from '../../contexts/I18nContext';
 import { useFormat } from '../../lib/format';
@@ -22,7 +24,9 @@ import { Alert, EmptyState, LoadingState } from '../../components/ui/Feedback';
 import { ChipToggle, DeltaBadge, SectionCard, StatCard, percentChange } from '../../components/ui/Metrics';
 import { Pill } from '../../components/ui/StatusBadge';
 import RevenueBars from '../../components/ui/RevenueBars';
-import { card, cx, input, label, textLink } from '../../components/ui/styles';
+import { button, card, cx, input, label, textLink } from '../../components/ui/styles';
+import { useAuth } from '../../contexts/AuthContext';
+import { hasPermission } from '../../lib/permissions';
 import type { MultiAgencyDetail } from '../../types';
 
 const PRESETS: PeriodPreset[] = ['today', '7d', '30d', 'month'];
@@ -37,6 +41,7 @@ const WORKSHOP_COLUMNS: { key: keyof MultiAgencyDetail['workshop']['columns']; t
 export default function MultiAgencyDetailPage() {
     const { id } = useParams<{ id: string }>();
     const { t } = useI18n();
+    const { user } = useAuth();
     const { money, dateTime, dayMonth } = useFormat();
 
     const [range, setRange] = useState(() => presetRange('month'));
@@ -98,7 +103,31 @@ export default function MultiAgencyDetailPage() {
                         title={data.agency.name}
                         subtitle={[data.agency.address, data.agency.city].filter(Boolean).join(' — ') || undefined}
                         icon={MapPin}
-                        actions={data.agency.is_active ? <Pill tone="emerald">{t('agency.active')}</Pill> : <Pill tone="rose">{t('agency.inactive')}</Pill>}
+                        actions={
+                            <div className="flex flex-wrap items-center gap-2">
+                                {!data.agency.is_active ? (
+                                    <Pill tone="rose">{t('agency.inactive')}</Pill>
+                                ) : data.agency.is_open_now === null ? (
+                                    <Pill tone="emerald">{t('agency.active')}</Pill>
+                                ) : (
+                                    <Pill tone={data.agency.is_open_now ? 'emerald' : 'neutral'}>
+                                        {data.agency.is_open_now ? t('multiAgency.open') : t('multiAgency.closed')} · {data.agency.opens_at}–{data.agency.closes_at}
+                                    </Pill>
+                                )}
+                                {data.agency.phone && (
+                                    <a href={`tel:${data.agency.phone.replace(/\s+/g, '')}`} className={button('secondary', 'sm')}>
+                                        <Phone aria-hidden="true" className="h-4 w-4" />
+                                        {t('multiAgency.contact')}
+                                    </a>
+                                )}
+                                {hasPermission(user, 'agencies.manage') && (
+                                    <Link to={`/agencies/${data.agency.id}/edit`} className={button('primary', 'sm')}>
+                                        <Settings2 aria-hidden="true" className="h-4 w-4" />
+                                        {t('multiAgency.manage')}
+                                    </Link>
+                                )}
+                            </div>
+                        }
                     />
 
                     <section aria-labelledby="multi-agency-detail-period" className={cx(card, 'space-y-4 p-5 sm:p-6')}>
@@ -135,7 +164,7 @@ export default function MultiAgencyDetailPage() {
                         <RevenueBars series={data.revenue_series} money={money} dateShort={dayMonth} />
                     </SectionCard>
 
-                    <div className="grid items-start gap-6 lg:grid-cols-2">
+                    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
                         <SectionCard id="multi-agency-detail-workshop" title={t('multiAgency.workshop.title')} subtitle={t('multiAgency.workshop.subtitle')} headerExtra={<Workflow aria-hidden="true" className="h-4 w-4 text-ink-400" />}>
                             <p className="text-sm text-ink-600 dark:text-ink-350">
                                 {t('multiAgency.workshop.capacity', { active: data.workshop.active_count, capacity: data.workshop.capacity })}
@@ -175,7 +204,40 @@ export default function MultiAgencyDetailPage() {
                         )}
                     </div>
 
-                    <div className="grid items-start gap-6 lg:grid-cols-2">
+                    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+                        <SectionCard id="multi-agency-detail-deposits" title={t('multiAgency.deposits.title')} subtitle={t('multiAgency.deposits.subtitle', { deposits: data.deposits_summary.deposits, pickups: data.deposits_summary.pickups })}>
+                            <dl className="divide-y divide-ink-100 text-sm dark:divide-ink-800">
+                                <Row label={t('multiAgency.deposits.express')} hint={t('multiAgency.deposits.expressHint', { percent: data.deposits_summary.express_rate })} value={String(data.deposits_summary.express)} />
+                                <Row label={t('multiAgency.deposits.onTime')} value={data.deposits_summary.on_time_rate === null ? '—' : `${data.deposits_summary.on_time_rate} %`} />
+                                <Row label={t('multiAgency.table.averageBasket')} value={money(data.deposits_summary.average_basket)} />
+                                <Row label={t('multiAgency.deposits.deliveries')} value={String(data.deposits_summary.deliveries)} />
+                            </dl>
+                            <div className="flex flex-wrap gap-2">
+                                <Link to="/" className={button('primary', 'sm')}>{t('nav.newOrder')}</Link>
+                                <Link to="/pickups" className={button('secondary', 'sm')}>{t('multiAgency.deposits.recordPickup')}</Link>
+                            </div>
+                        </SectionCard>
+
+                        <SectionCard id="multi-agency-detail-cash" title={t('multiAgency.cash.title')} subtitle={t('multiAgency.cash.subtitle')}>
+                            <dl className="divide-y divide-ink-100 text-sm dark:divide-ink-800">
+                                <Row label={t('multiAgency.cash.expected')} value={money(data.cash_today.expected_balance)} />
+                                <Row label={t('multiAgency.cash.collected')} value={`+${money(data.cash_today.collected_today)}`} />
+                                <Row label={t('multiAgency.cash.expenses')} value={`−${money(data.cash_today.expenses_today)}`} />
+                                <Row
+                                    label={t('multiAgency.cash.variance')}
+                                    value={data.cash_today.last_closure ? money(data.cash_today.last_closure.variance) : t('dailyReport.noClosureYet')}
+                                />
+                            </dl>
+                            {hasPermission(user, 'payments.manage') && (
+                                <div className="flex flex-wrap gap-2">
+                                    <Link to="/cash" className={button('primary', 'sm')}>{t('multiAgency.cash.open')}</Link>
+                                    <Link to="/cash/closures/new" className={button('secondary', 'sm')}>{t('cash.closeRegister')}</Link>
+                                </div>
+                            )}
+                        </SectionCard>
+                    </div>
+
+                    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
                         <SectionCard id="multi-agency-detail-clients" title={t('multiAgency.clients.title')} headerExtra={<Gem aria-hidden="true" className="h-4 w-4 text-ink-400" />}>
                             <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
                                 <SimpleMetric label={t('multiAgency.clients.active')} value={data.clients.active} />
@@ -194,7 +256,7 @@ export default function MultiAgencyDetailPage() {
                         </SectionCard>
                     </div>
 
-                    <div className="grid items-start gap-6 lg:grid-cols-2">
+                    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
                         <SectionCard id="multi-agency-detail-team" title={t('multiAgency.team.title')} subtitle={t('multiAgency.team.subtitle')} headerExtra={<UsersRound aria-hidden="true" className="h-4 w-4 text-ink-400" />}>
                             {data.team_present.length === 0 ? (
                                 <EmptyState compact icon={UsersRound} title={t('multiAgency.team.empty')} />
@@ -251,6 +313,18 @@ function ComparisonMetric({ label: title, mine, delta, positiveIsGood = true }: 
                 <span className="truncate">{mine}</span>
                 {delta !== null && <DeltaBadge value={delta} positiveIsGood={positiveIsGood} />}
             </dd>
+        </div>
+    );
+}
+
+function Row({ label: rowLabel, hint, value }: { label: string; hint?: string; value: string }) {
+    return (
+        <div className="flex items-center justify-between gap-3 py-2.5">
+            <dt className="min-w-0">
+                <span className="block font-medium text-ink-800 dark:text-ink-100">{rowLabel}</span>
+                {hint && <span className="block text-xs text-ink-500 dark:text-ink-400">{hint}</span>}
+            </dt>
+            <dd className="shrink-0 font-semibold tabular-nums text-ink-900 dark:text-white">{value}</dd>
         </div>
     );
 }

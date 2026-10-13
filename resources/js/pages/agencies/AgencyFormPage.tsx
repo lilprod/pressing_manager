@@ -24,6 +24,8 @@ export default function AgencyFormPage() {
     const [phone, setPhone] = useState('');
     const [unclaimedDays, setUnclaimedDays] = useState('30');
     const [workshopCapacity, setWorkshopCapacity] = useState('');
+    const [opensAt, setOpensAt] = useState('');
+    const [closesAt, setClosesAt] = useState('');
     const [isActive, setIsActive] = useState(true);
 
     const [error, setError] = useState<string | null>(null);
@@ -41,6 +43,8 @@ export default function AgencyFormPage() {
                 setPhone(agency.phone ?? '');
                 setUnclaimedDays(String(agency.unclaimed_item_threshold_days));
                 setWorkshopCapacity(agency.workshop_capacity != null ? String(agency.workshop_capacity) : '');
+                setOpensAt(agency.opens_at ? agency.opens_at.slice(0, 5) : '');
+                setClosesAt(agency.closes_at ? agency.closes_at.slice(0, 5) : '');
                 setIsActive(agency.is_active);
             })
             .catch((err) => {
@@ -61,6 +65,8 @@ export default function AgencyFormPage() {
                 phone: phone || null,
                 unclaimed_item_threshold_days: Number(unclaimedDays),
                 workshop_capacity: workshopCapacity ? Number(workshopCapacity) : null,
+                opens_at: opensAt || null,
+                closes_at: closesAt || null,
                 is_active: isEdit ? isActive : undefined,
             };
 
@@ -164,6 +170,15 @@ export default function AgencyFormPage() {
                             className={cx(input, 'w-full')}
                         />
                         <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{t('agency.workshopCapacityHint')}</p>
+                    </label>
+                    <label className="block">
+                        <span className={label}>{t('agency.opensAt')}</span>
+                        <input type="time" value={opensAt} onChange={(e) => setOpensAt(e.target.value)} className={cx(input, 'w-full')} />
+                    </label>
+                    <label className="block">
+                        <span className={label}>{t('agency.closesAt')}</span>
+                        <input type="time" value={closesAt} onChange={(e) => setClosesAt(e.target.value)} className={cx(input, 'w-full')} />
+                        <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{t('agency.hoursHint')}</p>
                     </label>
                 </div>
 

@@ -99,6 +99,12 @@ class MultiAgencyService
                 'address' => $agency->address,
                 'phone' => $agency->phone,
                 'is_active' => $agency->is_active,
+                'opens_at' => $agency->opens_at ? substr($agency->opens_at, 0, 5) : null,
+                'closes_at' => $agency->closes_at ? substr($agency->closes_at, 0, 5) : null,
+                // Ouverte/fermée seulement si des horaires sont configurés (jamais déduit).
+                'is_open_now' => $agency->opens_at && $agency->closes_at
+                    ? now()->format('H:i') >= substr($agency->opens_at, 0, 5) && now()->format('H:i') < substr($agency->closes_at, 0, 5)
+                    : null,
             ],
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
@@ -109,6 +115,46 @@ class MultiAgencyService
             'clients' => $this->clientSummary($agency, $from, $to),
             'team_present' => $this->teamPresent($agency),
             'recent_activity' => $this->recentActivity($agency),
+            'cash_today' => $this->cashToday($agency),
+            'deposits_summary' => $this->depositsSummary($agency, $from, $to),
+        ];
+    }
+
+    /** « Caisse & mouvements » : situation réelle du jour (même calculs que le Centre de caisse). */
+    private function cashToday(Agency $agency): array
+    {
+        $cash = app(CashService::class);
+        $stats = $cash->dailyStats($agency->id, now());
+        $preview = $cash->previewBalance($agency->id);
+
+        return [
+            'expected_balance' => (int) $preview['expected_balance'],
+            'collected_today' => (int) $stats['revenue_today'],
+            'expenses_today' => (int) $stats['expenses_today'],
+            'last_closure' => $stats['last_closure'] ?? null,
+        ];
+    }
+
+    /** « Dépôts & retraits » sur la période : express, retraits dans les délais, panier, livraisons. */
+    private function depositsSummary(Agency $agency, Carbon $from, Carbon $to): array
+    {
+        $orders = Order::query()->where('agency_id', $agency->id)->whereBetween('created_at', [$from, $to]);
+        $count = (clone $orders)->count();
+        $express = (clone $orders)->where('is_express', true)->count();
+
+        $pickups = \App\Models\OrderPickup::query()->where('agency_id', $agency->id)->whereBetween('processed_at', [$from, $to])->with('order:id,promised_at');
+        $pickupRows = $pickups->get(['id', 'order_id', 'processed_at']);
+        $withPromise = $pickupRows->filter(fn ($p) => $p->order?->promised_at !== null);
+        $onTime = $withPromise->filter(fn ($p) => $p->processed_at->lte($p->order->promised_at->copy()->endOfDay()))->count();
+
+        return [
+            'deposits' => $count,
+            'express' => $express,
+            'express_rate' => $count > 0 ? round($express / $count * 100, 1) : 0.0,
+            'pickups' => $pickupRows->count(),
+            'on_time_rate' => $withPromise->count() > 0 ? round($onTime / $withPromise->count() * 100, 1) : null,
+            'average_basket' => $count > 0 ? (int) round((clone $orders)->avg('total_amount')) : 0,
+            'deliveries' => \App\Models\Delivery::query()->where('agency_id', $agency->id)->whereBetween('created_at', [$from, $to])->count(),
         ];
     }
 

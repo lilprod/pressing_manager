@@ -131,4 +131,24 @@ class PickupController extends ApiController
             return max(0, $invoice->total_amount - $paid);
         });
     }
+
+    /**
+     * « Notifier » (Traiter le retrait, capture Figma) : renvoie au client l'avis
+     * « commande prête » via le pipeline réel (canaux de l'agence, modèle, horaires
+     * silencieux) — journalisé dans notification_logs comme tout autre envoi.
+     */
+    public function notify(Request $request, Order $order): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'orders.manage');
+        $this->authorizeAgency($request->user(), $order->agency_id);
+        if ($order->client === null) {
+            return response()->json(['message' => 'Aucun client rattaché à ce dépôt.'], 422);
+        }
+
+        $before = \App\Models\NotificationLog::query()->where('order_id', $order->id)->count();
+        app(\App\Services\NotificationService::class)->notifyEvent($order->agency_id, 'order_ready', $order->client, ['order' => $order]);
+        $sent = \App\Models\NotificationLog::query()->where('order_id', $order->id)->count() - $before;
+
+        return response()->json(['sent' => $sent]);
+    }
 }

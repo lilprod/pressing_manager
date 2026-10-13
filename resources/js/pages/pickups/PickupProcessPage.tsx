@@ -14,6 +14,7 @@ import {
     Users,
     WifiOff,
     Workflow,
+    Send,
 } from 'lucide-react';
 import { useI18n } from '../../contexts/I18nContext';
 import { api, ApiError } from '../../lib/api';
@@ -72,7 +73,7 @@ export default function PickupProcessPage() {
                 if (client) setRecipientName(`${client.first_name} ${client.last_name}`);
                 const initial: Record<number, number> = {};
                 res.items
-                    .filter((item) => ['pret', 'non_recupere'].includes(item.status))
+                    .filter((item) => ['pret', 'non_recupere', 'controle_qualite'].includes(item.status))
                     .forEach((item) => {
                         const remaining = item.quantity - item.quantity_delivered;
                         if (remaining > 0) initial[item.id] = remaining;
@@ -88,7 +89,7 @@ export default function PickupProcessPage() {
     }, [orderId]);
 
     const eligibleItems = useMemo(
-        () => (order?.items ?? []).filter((item) => ['pret', 'non_recupere'].includes(item.status) && item.quantity - item.quantity_delivered > 0),
+        () => (order?.items ?? []).filter((item) => ['pret', 'non_recupere', 'controle_qualite'].includes(item.status) && item.quantity - item.quantity_delivered > 0),
         [order],
     );
 
@@ -136,6 +137,33 @@ export default function PickupProcessPage() {
     }
 
     const selectedCount = Object.values(quantities).filter((q) => q > 0).length;
+    const totalPieces = eligibleItems.reduce((sum, item) => sum + item.quantity - item.quantity_delivered, 0);
+    const selectedPieces = Object.values(quantities).reduce((sum, q) => sum + q, 0);
+    const isFullPickup = totalPieces > 0 && selectedPieces === totalPieces;
+
+    // Bascule « Retrait total / Retrait partiel » (capture Figma) : total = toutes les
+    // pièces restantes ; partiel = on repart de zéro et l'on choisit pièce par pièce.
+    function selectAll() {
+        const next: Record<number, number> = {};
+        eligibleItems.forEach((item) => (next[item.id] = item.quantity - item.quantity_delivered));
+        setQuantities(next);
+    }
+
+    const [notifying, setNotifying] = useState(false);
+    const [notifyFeedback, setNotifyFeedback] = useState<string | null>(null);
+    async function notifyClient() {
+        if (!order) return;
+        setNotifying(true);
+        setNotifyFeedback(null);
+        try {
+            const result = await api.post<{ sent: number }>(`/orders/${order.id}/notify-ready`, {});
+            setNotifyFeedback(result.sent > 0 ? t('pickup.notifySent', { count: result.sent }) : t('pickup.notifyNone'));
+        } catch (err) {
+            setNotifyFeedback(err instanceof ApiError ? err.message : t('common.error'));
+        } finally {
+            setNotifying(false);
+        }
+    }
     const canSubmit =
         !busy &&
         selectedCount > 0 &&
@@ -207,6 +235,10 @@ export default function PickupProcessPage() {
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => void notifyClient()} disabled={notifying} className={button('secondary', 'sm')}>
+                            {notifying ? <Spinner className="h-4 w-4" /> : <Send aria-hidden="true" className="h-4 w-4" />}
+                            {t('pickup.notify')}
+                        </button>
                         <button type="button" onClick={() => setPrinting(true)} className={button('secondary', 'sm')}>
                             <Printer aria-hidden="true" className="h-4 w-4" />
                             {t('pickup.printReceipt')}
@@ -255,6 +287,7 @@ export default function PickupProcessPage() {
             </section>
 
             {error && <Alert tone="error">{error}</Alert>}
+            {notifyFeedback && <Alert tone="info">{notifyFeedback}</Alert>}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="space-y-4 lg:col-span-2">
@@ -265,6 +298,24 @@ export default function PickupProcessPage() {
                     ) : (
                         <section className={cx(card, 'overflow-hidden')}>
                             <h2 className={cx(sectionTitle, 'px-5 pt-5')}>{t('pickup.itemsVerification')}</h2>
+                            <div role="group" aria-label={t('pickup.mode')} className="mt-3 grid grid-cols-1 gap-2 px-5 sm:grid-cols-2">
+                                <button
+                                    type="button"
+                                    onClick={selectAll}
+                                    aria-pressed={isFullPickup}
+                                    className={cx(button(isFullPickup ? 'accent' : 'secondary', 'sm'), 'w-full')}
+                                >
+                                    {t('pickup.modeFull', { count: totalPieces })}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setQuantities({})}
+                                    aria-pressed={!isFullPickup}
+                                    className={cx(button(!isFullPickup ? 'accent' : 'secondary', 'sm'), 'w-full')}
+                                >
+                                    {t('pickup.modePartial', { count: selectedPieces })}
+                                </button>
+                            </div>
                             <div className="mt-3 overflow-x-auto">
                                 <div className="min-w-[680px]">
                                     <div

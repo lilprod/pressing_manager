@@ -17,7 +17,7 @@ import type { AuditLog, Paginated } from '../types';
  * Order/OrderItem/Client/Payment/Invoice/Delivery/CashMovement/CashClosure/StockMovement).
  * Permission dédiée `audit.view` (admin/manager). */
 
-const TYPES = ['order', 'order_item', 'client', 'payment', 'invoice', 'delivery', 'cash_movement', 'cash_closure', 'stock_movement'] as const;
+const TYPES = ['order', 'order_item', 'client', 'payment', 'invoice', 'delivery', 'cash_movement', 'cash_closure', 'stock_movement', 'cash_session'] as const;
 
 export default function AuditLogsPage() {
     const { t } = useI18n();

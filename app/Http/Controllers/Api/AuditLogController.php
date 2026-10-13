@@ -35,6 +35,7 @@ class AuditLogController extends ApiController
         'agency' => Agency::class,
         'app_setting' => AppSetting::class,
         'agency_setting' => AgencySetting::class,
+        'cash_session' => \App\Models\CashSession::class,
     ];
 
     /** Journal d'audit global (écran « Audit & logs »). */

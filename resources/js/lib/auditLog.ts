@@ -16,6 +16,7 @@ const TYPE_LABEL_KEYS: Record<string, string> = {
     Agency: 'audit.type.agency',
     AppSetting: 'audit.type.appSetting',
     AgencySetting: 'audit.type.agencySetting',
+    CashSession: 'audit.type.cashSession',
 };
 
 const PAYMENT_METHOD_KEYS: Record<string, string> = {

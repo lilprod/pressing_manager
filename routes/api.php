@@ -241,6 +241,7 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::get('/pickups', [PickupController::class, 'index']);
     Route::get('/pickups/summary', [PickupController::class, 'summary']);
     Route::post('/orders/{order}/pickups', [PickupController::class, 'store']);
+    Route::post('/orders/{order}/notify-ready', [PickupController::class, 'notify'])->middleware('throttle:6,1');
 
     Route::patch('/order-items/{orderItem}/status', [OrderItemController::class, 'updateStatus']);
     Route::get('/order-items/{orderItem}/qr-code', [OrderItemController::class, 'qrImage']);

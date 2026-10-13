@@ -18,3 +18,10 @@ export function categoryMeta(category: string): { icon: LucideIcon; tone: Tone }
             return { icon: Tag, tone: 'neutral' };
     }
 }
+
+const KNOWN_CATEGORIES = ['nettoyage', 'lavage', 'repassage', 'retouche', 'teinture', 'autre'];
+
+/** Libellé d'une famille d'articles : traduction pour les valeurs historiques, texte libre sinon. */
+export function categoryLabel(category: string, t: (key: string) => string): string {
+    return KNOWN_CATEGORIES.includes(category) ? t(`service.category.${category}`) : category;
+}

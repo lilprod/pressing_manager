@@ -240,8 +240,7 @@ class OrderController extends ApiController
             $total = 0;
             $maxDurationHours = 0;
             foreach ($data['items'] as $itemData) {
-                $service = $agency->services()->findOrFail($itemData['service_id']);
-                $maxDurationHours = max($maxDurationHours, $service->estimated_duration_hours);
+                $service = $agency->services()->with('treatmentRates')->findOrFail($itemData['service_id']);
 
                 $treatmentType = null;
                 if (! empty($itemData['treatment_type_id'])) {
@@ -251,37 +250,37 @@ class OrderController extends ApiController
                     }
                 }
 
+                // Délai par traitement défini sur la fiche article (Classique 72 h,
+                // Express 24 h…), sinon délai général de l'article.
+                $maxDurationHours = max($maxDurationHours, $this->pricing->delayFor($service, $treatmentType));
+
                 $weightKg = $itemData['weight_kg'] ?? null;
-                if ($weightKg !== null) {
-                    if (! in_array($service->billing_mode, ['kg', 'mixte'], true)) {
-                        throw new HttpException(422, "« {$service->name} » n'est pas facturable au kilo.");
-                    }
-
-                    $tier = $this->pricing->resolveTier($service, (float) $weightKg);
-                    if ($tier === null) {
-                        throw new HttpException(422, "Aucune grille de prix ne couvre {$weightKg} kg pour « {$service->name} ».");
-                    }
-
-                    // Un dépôt au kilo est traité comme un seul lot (quantity = 1) : le
-                    // retrait partiel par quantité n'a pas de sens pour un poids global.
-                    $quantity = 1;
-                    $unitPrice = $this->pricing->roundAmount($service, (int) round($tier->price_per_kg * $weightKg));
-                } else {
-                    $quantity = $itemData['quantity'];
-                    $unitPrice = $service->pivot->price_override ?? $service->base_price;
+                if ($weightKg !== null && ! in_array($service->billing_mode, ['kg', 'mixte'], true)) {
+                    throw new HttpException(422, "« {$service->name} » n'est pas facturable au kilo.");
                 }
 
-                // CDC §11.1-11.3 : un traitement (Classique/Express/Repassage…) applique un
-                // ratio automatique au prix de l'article — additif, une ligne sans traitement
-                // choisi garde exactement le comportement d'avant (prix pièce ou grille kilo).
-                if ($treatmentType !== null) {
-                    $unitPrice = $this->pricing->roundAmount($service, $this->pricing->applyTreatmentRatio($unitPrice, $treatmentType));
+                // Prix unique de vérité (ServicePricingService::priceFor) : prix explicite
+                // du traitement sur l'article, sinon ratio du traitement (CDC §11.1-11.3),
+                // prix local d'agence appliqué proportionnellement.
+                $unitPrice = $this->pricing->priceFor($service, $treatmentType, $service->pivot->price_override, $weightKg !== null ? (float) $weightKg : null);
+                if ($unitPrice === null) {
+                    throw new HttpException(422, "Aucune grille de prix ne couvre {$weightKg} kg pour « {$service->name} ».");
+                }
+                // Un dépôt au kilo est traité comme un seul lot (quantity = 1) : le
+                // retrait partiel par quantité n'a pas de sens pour un poids global.
+                $quantity = $weightKg !== null ? 1 : $itemData['quantity'];
+
+                // Rendu (sur cintre, plié…) : seulement parmi les rendus compatibles de l'article.
+                $finishOptionId = $itemData['finish_option_id'] ?? null;
+                if ($finishOptionId !== null && ! $service->finishOptions()->where('finish_options.id', $finishOptionId)->where('finish_options.is_active', true)->exists()) {
+                    throw new HttpException(422, "Ce rendu n'est pas compatible avec « {$service->name} ».");
                 }
 
                 $item = $order->items()->create([
                     'agency_id' => $agencyId,
                     'service_id' => $service->id,
                     'treatment_type_id' => $treatmentType?->id,
+                    'finish_option_id' => $finishOptionId,
                     'qr_code' => $this->qrCodes->generateCode($agency->code),
                     'description' => $itemData['description'] ?? null,
                     'intake_notes' => $itemData['intake_notes'] ?? null,
@@ -454,7 +453,7 @@ class OrderController extends ApiController
         $this->authorizeAgency($request->user(), $order->agency_id);
 
         $order->load(
-            'items.service', 'items.treatmentType', 'items.intakeConditions', 'items.statusHistories.actor',
+            'items.service', 'items.treatmentType', 'items.finishOption:id,name', 'items.intakeConditions', 'items.statusHistories.actor',
             'client', 'invoice.payments.receiver', 'agency', 'pickups.items.orderItem', 'pickups.processor', 'creator',
             'washer', 'sorter',
         );

@@ -70,7 +70,7 @@ class ServiceExportImportTest extends TestCase
         $admin = $this->makeUser('admin');
         $file = $this->makeImportFile([
             ['IMP-03', 'Chemise', 'nettoyage', 1500, 24],
-            ['IMP-04', 'Ligne invalide', 'categorie-inexistante', 2000, 24],
+            ['IMP-04', 'Ligne invalide (prix négatif)', 'Cérémonie', -2000, 24],
         ]);
 
         $response = $this->actingAs($admin)->post('/api/services/import', ['file' => $file]);

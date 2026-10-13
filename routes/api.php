@@ -204,6 +204,9 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::get('/services/export', [ServiceController::class, 'export']);
     Route::post('/services/import', [ServiceController::class, 'import']);
     Route::get('/services/price-history', [ServiceController::class, 'priceHistory']);
+    Route::get('/services/categories', [ServiceController::class, 'categories']);
+    Route::put('/services/{service}/draft', [ServiceController::class, 'saveDraft']);
+    Route::delete('/services/{service}/draft', [ServiceController::class, 'discardDraft']);
     Route::post('/services/{service}/duplicate', [ServiceController::class, 'duplicate']);
     Route::get('/services/{service}/availability', [ServiceController::class, 'availability']);
     Route::put('/services/{service}/availability', [ServiceController::class, 'updateAvailability']);
@@ -213,6 +216,9 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::patch('/agencies/{agency}/services/{service}', [ServiceController::class, 'updatePricing']);
 
     Route::get('/intake-conditions', [IntakeConditionController::class, 'index']);
+    Route::get('/finish-options', [\App\Http\Controllers\Api\FinishOptionController::class, 'index']);
+    Route::post('/finish-options', [\App\Http\Controllers\Api\FinishOptionController::class, 'store']);
+    Route::patch('/finish-options/{finishOption}', [\App\Http\Controllers\Api\FinishOptionController::class, 'update']);
 
     Route::get('/loyalty-tiers', [LoyaltyTierController::class, 'index']);
     Route::post('/loyalty-tiers', [LoyaltyTierController::class, 'store']);

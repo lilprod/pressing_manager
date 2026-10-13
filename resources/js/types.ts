@@ -470,7 +470,23 @@ export interface CashClosureOperator {
     status: CashOperatorStatus;
 }
 
-export type ServiceCategory = 'nettoyage' | 'lavage' | 'repassage' | 'retouche' | 'teinture' | 'autre';
+/** Famille d'articles : valeurs historiques traduites + familles libres du pressing (ex. « Cérémonie »). */
+export type ServiceCategory = string;
+
+/** Prix/délai explicites d'un article pour un traitement (null = ratio / délai de l'article). */
+export interface ServiceTreatmentRate {
+    treatment_type_id: number;
+    price: number | null;
+    delay_hours: number | null;
+}
+
+/** Rendu de livraison du linge (sur cintre, plié, sous housse…). */
+export interface FinishOption {
+    id: number;
+    name: string;
+    is_active: boolean;
+    sort_order: number;
+}
 export type ServiceBillingMode = 'piece' | 'kg' | 'mixte';
 export type ServicePriority = 'standard' | 'haute';
 
@@ -480,12 +496,14 @@ export interface ServicePriceTier {
     weight_min: number;
     weight_max: number | null;
     price_per_kg: number;
+    /** Prix au kilo explicites par traitement, clés = id du traitement. */
+    treatment_prices?: Record<string, number> | null;
 }
 
 export interface ServicePriceHistory {
     id: number;
     service_id: number;
-    field: 'base_price' | 'price_tiers';
+    field: 'base_price' | 'price_tiers' | 'treatment_rates';
     old_value: string | null;
     new_value: string | null;
     changed_at: string;
@@ -517,6 +535,14 @@ export interface Service {
     available_agencies_count?: number;
     total_agencies_count?: number;
     treatment_prices?: Record<string, number> | null;
+    treatment_rates?: ServiceTreatmentRate[];
+    finish_options?: { id: number; name: string }[];
+    associated_services?: { id: number; code?: string; name?: string }[];
+    home_delivery_enabled?: boolean;
+    has_draft?: boolean;
+    draft_data?: Record<string, unknown> | null;
+    draft_saved_at?: string | null;
+    draft_saver?: { id: number; name: string } | null;
 }
 
 export interface ServiceStats {
@@ -588,6 +614,8 @@ export interface OrderItem {
     service?: Service;
     treatment_type_id: number | null;
     treatment_type?: TreatmentType | null;
+    finish_option_id?: number | null;
+    finish_option?: { id: number; name: string } | null;
     qr_code: string;
     description: string | null;
     intake_notes: string | null;

@@ -4083,3 +4083,45 @@ par lot (`b8891d9`, `3a6a9bd`, `712dfa5`, `2dc756b`, `2aa5c68`, `a1a0c23`, `27eb
   parité i18n fr/en stricte, Playwright 1440 px et 390 px sans débordement sur chaque
   écran touché, plus parcours réels (session de caisse ouverte/clôturée via l'API,
   modification d'agence superadmin persistée en base puis remise à l'état initial).
+
+**Fiche article « Modifier l'article » + harmonisation article/service (2026-10-13)**
+— capture fournie par l'utilisateur (« La gestion des articles semble différente chez
+nous ou on parle de services »). Constat : le modèle `Service` *est* l'article du
+catalogue (le code garde le nom technique `services`, renommage de table jugé trop
+risqué), mais l'UI disait « service » par endroits et l'article ne portait ni prix ni
+délai par traitement (seulement un ratio global), ni rendus, ni services associés, ni
+brouillon. Fait :
+- **Vocabulaire** : toute l'UI dit « article » (fr) / « item » (en) — comptoir, catalogue,
+  fiche. Clés i18n inchangées (`service.*`), seules les valeurs.
+- **Familles libres** : contrainte `services_category_check` supprimée, `category` texte
+  libre (≤ 60) avec autocomplétion (`GET /services/categories`) ; les anciennes valeurs
+  restent traduites (`categoryLabel()`), les familles libres (« Cérémonie ») affichées
+  telles quelles au catalogue et au comptoir (regroupement compris).
+- **Prix et délai par traitement** : table `service_treatment_rates`… en réalité
+  `service_treatment_prices` (relation `Service::treatmentRates()`, payload
+  `treatment_rates` — nom distinct de la carte `treatment_prices` du catalogue pour
+  éviter la collision JSON). Le traitement de ratio 1 porte le prix de base, les autres
+  un prix explicite (vide = ratio). `service_price_tiers.treatment_prices` (JSON, clés =
+  id de traitement) pour les grilles au kilo. **Source unique** :
+  `ServicePricingService::priceFor()` (comptoir + catalogue) et `delayFor()` (date
+  promise) ; prix local d'agence appliqué proportionnellement au prix explicite. Sans
+  prix explicite, comportement strictement identique à avant (tests existants inchangés).
+- **Rendus compatibles** : référentiel `finish_options` par pressing (4 défauts, CRUD sur
+  l'écran Types de traitement), pivot `service_finish_option`, `order_items.finish_option_id`
+  choisi au comptoir et refusé (422) s'il n'est pas compatible ; imprimé sur ticket/facture.
+- **Services associés** : pivot `service_associations` (autres articles), suggérés au
+  comptoir (« Souvent associé : + … »), jamais ajoutés d'office ; `home_delivery_enabled`
+  par article, appliqué par `DeliveryService::createForOrder()` (422). « Collecte » non
+  reproduite : aucune collecte à domicile n'existe.
+- **Brouillon** : `services.draft_data/draft_saved_at/draft_saved_by` (relation
+  `draftSaver()`), `PUT/DELETE /services/{id}/draft`, autosave 1,5 s, restauration au
+  chargement, publication = `PATCH` qui efface le brouillon ; `draft_data` caché par
+  défaut (jamais envoyé au comptoir). À la création, « Enregistrer brouillon » crée
+  l'article désactivé. Pastille « Brouillon » au catalogue (`has_draft`).
+- **Écran** réécrit zone par zone (bannière modifications non enregistrées, prix en doré
+  pour un traitement premium, recommandation si écart > 40 %, aperçu client, historique
+  à la demande, prix local par agence éditable en ligne). Corrigé en passant : l'aperçu
+  comptoir d'une ligne au poids d'un article *mixte* utilisait le prix pièce.
+- Tests : `tests/Feature/Services/ArticleSheetTest.php` (10). Suite 659/659, `tsc`/build
+  propres, parité i18n, Playwright 1440/390 sans débordement + parcours brouillon réel
+  (autosave → rechargement restauré → annulation).

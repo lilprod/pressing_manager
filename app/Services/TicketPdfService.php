@@ -15,7 +15,7 @@ class TicketPdfService
      */
     public function render(Order $order): string
     {
-        $order->loadMissing('items.service', 'items.treatmentType', 'client', 'agency');
+        $order->loadMissing('items.service', 'items.treatmentType', 'items.finishOption', 'client', 'agency');
         $orderNumberFormatted = $order->agency->formatOrderNumber($order->order_number);
         $settings = AppSetting::current($order->agency->pressing_id);
 

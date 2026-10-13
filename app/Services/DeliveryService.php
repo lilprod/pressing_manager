@@ -33,6 +33,12 @@ class DeliveryService
         ?int $fee,
         ?\DateTimeInterface $scheduledAt,
     ): Delivery {
+        // Éligibilité à la livraison réglée sur la fiche article (« Services associés »).
+        $blocked = $order->items()->whereHas('service', fn ($q) => $q->where('home_delivery_enabled', false))->with('service:id,name')->first();
+        if ($blocked !== null) {
+            throw new \Symfony\Component\HttpKernel\Exception\HttpException(422, "« {$blocked->service->name} » n'est pas éligible à la livraison à domicile.");
+        }
+
         // Ordre : frais saisi > frais de la zone > frais de livraison par défaut de l'agence.
         $resolvedFee = $fee
             ?? ($zoneId ? DeliveryZone::find($zoneId)?->fee : null)

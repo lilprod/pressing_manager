@@ -52,29 +52,39 @@ interface CartLine {
     intake_condition_ids: number[];
     intake_notes: string;
     treatment_type_id: number | null;
+    finish_option_id: number | null;
 }
 
-/** Aperçu client du prix au kilo — le serveur recalcule et fait foi à la création du dépôt. */
-function resolveTierPrice(service: Service | undefined, weightKg: number): number | null {
-    const tier = service?.price_tiers?.find((t) => weightKg >= t.weight_min && (t.weight_max === null || weightKg <= t.weight_max));
-    if (!tier) return null;
-    const raw = tier.price_per_kg * weightKg;
-    return service?.round_to_hundred ? Math.round(raw / 100) * 100 : Math.round(raw);
-}
-
-/** Aperçu client du ratio de traitement — le serveur recalcule et fait foi à la création du dépôt. */
-function applyTreatmentRatio(amount: number, treatmentType: TreatmentType | undefined): number {
-    if (!treatmentType) return amount;
-    return Math.round(amount * treatmentType.price_ratio);
-}
+/*
+ * Aperçu client du prix d'une ligne — même règle que ServicePricingService::priceFor()
+ * côté API (le serveur recalcule et fait foi à la création du dépôt) : prix explicite du
+ * traitement sur l'article (pièce ou tranche au kilo), sinon ratio du traitement ; un
+ * prix local d'agence s'applique proportionnellement à un prix explicite.
+ */
+const roundIf = (service: Service | undefined, amount: number) => (service?.round_to_hundred ? Math.round(amount / 100) * 100 : amount);
 
 function lineTotal(service: Service | undefined, treatmentType: TreatmentType | undefined, line: CartLine): number {
-    if (service?.billing_mode === 'kg' && line.weight_kg) {
-        const tierPrice = resolveTierPrice(service, line.weight_kg) ?? 0;
-        return applyTreatmentRatio(tierPrice, treatmentType);
+    if (!service) return 0;
+    if (line.weight_kg !== null) {
+        if (!line.weight_kg) return 0;
+        const tier = service.price_tiers?.find((t) => line.weight_kg! >= t.weight_min && (t.weight_max === null || line.weight_kg! <= t.weight_max));
+        if (!tier) return 0;
+        const explicit = treatmentType ? tier.treatment_prices?.[String(treatmentType.id)] : undefined;
+        if (explicit !== undefined && explicit !== null) return roundIf(service, Math.round(explicit * line.weight_kg));
+        const amount = roundIf(service, Math.round(tier.price_per_kg * line.weight_kg));
+        return treatmentType ? roundIf(service, Math.round(amount * treatmentType.price_ratio)) : amount;
     }
-    const unitPrice = applyTreatmentRatio(service?.effective_price ?? 0, treatmentType);
-    return unitPrice * line.quantity;
+    const effective = service.effective_price ?? service.base_price ?? 0;
+    let unit = effective;
+    if (treatmentType) {
+        const explicit = service.treatment_rates?.find((r) => r.treatment_type_id === treatmentType.id)?.price ?? null;
+        const override = service.pivot?.price_override ?? null;
+        unit =
+            explicit !== null
+                ? roundIf(service, override !== null && (service.base_price ?? 0) > 0 ? Math.round((explicit * override) / (service.base_price ?? 1)) : explicit)
+                : roundIf(service, Math.round(effective * treatmentType.price_ratio));
+    }
+    return unit * line.quantity;
 }
 
 export default function NewOrder() {
@@ -265,6 +275,7 @@ export default function NewOrder() {
                     intake_condition_ids: [],
                     intake_notes: '',
                     treatment_type_id: null,
+                    finish_option_id: null,
                 },
             ];
         });
@@ -320,6 +331,7 @@ export default function NewOrder() {
                 intake_condition_ids: l.intake_condition_ids.length > 0 ? l.intake_condition_ids : undefined,
                 intake_notes: l.intake_notes || null,
                 treatment_type_id: l.treatment_type_id ?? undefined,
+                finish_option_id: l.finish_option_id ?? undefined,
             })),
             ...(payNow
                 ? {
@@ -427,7 +439,9 @@ export default function NewOrder() {
             list.push(service);
             groups.set(service.category, list);
         }
-        return SERVICE_CATEGORY_ORDER.filter((category) => groups.has(category)).map((category) => {
+        const known = SERVICE_CATEGORY_ORDER.filter((category) => groups.has(category));
+        const free = [...groups.keys()].filter((category) => !SERVICE_CATEGORY_ORDER.includes(category)).sort((a, b) => a.localeCompare(b));
+        return [...free, ...known].map((category) => {
             const items = groups.get(category)!;
             const visible = trimmedServiceQuery ? items : items.slice(0, SERVICE_PREVIEW_LIMIT_PER_CATEGORY);
             return { category, items: visible, hiddenCount: items.length - visible.length };
@@ -774,6 +788,54 @@ export default function NewOrder() {
                                                             </div>
                                                         </div>
                                                     )}
+                                                    {service?.finish_options && service.finish_options.length > 0 && (
+                                                        <div>
+                                                            <span className={cx(label, 'mb-1 block')}>{t('order.finish')}</span>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {service.finish_options.map((finish) => {
+                                                                    const checked = line.finish_option_id === finish.id;
+                                                                    return (
+                                                                        <button
+                                                                            key={finish.id}
+                                                                            type="button"
+                                                                            aria-pressed={checked}
+                                                                            onClick={() => updateLine(line.service_id, { finish_option_id: checked ? null : finish.id })}
+                                                                            className={cx(
+                                                                                'inline-flex h-8 items-center rounded-full px-3 text-xs font-semibold transition duration-150',
+                                                                                checked
+                                                                                    ? 'bg-brand-700 text-white dark:bg-brand-400 dark:text-ink-950'
+                                                                                    : 'bg-white text-ink-700 ring-1 ring-inset ring-ink-200 hover:bg-ink-100 dark:bg-ink-900 dark:text-ink-200 dark:ring-ink-700 dark:hover:bg-ink-800',
+                                                                            )}
+                                                                        >
+                                                                            {finish.name}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {(() => {
+                                                        // Services associés de la fiche article : suggérés, jamais ajoutés d'office.
+                                                        const suggestions = (service?.associated_services ?? [])
+                                                            .map((a) => services.find((s) => s.id === a.id))
+                                                            .filter((s): s is (typeof services)[number] => Boolean(s) && !cart.some((l) => l.service_id === s!.id));
+                                                        if (suggestions.length === 0) return null;
+                                                        return (
+                                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                                <span className="text-xs font-semibold text-ink-600 dark:text-ink-350">{t('order.associatedSuggest')}</span>
+                                                                {suggestions.map((s) => (
+                                                                    <button
+                                                                        key={s.id}
+                                                                        type="button"
+                                                                        onClick={() => addLine(s.id)}
+                                                                        className="inline-flex h-7 items-center gap-1 rounded-full bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200 hover:bg-emerald-100 dark:bg-emerald-400/10 dark:text-emerald-200 dark:ring-emerald-400/30"
+                                                                    >
+                                                                        + {s.name} · {money(s.effective_price)}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                             )}
                                         </li>

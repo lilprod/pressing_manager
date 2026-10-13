@@ -8,7 +8,7 @@ import { Alert, EmptyState, LoadingState, Spinner } from '../../components/ui/Fe
 import { SectionCard } from '../../components/ui/Metrics';
 import { Pill } from '../../components/ui/StatusBadge';
 import { button, cx, input, inputSm, label, textLink } from '../../components/ui/styles';
-import type { TreatmentType } from '../../types';
+import type { FinishOption, TreatmentType } from '../../types';
 
 /* CDC §11.1-11.3 : types de traitement (Classique/Express/Repassage…), chacun avec un
  * price_ratio appliqué automatiquement au prix de l'article choisi à la création d'un
@@ -39,11 +39,12 @@ export default function TreatmentTypesPage() {
             {loading ? (
                 <LoadingState />
             ) : (
-                <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+                <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
                     <TreatmentTypesPanel treatmentTypes={treatmentTypes} onChanged={reload} />
                     <CreateTreatmentTypeForm onCreated={reload} />
                 </div>
             )}
+            <FinishOptionsCard />
         </div>
     );
 }
@@ -230,6 +231,64 @@ function CreateTreatmentTypeForm({ onCreated }: { onCreated: () => void }) {
                 {busy ? <Spinner className="h-4 w-4" /> : <Plus aria-hidden="true" className="h-4 w-4" />}
                 {t('common.create')}
             </button>
+        </SectionCard>
+    );
+}
+
+/** Référentiel des rendus (sur cintre, plié…) proposés au comptoir aux articles compatibles. */
+function FinishOptionsCard() {
+    const { t } = useI18n();
+    const [options, setOptions] = useState<FinishOption[]>([]);
+    const [name, setName] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const load = () => {
+        api.get<FinishOption[]>('/finish-options').then(setOptions).catch(() => setOptions([]));
+    };
+    useEffect(load, []);
+
+    async function add() {
+        setBusy(true);
+        setError(null);
+        try {
+            await api.post('/finish-options', { name: name.trim() });
+            setName('');
+            load();
+        } catch (err) {
+            setError(err instanceof ApiError ? err.message : t('common.error'));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function toggle(option: FinishOption) {
+        await api.patch(`/finish-options/${option.id}`, { is_active: !option.is_active });
+        load();
+    }
+
+    return (
+        <SectionCard id="finish-options" title={t("finishOption.title")} subtitle={t("finishOption.hint")}>
+            {error && <Alert tone="error">{error}</Alert>}
+            <div className="flex flex-wrap gap-2">
+                {options.map((option) => (
+                    <button key={option.id} type="button" onClick={() => void toggle(option)} aria-pressed={option.is_active} className="rounded-full">
+                        <Pill tone={option.is_active ? 'emerald' : 'neutral'}>
+                            {option.name} · {option.is_active ? t("service.active") : t("service.inactive")}
+                        </Pill>
+                    </button>
+                ))}
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+                <label className="block min-w-0 flex-1 basis-full sm:basis-auto">
+                    <span className={label}>{t('finishOption.title')}</span>
+                    <input value={name} placeholder={t('finishOption.placeholder')} onChange={(e) => setName(e.target.value)} className={cx(input, 'w-full')} />
+                </label>
+                <button type="button" onClick={() => void add()} disabled={busy || !name.trim()} className={button('primary', 'md')}>
+                    {busy ? <Spinner className="h-4 w-4" /> : <Plus aria-hidden="true" className="h-4 w-4" />}
+                    {t('finishOption.add')}
+                </button>
+            </div>
         </SectionCard>
     );
 }

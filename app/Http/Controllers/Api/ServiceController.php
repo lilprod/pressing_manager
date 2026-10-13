@@ -40,7 +40,7 @@ class ServiceController extends ApiController
         $services = $agency->services()
             ->wherePivot('is_active', true)
             ->where('services.is_active', true)
-            ->with(['priceTiers', 'acceptedConditions:id'])
+            ->with(['priceTiers', 'acceptedConditions:id', 'treatmentRates', 'finishOptions' => fn ($q) => $q->where('finish_options.is_active', true)->orderBy('sort_order'), 'associatedServices:id'])
             ->get()
             ->map(function ($service) {
                 $service->effective_price = $service->pivot->price_override ?? $service->base_price;
@@ -86,7 +86,7 @@ class ServiceController extends ApiController
                     ->orWhereDoesntHave('agencies', fn ($aq) => $aq->where('agency_services.is_active', true)));
             })
             ->withCount(['agencies as available_agencies_count' => fn ($q) => $q->where('agency_services.is_active', true)])
-            ->with('priceTiers')
+            ->with(['priceTiers', 'treatmentRates'])
             ->orderBy($sort, $direction);
 
         $paginated = $query->paginate($request->integer('per_page', 20));
@@ -115,11 +115,14 @@ class ServiceController extends ApiController
             // mixte, qui autorise aussi un prix pièce) avec un prix de base réel — un
             // article exclusivement au kilo exigerait un poids de référence fabriqué,
             // conserve donc l'affichage existant "Dès X FCFA/kg" dans ce cas.
+            // Prix réellement facturés au comptoir (explicite par article, sinon ratio).
             $service->treatment_prices = ($service->billing_mode !== 'kg' && $service->base_price !== null)
                 ? $treatmentTypes->mapWithKeys(fn (TreatmentType $tt) => [
-                    $tt->code => $this->pricing->roundAmount($service, $this->pricing->applyTreatmentRatio($service->base_price, $tt)),
+                    $tt->code => $this->pricing->priceFor($service, $tt, null, null),
                 ])
                 : null;
+            $service->has_draft = $service->draft_saved_at !== null;
+            $service->unsetRelation('treatmentRates');
 
             return $service;
         });
@@ -171,18 +174,31 @@ class ServiceController extends ApiController
 
         $data = $service->only([
             'category', 'billing_mode', 'description', 'base_price', 'estimated_duration_hours',
-            'priority', 'allow_discount', 'round_to_hundred', 'price_editable_at_counter',
+            'priority', 'allow_discount', 'round_to_hundred', 'price_editable_at_counter', 'home_delivery_enabled',
         ]);
         $data['name'] = $service->name.' (copie)';
         $data['code'] = $this->uniqueDuplicateCode($service->code, $request->user()->pressing_id);
         $data['is_active'] = false; // Copie inactive par défaut : à revoir avant publication, jamais calquée telle quelle.
         $data['price_tiers'] = $service->priceTiers->map(fn ($t) => [
             'weight_min' => $t->weight_min, 'weight_max' => $t->weight_max, 'price_per_kg' => $t->price_per_kg,
+            'treatment_prices' => $t->treatment_prices,
         ])->all();
+        $data['treatment_rates'] = $service->treatmentRates->map->only(['treatment_type_id', 'price', 'delay_hours'])->all();
+        $data['finish_option_ids'] = $service->finishOptions()->pluck('finish_options.id')->all();
+        $data['associated_service_ids'] = $service->associatedServices()->pluck('services.id')->all();
 
         $duplicate = $this->pricing->createService($data, $request->user());
+        $duplicate->acceptedConditions()->sync($service->acceptedConditions()->pluck('intake_conditions.id')->all());
 
         return response()->json($duplicate, 201);
+    }
+
+    /** Un article ne peut pas s'associer à lui-même. */
+    private function assertAssociationsValid(Service $service, array $ids): void
+    {
+        if (in_array($service->id, $ids, true)) {
+            throw new HttpException(422, 'Un article ne peut pas être son propre service associé.');
+        }
     }
 
     private function uniqueDuplicateCode(string $baseCode, int $pressingId): string
@@ -230,7 +246,49 @@ class ServiceController extends ApiController
             $service->agency_pivot = $pivot ? ['price_override' => $pivot->price_override, 'is_active' => $pivot->is_active] : null;
         }
 
-        return response()->json($service->load('priceTiers', 'priceHistories.actor', 'acceptedConditions:id,code,label'));
+        $service->load('priceTiers', 'priceHistories.actor', 'acceptedConditions:id,code,label', 'treatmentRates',
+            'finishOptions:id,name', 'associatedServices:id,code,name', 'draftSaver:id,name');
+        $service->makeVisible('draft_data');
+
+        return response()->json($service);
+    }
+
+    /**
+     * Brouillon serveur de la fiche article (sauvegarde automatique) : l'état complet
+     * du formulaire est conservé tel quel, jamais appliqué au catalogue ni au comptoir
+     * tant qu'il n'est pas publié (PATCH /services/{id}, qui l'efface).
+     */
+    public function saveDraft(Request $request, Service $service): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'services.manage');
+        $this->authorizeService($request->user(), $service);
+        $data = $request->validate(['data' => ['required', 'array']]);
+
+        $service->forceFill([
+            'draft_data' => $data['data'],
+            'draft_saved_at' => now(),
+            'draft_saved_by' => $request->user()->id,
+        ])->saveQuietly();
+
+        return response()->json(['draft_saved_at' => $service->draft_saved_at, 'draft_saver' => ['id' => $request->user()->id, 'name' => $request->user()->name]]);
+    }
+
+    /** « Annuler les modifications » : abandonne le brouillon, la version publiée reste. */
+    public function discardDraft(Request $request, Service $service): JsonResponse
+    {
+        $this->authorizePermission($request->user(), 'services.manage');
+        $this->authorizeService($request->user(), $service);
+        $service->forceFill(['draft_data' => null, 'draft_saved_at' => null, 'draft_saved_by' => null])->saveQuietly();
+
+        return response()->json(null, 204);
+    }
+
+    /** Catégories (familles d'articles) déjà utilisées par le pressing, pour l'autocomplétion. */
+    public function categories(Request $request): JsonResponse
+    {
+        return response()->json(
+            Service::where('pressing_id', $request->user()->pressing_id)->distinct()->orderBy('category')->pluck('category')
+        );
     }
 
     /** « Disponibilité par agence » : toutes les agences actives du pressing et leur pivot réel. */
@@ -283,6 +341,9 @@ class ServiceController extends ApiController
         if ($request->has('accepted_condition_ids')) {
             $service->acceptedConditions()->sync($request->validated()['accepted_condition_ids']);
         }
+        if (! empty($request->validated()['associated_service_ids'])) {
+            $this->assertAssociationsValid($service, $request->validated()['associated_service_ids']);
+        }
 
         return response()->json($service, 201);
     }
@@ -291,6 +352,9 @@ class ServiceController extends ApiController
     {
         $this->authorizeService($request->user(), $service);
 
+        if (! empty($request->validated()['associated_service_ids'])) {
+            $this->assertAssociationsValid($service, $request->validated()['associated_service_ids']);
+        }
         $service = $this->pricing->updateService($service, \Illuminate\Support\Arr::except($request->validated(), ['accepted_condition_ids']), $request->user());
         if ($request->has('accepted_condition_ids')) {
             $service->acceptedConditions()->sync($request->validated()['accepted_condition_ids']);

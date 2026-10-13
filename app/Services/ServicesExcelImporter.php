@@ -98,7 +98,7 @@ class ServicesExcelImporter
                 },
             ],
             'name' => ['required', 'string', 'max:255'],
-            'category' => ['required', 'in:nettoyage,lavage,repassage,retouche,teinture,autre'],
+            'category' => ['required', 'string', 'max:60'],
             'base_price' => ['required', 'integer', 'min:0'],
             'estimated_duration_hours' => ['required', 'integer', 'min:1'],
         ]);

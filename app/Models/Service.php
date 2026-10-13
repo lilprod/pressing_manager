@@ -14,7 +14,11 @@ class Service extends Model
     protected $fillable = [
         'pressing_id', 'code', 'name', 'category', 'billing_mode', 'description', 'base_price', 'estimated_duration_hours',
         'priority', 'is_active', 'allow_discount', 'round_to_hundred', 'price_editable_at_counter',
+        'home_delivery_enabled', 'draft_data', 'draft_saved_at', 'draft_saved_by',
     ];
+
+    /** Le brouillon n'est exposé que sur la fiche d'édition (show), jamais au comptoir. */
+    protected $hidden = ['draft_data'];
 
     protected function casts(): array
     {
@@ -23,6 +27,9 @@ class Service extends Model
             'allow_discount' => 'boolean',
             'round_to_hundred' => 'boolean',
             'price_editable_at_counter' => 'boolean',
+            'home_delivery_enabled' => 'boolean',
+            'draft_data' => 'array',
+            'draft_saved_at' => 'datetime',
         ];
     }
 
@@ -46,5 +53,29 @@ class Service extends Model
     public function acceptedConditions(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
     {
         return $this->belongsToMany(IntakeCondition::class, 'service_intake_condition');
+    }
+
+    /** Prix/délai explicites par traitement (Classique, Express, Repassage…). */
+    public function treatmentRates(): HasMany
+    {
+        return $this->hasMany(ServiceTreatmentPrice::class);
+    }
+
+    /** Rendus compatibles (vide = aucun rendu proposé au comptoir). */
+    public function finishOptions(): BelongsToMany
+    {
+        return $this->belongsToMany(FinishOption::class, 'service_finish_option');
+    }
+
+    /** Autres articles du catalogue proposés en complément au comptoir. */
+    public function associatedServices(): BelongsToMany
+    {
+        return $this->belongsToMany(Service::class, 'service_associations', 'service_id', 'associated_service_id');
+    }
+
+    /** Nom distinct de la colonne draft_saved_by (piège Eloquent documenté). */
+    public function draftSaver(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'draft_saved_by');
     }
 }

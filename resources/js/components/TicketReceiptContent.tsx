@@ -44,7 +44,7 @@ export default function TicketReceiptContent({ order }: { order: Order }) {
                 {order.items.map((item) => (
                     <li key={item.id}>
                         {item.service?.name}
-                        {item.treatment_type ? ` (${item.treatment_type.name})` : ''} × {item.quantity} — {item.qr_code}
+                        {item.treatment_type ? ` (${item.treatment_type.name})` : ''}{item.finish_option ? ` · ${item.finish_option.name}` : ''} × {item.quantity} — {item.qr_code}
                     </li>
                 ))}
             </ul>

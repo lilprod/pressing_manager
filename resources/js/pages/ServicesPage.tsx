@@ -11,10 +11,9 @@ import { Pill, TONES } from '../components/ui/StatusBadge';
 import { button, card, cx, inputLg, inputSm } from '../components/ui/styles';
 import { StatCard, ChipToggle, percentChange, trend } from '../components/ui/Metrics';
 import { Download, Layers, Pencil, Plus, Search, Shirt, Sparkles, TrendingUp, TriangleAlert, Upload, Copy, History } from 'lucide-react';
-import { categoryMeta } from '../lib/serviceCategory';
+import { categoryLabel, categoryMeta } from '../lib/serviceCategory';
 import type { Paginated, Service, ServiceCategory, ServiceBillingMode, ServiceStats, ServicePriceHistory, TreatmentType } from '../types';
 
-const CATEGORIES: ServiceCategory[] = ['nettoyage', 'lavage', 'repassage', 'retouche', 'teinture', 'autre'];
 const BILLING_MODES: ServiceBillingMode[] = ['piece', 'kg', 'mixte'];
 const SORTS = ['name', 'updated_at', 'base_price'] as const;
 type Sort = (typeof SORTS)[number];
@@ -41,6 +40,11 @@ export default function ServicesPage() {
     const [sort, setSort] = useState<Sort>('name');
     const [tab, setTab] = useState<Tab>('all');
     const [loading, setLoading] = useState(true);
+    // Familles d'articles réellement utilisées par le pressing (catégories libres).
+    const [categories, setCategories] = useState<string[]>([]);
+    useEffect(() => {
+        api.get<string[]>('/services/categories').then(setCategories).catch(() => setCategories([]));
+    }, []);
     const [importing, setImporting] = useState(false);
     const [importErrors, setImportErrors] = useState<Array<{ row: number; errors: string[] }> | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -143,7 +147,7 @@ export default function ServicesPage() {
 
     const groupedByCategory =
         tab === 'categories'
-            ? CATEGORIES.map((c) => ({ category: c, items: services.filter((s) => s.category === c) })).filter((g) => g.items.length > 0)
+            ? categories.map((c) => ({ category: c, items: services.filter((s) => s.category === c) })).filter((g) => g.items.length > 0)
             : null;
 
     return (
@@ -280,9 +284,9 @@ export default function ServicesPage() {
                             <ChipToggle active={category === ''} onClick={() => setCategory('')}>
                                 {t('service.allCategories')}
                             </ChipToggle>
-                            {CATEGORIES.map((c) => (
+                            {categories.map((c) => (
                                 <ChipToggle key={c} active={category === c} onClick={() => setCategory(c)}>
-                                    {t(`service.category.${c}`)}
+                                    {categoryLabel(c, t)}
                                 </ChipToggle>
                             ))}
                         </div>
@@ -325,7 +329,7 @@ export default function ServicesPage() {
                             {groupedByCategory.map((group) => (
                                 <div key={group.category} className={cx(card, 'overflow-hidden')}>
                                     <div className="border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 font-semibold text-ink-900 dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-50">
-                                        {t(`service.category.${group.category}`)} ({group.items.length})
+                                        {categoryLabel(group.category, t)} ({group.items.length})
                                     </div>
                                     <ul className="divide-y divide-ink-100 dark:divide-ink-800">
                                         {group.items.map((service) => (
@@ -447,7 +451,8 @@ function ServiceRow({
             </div>
 
             <div className="flex w-auto shrink-0 flex-col items-start gap-1 sm:w-28">
-                <Pill tone="neutral">{t(`service.category.${service.category}`)}</Pill>
+                <Pill tone="neutral">{categoryLabel(service.category, t)}</Pill>
+                {service.has_draft && <Pill tone="amber">{t('service.draft.badge')}</Pill>}
                 {service.billing_mode !== 'piece' && <Pill tone="violet">{t(`service.billingModeOption.${service.billing_mode}`)}</Pill>}
             </div>
 

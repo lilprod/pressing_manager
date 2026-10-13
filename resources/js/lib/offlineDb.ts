@@ -16,6 +16,7 @@ export interface PendingOrderPayload {
         intake_condition_ids?: number[];
         intake_notes?: string | null;
         treatment_type_id?: number;
+        finish_option_id?: number;
     }>;
     // Encaissement optionnel intégré à la création (refonte flux comptoir) — voyage
     // dans le même payload mis en file et rejoué tel quel par /orders au retour réseau.

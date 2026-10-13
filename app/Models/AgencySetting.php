@@ -24,6 +24,7 @@ class AgencySetting extends Model
         'loyalty_amount_per_point', 'loyalty_redemption_threshold', 'loyalty_point_expiry_months',
         'offline_sync_interval_minutes', 'offline_retention_days',
         'notif_quiet_enabled', 'notif_quiet_start', 'notif_quiet_end', 'notif_require_consent', 'notif_unsubscribe_link',
+        'cashier_daily_target',
     ];
 
     protected function casts(): array

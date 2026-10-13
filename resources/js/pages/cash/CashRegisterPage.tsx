@@ -13,6 +13,7 @@ import { StatCard } from '../../components/ui/Metrics';
 import SegmentedBar from '../../components/ui/SegmentedBar';
 import CashFlowBars from '../../components/ui/CashFlowBars';
 import CashJournalSection from './CashJournalSection';
+import CashSessionsCard from './CashSessionsCard';
 import { button, cardPadded, cx, input, sectionTitle } from '../../components/ui/styles';
 import type { CashFlowSeries, CashMovement, CashPaymentBreakdown, CashStats, CashSummary, Paginated } from '../../types';
 
@@ -293,6 +294,8 @@ export default function CashRegisterPage() {
                             <p className="text-xs text-ink-600 dark:text-ink-350">{t('cash.sync.hint')}</p>
                         </div>
                     </section>
+
+                    <CashSessionsCard agencyId={agencyId} date={date} />
 
                     <CashJournalSection agencyId={agencyId} />
                 </>

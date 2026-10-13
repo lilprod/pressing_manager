@@ -89,6 +89,7 @@ export interface AgencySettings {
     loyalty_amount_per_point: number | null;
     loyalty_redemption_threshold: number | null;
     loyalty_point_expiry_months: number | null;
+    cashier_daily_target?: number | null;
     loyalty_point_value_fcfa: number | null;
     offline_sync_interval_minutes: number | null;
     offline_retention_days: number | null;
@@ -356,6 +357,43 @@ export interface DailyReportCashier {
     transactions_count: number;
     average_basket: number;
     status: 'verifie' | 'en_attente' | null;
+    session: { register_label: string; status: CashSession['status']; opened_at: string } | null;
+    variance: number | null;
+    errors: number;
+    previous_month_daily_average: number | null;
+}
+
+export interface CashSession {
+    id: number;
+    agency_id: number;
+    user_id: number;
+    register_label: string;
+    status: 'open' | 'paused' | 'closed';
+    opening_float: number;
+    opened_at: string;
+    paused_at: string | null;
+    closed_at: string | null;
+    expected_amount: number | null;
+    counted_amount: number | null;
+    variance: number | null;
+    notes: string | null;
+    cashier?: { id: number; name: string } | null;
+    collected_total: number;
+    transactions_count: number;
+    expected_now: number | null;
+}
+
+export interface DailyReportSession {
+    id: number;
+    register_label: string;
+    cashier: string | null;
+    user_id: number;
+    status: CashSession['status'];
+    opened_at: string;
+    closed_at: string | null;
+    paused_at: string | null;
+    variance: number | null;
+    collected: number;
 }
 
 export interface DailyReport {
@@ -375,6 +413,11 @@ export interface DailyReport {
     unpaid_today: { count: number; amount: number };
     discounts_today: number;
     cashiers: DailyReportCashier[];
+    sessions: DailyReportSession[];
+    reconciliation: { closed: boolean; expected: number | null; counted: number | null; variance: number | null; notes: string | null };
+    discounts: { count: number; total: number; sensitive_count: number; sensitive_total: number };
+    comparison: { previous_date: string; revenue_previous: number };
+    cashier_daily_target: number | null;
 }
 
 export type CashLedgerKind = 'mouvement' | 'encaissement' | 'cloture';
@@ -937,6 +980,27 @@ export interface KpiMetrics {
     attendance_absent: number;
     hours_worked: number;
     active_subscriptions: number;
+    discounts_total: number;
+    payments_count: number;
+    pieces_count: number;
+    pickups_count: number;
+    cash_in: number;
+    cash_out: number;
+    outstanding: number;
+    loyalty_members: number;
+    loyalty_new_members: number;
+    loyalty_revenue_share: number;
+}
+
+export interface ReportSchedule {
+    id: number;
+    agency_id: number | null;
+    agency?: { id: number; name: string } | null;
+    frequency: 'daily' | 'weekly' | 'monthly';
+    format: 'pdf' | 'excel' | 'csv';
+    recipients: string[];
+    is_active: boolean;
+    last_sent_at: string | null;
 }
 
 export interface KpiAgencyRow extends KpiMetrics {
@@ -1043,6 +1107,8 @@ export interface MultiAgencyRow {
 export interface RevenueSeriesPoint {
     date: string;
     revenue: number;
+    orders?: number;
+    average_basket?: number;
 }
 
 export interface MultiAgencyAlert {

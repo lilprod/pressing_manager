@@ -7,10 +7,15 @@ import {
     BadgePercent,
     CalendarDays,
     ChartNoAxesCombined,
-    CircleDollarSign,
     FileDown,
     FileSpreadsheet,
+    FileText,
+    Clock,
     Gem,
+    Inbox,
+    PackageOpen,
+    Wallet,
+    Trash2,
     MapPin,
     Receipt,
     ReceiptText,
@@ -22,24 +27,22 @@ import { useI18n } from '../contexts/I18nContext';
 import { useFormat } from '../lib/format';
 import { api, ApiError } from '../lib/api';
 import { hasPermission } from '../lib/permissions';
-import { matchPreset, presetRange, previousRange, type PeriodPreset } from '../lib/period';
+import { matchPreset, presetRange, previousRange, type DateRange, type PeriodPreset } from '../lib/period';
 import PageHeader from '../components/ui/PageHeader';
 import { Alert, LoadingState, Spinner } from '../components/ui/Feedback';
 import { ChipToggle, DeltaBadge, percentChange, trend, SectionCard, StatCard } from '../components/ui/Metrics';
 import { Pill } from '../components/ui/StatusBadge';
 import RevenueBars from '../components/ui/RevenueBars';
 import SegmentedBar from '../components/ui/SegmentedBar';
-import { button, cardPadded, cx, input, label } from '../components/ui/styles';
-import type { KpiData, RevenueSeriesResponse } from '../types';
+import { button, cardPadded, cx, input, label, select } from '../components/ui/styles';
+import type { KpiData, ReportSchedule, RevenueSeriesResponse } from '../types';
 
-/* Écran « Rapports et bilans » (Figma SPARK PRESSING, section 08, node 43:774).
- * Indicateurs et comparatif d'agences issus de GET /kpi (période choisie + période
- * précédente de même durée pour les variations), histogramme du CA par jour/semaine/
- * mois (GET /kpi/revenue-series), répartition par mode de paiement et synthèse
- * fidélité (both dans la réponse /kpi) — voir CLAUDE.md pour le détail de ces trois
- * chantiers (2026-10-05). Seule la planification d'exports reste omise (aucun
- * planificateur n'existe). Les indicateurs opérationnels déjà calculés par l'API
- * (stock, livraisons, présence) sont conservés dans une section dédiée. */
+/* Écran « Rapports et bilans » (capture Figma, audit du 2026-10-13). Huit indicateurs
+ * réels (GET /kpi), filtre agence et comparaison (période précédente ou même période
+ * l'an dernier), histogramme CA / ventes / panier moyen, répartition des paiements,
+ * mouvements de caisse, programme fidélité, comparaison inter-agences, exports
+ * PDF / Excel / CSV et envois programmés (report_schedules + commande planifiée).
+ * Omis : courbe de projection (aucun modèle prévisionnel). */
 
 const PRESETS: PeriodPreset[] = ['today', '7d', 'month', 'year'];
 
@@ -52,6 +55,99 @@ function seriesLabel(value: string, granularity: 'day' | 'week' | 'month', lang:
         return new Intl.DateTimeFormat(locale, { month: 'short', year: 'numeric' }).format(date);
     }
     return new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short' }).format(date);
+}
+
+/** Période de comparaison : précédente de même durée, ou même période l'an dernier. */
+function comparisonRange(range: DateRange, mode: 'previous' | 'last_year'): DateRange {
+    if (mode === 'previous') return previousRange(range);
+    const shift = (value: string) => {
+        const d = new Date(value);
+        d.setFullYear(d.getFullYear() - 1);
+        return d.toISOString().slice(0, 10);
+    };
+    return { from: shift(range.from), to: shift(range.to) };
+}
+
+function ScheduleCard({ agencyId }: { agencyId: number | null }) {
+    const { t } = useI18n();
+    const { dateTime } = useFormat();
+    const [schedules, setSchedules] = useState<ReportSchedule[]>([]);
+    const [frequency, setFrequency] = useState<ReportSchedule['frequency']>('weekly');
+    const [format, setFormat] = useState<ReportSchedule['format']>('pdf');
+    const [recipients, setRecipients] = useState('');
+    const [error, setError] = useState<string | null>(null);
+
+    const load = () => void api.get<ReportSchedule[]>('/report-schedules').then(setSchedules).catch(() => setSchedules([]));
+    useEffect(load, []);
+
+    async function create() {
+        setError(null);
+        try {
+            await api.post('/report-schedules', {
+                frequency,
+                format,
+                agency_id: agencyId,
+                recipients: recipients.split(/[,;\s]+/).map((r) => r.trim()).filter(Boolean),
+            });
+            setRecipients('');
+            load();
+        } catch (err) {
+            setError(err instanceof ApiError ? err.message : t('common.error'));
+        }
+    }
+
+    return (
+        <SectionCard id="reports-schedules" title={t('reports.schedule.title')} subtitle={t('reports.schedule.subtitle')}>
+            {error && <Alert tone="error">{error}</Alert>}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[repeat(2,minmax(0,160px))_minmax(0,1fr)_auto] sm:items-end">
+                <label className="block">
+                    <span className={label}>{t('reports.schedule.frequency')}</span>
+                    <select value={frequency} onChange={(e) => setFrequency(e.target.value as ReportSchedule['frequency'])} className={select}>
+                        {(['daily', 'weekly', 'monthly'] as const).map((f) => (
+                            <option key={f} value={f}>{t(`reports.schedule.${f}`)}</option>
+                        ))}
+                    </select>
+                </label>
+                <label className="block">
+                    <span className={label}>{t('reports.schedule.format')}</span>
+                    <select value={format} onChange={(e) => setFormat(e.target.value as ReportSchedule['format'])} className={select}>
+                        <option value="pdf">PDF</option>
+                        <option value="excel">Excel</option>
+                        <option value="csv">CSV</option>
+                    </select>
+                </label>
+                <label className="block">
+                    <span className={label}>{t('reports.schedule.recipients')}</span>
+                    <input value={recipients} onChange={(e) => setRecipients(e.target.value)} placeholder="direction@exemple.com" className={input} />
+                </label>
+                <button type="button" onClick={() => void create()} disabled={!recipients.trim()} className={button('primary', 'md')}>
+                    {t('reports.schedule.add')}
+                </button>
+            </div>
+            {schedules.length > 0 && (
+                <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                    {schedules.map((s) => (
+                        <li key={s.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                            <span className="min-w-0 flex-1 basis-full sm:basis-auto">
+                                <span className="font-semibold text-ink-900 dark:text-ink-50">
+                                    {t(`reports.schedule.${s.frequency}`)} · {s.format.toUpperCase()} · {s.agency?.name ?? t('nav.allAgencies')}
+                                </span>
+                                <span className="block truncate text-xs text-ink-600 dark:text-ink-350">
+                                    {s.recipients.join(', ')} · {s.last_sent_at ? t('reports.schedule.lastSent', { date: dateTime(s.last_sent_at) }) : t('reports.schedule.never')}
+                                </span>
+                            </span>
+                            <ChipToggle active={s.is_active} onClick={() => void api.patch(`/report-schedules/${s.id}`, { is_active: !s.is_active }).then(load)}>
+                                {s.is_active ? t('reports.schedule.active') : t('reports.schedule.paused')}
+                            </ChipToggle>
+                            <button type="button" onClick={() => void api.delete(`/report-schedules/${s.id}`).then(load)} className="text-red-700 dark:text-red-300" aria-label={t('common.delete')}>
+                                <Trash2 aria-hidden="true" className="h-4 w-4" />
+                            </button>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </SectionCard>
+    );
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -73,17 +169,23 @@ export default function KpiPage() {
     const percent = (n: number) => `${number(n)}\u00a0%`;
 
     const [range, setRange] = useState(() => presetRange('month'));
+    const [agencyFilter, setAgencyFilter] = useState<number | ''>('');
+    const [comparison, setComparison] = useState<'previous' | 'last_year'>('previous');
+    const [metric, setMetric] = useState<'revenue' | 'orders' | 'average_basket'>('revenue');
+    const [showSchedules, setShowSchedules] = useState(false);
+    const { agencies } = useAuth();
     const [data, setData] = useState<KpiData | null>(null);
     const [previous, setPrevious] = useState<KpiData | null>(null);
     const [loading, setLoading] = useState(true);
-    const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
+    const [exporting, setExporting] = useState<'pdf' | 'excel' | 'csv' | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [granularity, setGranularity] = useState<'day' | 'week' | 'month'>('day');
     const [revenueSeries, setRevenueSeries] = useState<RevenueSeriesResponse | null>(null);
 
     function buildQuery(r = range) {
         const params = new URLSearchParams(r);
-        if (activeAgencyId) params.set('agency_id', String(activeAgencyId));
+        const agency = agencyFilter || activeAgencyId;
+        if (agency) params.set('agency_id', String(agency));
         return params.toString();
     }
 
@@ -92,7 +194,7 @@ export default function KpiPage() {
         let cancelled = false;
         setLoading(true);
         setError(null);
-        Promise.all([api.get<KpiData>(`/kpi?${buildQuery()}`), api.get<KpiData>(`/kpi?${buildQuery(previousRange(range))}`)])
+        Promise.all([api.get<KpiData>(`/kpi?${buildQuery()}`), api.get<KpiData>(`/kpi?${buildQuery(comparisonRange(range, comparison))}`)])
             .then(([current, before]) => {
                 if (cancelled) return;
                 setData(current);
@@ -104,7 +206,7 @@ export default function KpiPage() {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeAgencyId, range.from, range.to]);
+    }, [activeAgencyId, agencyFilter, comparison, range.from, range.to]);
 
     useEffect(() => {
         if (!range.from || !range.to || range.from > range.to) return;
@@ -117,14 +219,14 @@ export default function KpiPage() {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeAgencyId, range.from, range.to, granularity]);
+    }, [activeAgencyId, agencyFilter, range.from, range.to, granularity]);
 
-    async function exportFile(kind: 'pdf' | 'excel') {
+    async function exportFile(kind: 'pdf' | 'excel' | 'csv') {
         setExporting(kind);
         setError(null);
         try {
             const blob = await api.blob(`/kpi/export/${kind}?${buildQuery()}`);
-            downloadBlob(blob, `kpi-${range.from}-${range.to}.${kind === 'pdf' ? 'pdf' : 'xlsx'}`);
+            downloadBlob(blob, `kpi-${range.from}-${range.to}.${kind === 'excel' ? 'xlsx' : kind}`);
         } catch (err) {
             setError(err instanceof ApiError ? err.message : t('kpi.exportError'));
         } finally {
@@ -145,6 +247,8 @@ export default function KpiPage() {
         },
         { to: '/loyalty', icon: Gem, title: t('reports.links.loyalty'), text: t('reports.links.loyaltyText'), allowed: hasPermission(user, 'clients.manage') },
         { to: '/cash', icon: ArrowLeftRight, title: t('reports.links.movements'), text: t('reports.links.movementsText'), allowed: hasPermission(user, 'payments.manage') },
+        { to: '/reports/daily', icon: UsersRound, title: t('reports.links.cashiers'), text: t('reports.links.cashiersText'), allowed: hasPermission(user, 'reports.view') },
+        { to: '/multi-agences', icon: MapPin, title: t('reports.links.agencies'), text: t('reports.links.agenciesText'), allowed: hasPermission(user, 'reports.view') },
         {
             to: '/reports/daily',
             icon: Receipt,
@@ -162,6 +266,14 @@ export default function KpiPage() {
                 icon={ChartNoAxesCombined}
                 actions={
                     <>
+                        <button type="button" onClick={() => setShowSchedules((v) => !v)} className={button('secondary', 'md', 'h-10')}>
+                            <Clock aria-hidden="true" className="h-4 w-4" />
+                            {t('reports.schedule.action')}
+                        </button>
+                        <button type="button" disabled={exporting !== null} onClick={() => void exportFile('csv')} className={button('secondary', 'md', 'h-10')}>
+                            {exporting === 'csv' ? <Spinner className="h-4 w-4" /> : <FileText aria-hidden="true" className="h-4 w-4" />}
+                            CSV
+                        </button>
                         <button type="button" disabled={exporting !== null} onClick={() => void exportFile('pdf')} className={button('secondary', 'md', 'h-10')}>
                             {exporting === 'pdf' ? <Spinner className="h-4 w-4" /> : <FileDown aria-hidden="true" className="h-4 w-4" />}
                             {t('kpi.exportPdf')}
@@ -175,6 +287,8 @@ export default function KpiPage() {
             />
 
             {error && <Alert tone="error">{error}</Alert>}
+
+            {showSchedules && <ScheduleCard agencyId={agencyFilter || activeAgencyId || null} />}
 
             <section aria-labelledby="reports-period-heading" className={cx(cardPadded, 'space-y-4')}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -194,6 +308,26 @@ export default function KpiPage() {
                         <span className={label}>{t('kpi.to')}</span>
                         <input type="date" value={range.to} min={range.from} onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))} className={cx(input, 'sm:w-44')} />
                     </label>
+                    {user?.agency_id === null && (
+                        <label className="block basis-full sm:basis-auto">
+                            <span className={label}>{t('kpi.agency')}</span>
+                            <select value={agencyFilter} onChange={(e) => setAgencyFilter(e.target.value ? Number(e.target.value) : '')} className={cx(select, 'sm:w-52')}>
+                                <option value="">{agencies.find((a) => a.id === activeAgencyId)?.name ?? t('nav.allAgencies')}</option>
+                                {agencies.filter((a) => a.id !== activeAgencyId).map((a) => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    )}
+                    <label className="block basis-full sm:basis-auto">
+                        <span className={label}>{t('reports.comparison')}</span>
+                        <select value={comparison} onChange={(e) => setComparison(e.target.value as 'previous' | 'last_year')} className={cx(select, 'sm:w-56')}>
+                            <option value="previous">{t('reports.comparison.previous')}</option>
+                            <option value="last_year">{t('reports.comparison.lastYear')}</option>
+                        </select>
+                    </label>
                     <div role="group" aria-label={t('reports.shortcuts')} className="flex flex-wrap gap-2 sm:pb-1">
                         {PRESETS.map((p) => (
                             <ChipToggle key={p} active={activePreset === p} onClick={() => setRange(presetRange(p))}>
@@ -208,34 +342,15 @@ export default function KpiPage() {
                 <LoadingState />
             ) : (
                 <>
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                        <StatCard
-                            label={t('kpi.revenue')}
-                            value={money(data.revenue)}
-                            icon={ChartNoAxesCombined}
-                            {...trend(percentChange(data.revenue, previous?.revenue ?? 0), t('dashboard.vsPrevious'))}
-                        />
-                        <StatCard
-                            label={t('kpi.ordersCount')}
-                            value={data.orders_count}
-                            icon={ReceiptText}
-                            tone="sky"
-                            {...trend(percentChange(data.orders_count, previous?.orders_count ?? 0), t('dashboard.vsPrevious'))}
-                        />
-                        <StatCard
-                            label={t('kpi.expressRate')}
-                            value={percent(data.express_rate)}
-                            icon={BadgePercent}
-                            tone="accent"
-                            {...trend(previous && previous.orders_count > 0 ? Math.round((data.express_rate - previous.express_rate) * 10) / 10 : null, t('dashboard.vsPrevious'), { unit: '\u00a0pt' })}
-                        />
-                        <StatCard
-                            label={t('kpi.averageOrderValue')}
-                            value={money(data.average_order_value)}
-                            icon={CircleDollarSign}
-                            tone="violet"
-                            {...trend(percentChange(data.average_order_value, previous?.average_order_value ?? 0), t('dashboard.vsPrevious'))}
-                        />
+                    <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 xl:grid-cols-4">
+                        <StatCard label={t('kpi.revenue')} value={money(data.revenue)} icon={ChartNoAxesCombined} {...trend(percentChange(data.revenue, previous?.revenue ?? 0), t(comparison === 'previous' ? 'dashboard.vsPrevious' : 'reports.vsLastYear'))} />
+                        <StatCard label={t('reports.kpi.sales')} value={data.payments_count} icon={ReceiptText} tone="sky" {...trend(percentChange(data.payments_count, previous?.payments_count ?? 0), t('reports.kpi.basket', { amount: money(data.average_order_value) }))} />
+                        <StatCard label={t('reports.kpi.discounts')} value={money(data.discounts_total)} icon={BadgePercent} tone="accent" hint={t('reports.kpi.ofRevenue', { percent: data.revenue > 0 ? number((data.discounts_total / data.revenue) * 100) : 0 })} />
+                        <StatCard label={t('reports.kpi.deposits')} value={data.orders_count} icon={Inbox} tone="violet" {...trend(percentChange(data.orders_count, previous?.orders_count ?? 0), t('reports.kpi.pieces', { count: data.pieces_count }))} />
+                        <StatCard label={t('reports.kpi.pickups')} value={data.pickups_count} icon={PackageOpen} tone="emerald" hint={t('reports.kpi.ofDeposits', { percent: data.orders_count > 0 ? number((data.pickups_count / data.orders_count) * 100) : 0 })} />
+                        <StatCard label={t('reports.kpi.cash')} value={money(data.payments_by_method.espece.amount + data.cash_in - data.cash_out)} icon={Wallet} tone="brand" hint={t('reports.kpi.netEntries', { amount: money(data.cash_in - data.cash_out) })} />
+                        <StatCard label={t('reports.kpi.outstanding')} value={money(data.outstanding)} icon={BadgeAlert} tone="rose" />
+                        <StatCard label={t('reports.kpi.loyalty')} value={t('reports.kpi.members', { count: data.loyalty_members })} icon={Gem} tone="accent" hint={t('reports.kpi.loyaltyHint', { count: data.loyalty_new_members, percent: number(data.loyalty_revenue_share) })} />
                     </div>
 
                     {data.by_agency && data.by_agency.length > 0 && (
@@ -279,6 +394,12 @@ export default function KpiPage() {
                         subtitle={t('reports.revenueSeries.subtitle')}
                         headerExtra={
                             <div role="group" aria-label={t('reports.revenueSeries.granularity')} className="flex flex-wrap gap-2">
+                                {(['revenue', 'orders', 'average_basket'] as const).map((m) => (
+                                    <ChipToggle key={m} active={metric === m} onClick={() => setMetric(m)}>
+                                        {t(`reports.metric.${m}`)}
+                                    </ChipToggle>
+                                ))}
+                                <span className="w-px self-stretch bg-ink-200 dark:bg-ink-700" aria-hidden="true" />
                                 {(['day', 'week', 'month'] as const).map((g) => (
                                     <ChipToggle key={g} active={granularity === g} onClick={() => setGranularity(g)}>
                                         {t(`reports.revenueSeries.${g}`)}
@@ -288,13 +409,17 @@ export default function KpiPage() {
                         }
                     >
                         {revenueSeries && revenueSeries.series.length > 0 ? (
-                            <RevenueBars series={revenueSeries.series} money={money} dateShort={(value) => seriesLabel(value, granularity, lang)} />
+                            <RevenueBars
+                                series={revenueSeries.series.map((p) => ({ date: p.date, revenue: metric === 'revenue' ? p.revenue : metric === 'orders' ? p.orders ?? 0 : p.average_basket ?? 0 }))}
+                                money={metric === 'orders' ? (n) => String(n) : money}
+                                dateShort={(value) => seriesLabel(value, granularity, lang)}
+                            />
                         ) : (
                             <p className="text-sm text-ink-600 dark:text-ink-350">{t('reports.revenueSeries.empty')}</p>
                         )}
                     </SectionCard>
 
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                         <SectionCard id="reports-payments" title={t('reports.payments.title')} subtitle={t('reports.payments.subtitle')}>
                             <SegmentedBar
                                 money={money}
@@ -307,8 +432,19 @@ export default function KpiPage() {
                             />
                         </SectionCard>
 
+                        <SectionCard id="reports-cash" title={t('reports.cash.title')} subtitle={t('reports.cash.subtitle')}>
+                            <dl className="space-y-2 text-sm">
+                                <div className="flex justify-between gap-3"><dt className="text-ink-600 dark:text-ink-350">{t('reports.cash.cashPayments')}</dt><dd className="font-semibold tabular-nums text-ink-900 dark:text-white">{money(data.payments_by_method.espece.amount)}</dd></div>
+                                <div className="flex justify-between gap-3"><dt className="text-ink-600 dark:text-ink-350">{t('reports.cash.in')}</dt><dd className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">+{money(data.cash_in)}</dd></div>
+                                <div className="flex justify-between gap-3"><dt className="text-ink-600 dark:text-ink-350">{t('reports.cash.out')}</dt><dd className="font-semibold tabular-nums text-red-700 dark:text-red-300">−{money(data.cash_out)}</dd></div>
+                            </dl>
+                        </SectionCard>
+
                         <SectionCard id="reports-loyalty" title={t('reports.loyalty.title')} subtitle={t('reports.loyalty.subtitle')}>
+                            <p className="font-display text-3xl font-bold tabular-nums text-ink-900 dark:text-white">{data.loyalty_members}</p>
                             <dl className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                <Metric label={t('reports.loyalty.newMembers')} value={data.loyalty_new_members} />
+                                <Metric label={t('reports.loyalty.revenueShare')} value={percent(data.loyalty_revenue_share)} />
                                 <Metric label={t('reports.loyalty.pointsIssued')} value={number(data.loyalty.points_issued)} />
                                 <Metric label={t('reports.loyalty.pointsConsumed')} value={number(data.loyalty.points_consumed)} />
                             </dl>

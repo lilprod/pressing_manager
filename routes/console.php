@@ -17,3 +17,4 @@ Schedule::command('loyalty:recalculate-spend')->dailyAt('02:15');
 Schedule::command('staff:send-daily-summaries')->dailyAt('18:00');
 Schedule::command('notifications:send-delays')->hourly();
 Schedule::command('notifications:flush-deferred')->everyFifteenMinutes();
+Schedule::command('reports:send-scheduled')->dailyAt('07:00');

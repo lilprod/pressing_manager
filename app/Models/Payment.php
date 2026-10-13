@@ -12,7 +12,7 @@ class Payment extends Model
 
     protected $fillable = [
         'agency_id', 'invoice_id', 'client_id', 'method', 'amount', 'currency', 'status',
-        'external_reference', 'payload', 'received_by', 'paid_at',
+        'external_reference', 'payload', 'received_by', 'paid_at', 'cash_session_id',
     ];
 
     protected function casts(): array

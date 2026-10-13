@@ -45,13 +45,28 @@ class KpiService
             ->get()
             ->keyBy(fn ($r) => Carbon::parse($r->period)->toDateString());
 
+        $orders = Order::query()
+            ->whereIn('agency_id', $agencyIds)
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', '!=', 'annule')
+            ->selectRaw("date_trunc('{$granularity}', created_at) as period, count(*) as orders, sum(total_amount) as total")
+            ->groupBy('period')
+            ->get()
+            ->keyBy(fn ($r) => Carbon::parse($r->period)->toDateString());
+
         $series = [];
         $cursor = $this->periodStart($from, $granularity);
         $end = $this->periodStart($to, $granularity);
         $guard = 0;
         while ($cursor->lte($end) && $guard < 366) {
             $key = $cursor->toDateString();
-            $series[] = ['date' => $key, 'revenue' => (int) ($rows[$key]->total ?? 0)];
+            $count = (int) ($orders[$key]->orders ?? 0);
+            $series[] = [
+                'date' => $key,
+                'revenue' => (int) ($rows[$key]->total ?? 0),
+                'orders' => $count,
+                'average_basket' => $count > 0 ? (int) round(($orders[$key]->total ?? 0) / $count) : 0,
+            ];
             $cursor = $this->advancePeriod($cursor, $granularity);
             $guard++;
         }
@@ -239,9 +254,41 @@ class KpiService
             ->where('status', 'active')
             ->count();
 
+        $cashMovements = \App\Models\CashMovement::query()
+            ->whereIn('agency_id', $agencyIds)
+            ->where('status', 'valide')
+            ->whereBetween('created_at', [$from, $to])
+            ->selectRaw('type, sum(amount) as total')
+            ->groupBy('type')
+            ->pluck('total', 'type');
+
+        $outstanding = (int) \App\Models\Invoice::query()
+            ->whereIn('status', ['emise', 'partiellement_payee'])
+            ->whereIn('agency_id', $agencyIds)
+            ->withSum(['payments as paid_amount' => fn ($q) => $q->where('status', 'complete')], 'amount')
+            ->get()
+            ->sum(fn ($invoice) => max(0, $invoice->total_amount - (int) ($invoice->paid_amount ?? 0)));
+
+        $loyaltyRevenue = (int) Payment::query()
+            ->whereIn('agency_id', $agencyIds)
+            ->where('status', 'complete')
+            ->whereBetween('paid_at', [$from, $to])
+            ->whereHas('client', fn ($q) => $q->where('loyalty_points', '>', 0))
+            ->sum('amount');
+
         return [
             'revenue' => $revenue,
             'orders_count' => $ordersCount,
+            'discounts_total' => (int) (clone $orders)->sum('discount_amount'),
+            'payments_count' => Payment::query()->whereIn('agency_id', $agencyIds)->where('status', 'complete')->whereBetween('paid_at', [$from, $to])->count(),
+            'pieces_count' => (int) \App\Models\OrderItem::query()->whereIn('order_id', (clone $orders)->select('id'))->sum('quantity'),
+            'pickups_count' => \App\Models\OrderPickup::query()->whereIn('agency_id', $agencyIds)->whereBetween('processed_at', [$from, $to])->count(),
+            'cash_in' => (int) ($cashMovements['entree'] ?? 0),
+            'cash_out' => (int) ($cashMovements['sortie'] ?? 0),
+            'outstanding' => $outstanding,
+            'loyalty_members' => \App\Models\Client::query()->whereIn('agency_id', $agencyIds)->where('is_active', true)->where('loyalty_points', '>', 0)->count(),
+            'loyalty_new_members' => \App\Models\Client::query()->whereIn('agency_id', $agencyIds)->whereBetween('created_at', [$from, $to])->where('loyalty_points', '>', 0)->count(),
+            'loyalty_revenue_share' => $revenue > 0 ? round($loyaltyRevenue / $revenue * 100, 1) : 0.0,
             'average_order_value' => $ordersCount > 0 ? (int) round($ordersTotal / $ordersCount) : 0,
             'express_rate' => $ordersCount > 0 ? round($expressCount / $ordersCount * 100, 1) : 0.0,
             'low_stock_items' => $lowStock,

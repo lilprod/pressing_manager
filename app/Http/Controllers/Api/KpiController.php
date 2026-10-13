@@ -41,6 +41,25 @@ class KpiController extends ApiController
         return $exporter->download($data);
     }
 
+    /** Export CSV : indicateurs de la période, puis une ligne par agence (vue consolidée). */
+    public function exportCsv(Request $request): StreamedResponse
+    {
+        $this->authorizePermission($request->user(), 'reports.view');
+        [$agencyId, $agencyIds, $from, $to] = $this->resolveParams($request);
+        $data = $this->kpi->build($agencyId, $agencyIds, $from, $to, $request->user()->pressing_id);
+
+        return response()->streamDownload(function () use ($data) {
+            $out = fopen('php://output', 'w');
+            $keys = ['revenue', 'orders_count', 'average_order_value', 'discounts_total', 'pieces_count', 'pickups_count', 'cash_in', 'cash_out', 'outstanding', 'loyalty_members'];
+            fputcsv($out, ['Périmètre', 'Du', 'Au', ...$keys], ';');
+            fputcsv($out, [$data['agency']['name'] ?? 'Toutes les agences', $data['from'], $data['to'], ...array_map(fn ($k) => $data[$k] ?? '', $keys)], ';');
+            foreach ($data['by_agency'] ?? [] as $row) {
+                fputcsv($out, [$row['agency_name'], $data['from'], $data['to'], ...array_map(fn ($k) => $row[$k] ?? '', $keys)], ';');
+            }
+            fclose($out);
+        }, "rapport-{$data['from']}-{$data['to']}.csv", ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
     public function revenueSeries(Request $request): JsonResponse
     {
         $this->authorizePermission($request->user(), 'reports.view');

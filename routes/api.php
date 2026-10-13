@@ -256,6 +256,12 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::get('/cash/summary', [CashController::class, 'summary']);
     Route::get('/cash/stats', [CashController::class, 'stats']);
     Route::get('/cash/payment-breakdown', [CashController::class, 'paymentBreakdown']);
+    Route::get('/cash/sessions', [\App\Http\Controllers\Api\CashSessionController::class, 'index']);
+    Route::get('/cash/sessions/mine', [\App\Http\Controllers\Api\CashSessionController::class, 'mine']);
+    Route::post('/cash/sessions', [\App\Http\Controllers\Api\CashSessionController::class, 'open']);
+    Route::post('/cash/sessions/{session}/pause', [\App\Http\Controllers\Api\CashSessionController::class, 'pause']);
+    Route::post('/cash/sessions/{session}/resume', [\App\Http\Controllers\Api\CashSessionController::class, 'resume']);
+    Route::post('/cash/sessions/{session}/close', [\App\Http\Controllers\Api\CashSessionController::class, 'close']);
     Route::get('/cash/flow-series', [CashController::class, 'flowSeries']);
     Route::get('/cash/ledger', [CashController::class, 'ledger']);
     Route::get('/cash/ledger/export/pdf', [CashController::class, 'exportLedgerPdf']);
@@ -335,10 +341,16 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
     Route::get('/kpi', [KpiController::class, 'index']);
     Route::get('/kpi/export/pdf', [KpiController::class, 'exportPdf']);
     Route::get('/kpi/export/excel', [KpiController::class, 'exportExcel']);
+    Route::get('/kpi/export/csv', [KpiController::class, 'exportCsv']);
+    Route::get('/report-schedules', [\App\Http\Controllers\Api\ReportScheduleController::class, 'index']);
+    Route::post('/report-schedules', [\App\Http\Controllers\Api\ReportScheduleController::class, 'store']);
+    Route::patch('/report-schedules/{schedule}', [\App\Http\Controllers\Api\ReportScheduleController::class, 'update']);
+    Route::delete('/report-schedules/{schedule}', [\App\Http\Controllers\Api\ReportScheduleController::class, 'destroy']);
     Route::get('/kpi/revenue-series', [KpiController::class, 'revenueSeries']);
 
     Route::get('/reports/daily', [ReportController::class, 'daily']);
     Route::get('/reports/daily/export/excel', [ReportController::class, 'exportExcel']);
+    Route::get('/reports/daily/export/pdf', [ReportController::class, 'exportPdf']);
 
     Route::get('/notification-settings', [NotificationSettingController::class, 'index']);
     Route::post('/notification-settings', [NotificationSettingController::class, 'store']);

@@ -65,6 +65,72 @@ class DailyReportService
             'unpaid_today' => $this->unpaidToday($agencyId, $date),
             'discounts_today' => $this->discountsToday($agencyId, $date),
             'cashiers' => $this->cashierPerformance($agencyId, $date),
+            'sessions' => $this->sessionsForDate($agencyId, $date),
+            'reconciliation' => $this->reconciliation($agencyId, $date),
+            'discounts' => $this->discountDetails($agencyId, $date),
+            'comparison' => [
+                // Même jour de la semaine précédente (« +11,6 % vs lundi »).
+                'previous_date' => $date->copy()->subWeek()->toDateString(),
+                'revenue_previous' => $this->revenueOn($agencyId, $date->copy()->subWeek()),
+            ],
+            'cashier_daily_target' => \App\Models\AgencySetting::forAgency($agencyId)->cashier_daily_target,
+        ];
+    }
+
+    private function revenueOn(int $agencyId, Carbon $date): int
+    {
+        return (int) Payment::query()->where('agency_id', $agencyId)->where('status', 'complete')->whereDate('paid_at', $date)->sum('amount');
+    }
+
+    /** Sessions de caisse ouvertes ce jour (ou encore ouvertes), avec leur total encaissé. */
+    private function sessionsForDate(int $agencyId, Carbon $date): array
+    {
+        return \App\Models\CashSession::query()
+            ->with('cashier:id,name')
+            ->where('agency_id', $agencyId)
+            ->whereDate('opened_at', $date)
+            ->orderBy('register_label')
+            ->get()
+            ->map(fn (\App\Models\CashSession $s) => [
+                'id' => $s->id,
+                'register_label' => $s->register_label,
+                'cashier' => $s->cashier?->name,
+                'user_id' => $s->user_id,
+                'status' => $s->status,
+                'opened_at' => $s->opened_at,
+                'closed_at' => $s->closed_at,
+                'paused_at' => $s->paused_at,
+                'variance' => $s->variance,
+                'collected' => (int) $s->payments()->where('status', 'complete')->sum('amount'),
+            ])
+            ->all();
+    }
+
+    /**
+     * Rapprochement : clôture de caisse du jour si elle existe (solde théorique,
+     * comptage déclaré, écart) — sinon l'aperçu théorique courant, sans comptage.
+     */
+    private function reconciliation(int $agencyId, Carbon $date): array
+    {
+        $closure = \App\Models\CashClosure::query()->where('agency_id', $agencyId)->whereDate('closed_at', $date)->latest('closed_at')->first();
+        if ($closure) {
+            return ['closed' => true, 'expected' => (int) $closure->expected_balance, 'counted' => (int) $closure->counted_balance, 'variance' => (int) $closure->variance, 'notes' => $closure->notes];
+        }
+
+        return ['closed' => false, 'expected' => $date->isToday() ? (int) $this->cash->previewBalance($agencyId)['expected_balance'] : null, 'counted' => null, 'variance' => null, 'notes' => null];
+    }
+
+    /** Remises du jour : nombre, total, part du CA et remises « sensibles » (> 10 % du sous-total). */
+    private function discountDetails(int $agencyId, Carbon $date): array
+    {
+        $orders = Order::query()->where('agency_id', $agencyId)->whereDate('created_at', $date)->where('discount_amount', '>', 0)->get(['id', 'discount_amount', 'total_amount']);
+        $sensitive = $orders->filter(fn (Order $o) => $o->discount_amount > 0.1 * ($o->total_amount + $o->discount_amount));
+
+        return [
+            'count' => $orders->count(),
+            'total' => (int) $orders->sum('discount_amount'),
+            'sensitive_count' => $sensitive->count(),
+            'sensitive_total' => (int) $sensitive->sum('discount_amount'),
         ];
     }
 
@@ -241,6 +307,21 @@ class DailyReportService
             ->with('receiver:id,name')
             ->get(['received_by', 'amount']);
 
+        $sessions = \App\Models\CashSession::query()->where('agency_id', $agencyId)->whereDate('opened_at', $date)->orderBy('opened_at')->get()->groupBy('user_id');
+
+        // Moyenne journalière du mois précédent par caissier (« Comparer avec le mois précédent »).
+        $previousMonth = $date->copy()->subMonthNoOverflow();
+        $previousMonthAverages = Payment::query()
+            ->where('agency_id', $agencyId)
+            ->where('status', 'complete')
+            ->whereNotNull('received_by')
+            ->whereBetween('paid_at', [$previousMonth->copy()->startOfMonth(), $previousMonth->copy()->endOfMonth()])
+            ->selectRaw('received_by, sum(amount) as total, count(distinct date(paid_at)) as days')
+            ->groupBy('received_by')
+            ->get()
+            ->mapWithKeys(fn ($row) => [$row->received_by => $row->days > 0 ? (int) round($row->total / $row->days) : null])
+            ->all();
+
         $attendanceStatus = Attendance::query()
             ->where('agency_id', $agencyId)
             ->whereDate('clock_in', $date)
@@ -250,9 +331,10 @@ class DailyReportService
 
         return $payments
             ->groupBy('received_by')
-            ->map(function ($rows, $userId) use ($attendanceStatus) {
+            ->map(function ($rows, $userId) use ($attendanceStatus, $sessions, $previousMonthAverages) {
                 $amount = (int) $rows->sum('amount');
                 $count = $rows->count();
+                $own = $sessions->get($userId, collect());
 
                 return [
                     'user_id' => (int) $userId,
@@ -261,6 +343,12 @@ class DailyReportService
                     'transactions_count' => $count,
                     'average_basket' => $count > 0 ? (int) round($amount / $count) : 0,
                     'status' => $attendanceStatus[$userId] ?? null,
+                    // Sessions de caisse du jour du caissier : dernière session (libellé/état),
+                    // écart cumulé des sessions clôturées, erreurs = sessions clôturées avec écart.
+                    'session' => $own->last() ? ['register_label' => $own->last()->register_label, 'status' => $own->last()->status, 'opened_at' => $own->last()->opened_at] : null,
+                    'variance' => $own->whereNotNull('variance')->isEmpty() ? null : (int) $own->sum('variance'),
+                    'errors' => $own->filter(fn ($s) => $s->variance !== null && $s->variance !== 0)->count(),
+                    'previous_month_daily_average' => $previousMonthAverages[$userId] ?? null,
                 ];
             })
             ->sortByDesc('amount')

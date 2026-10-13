@@ -293,6 +293,19 @@ export default function OperationalSettingsPage() {
                         />
                     </SectionCard>
 
+                    <SectionCard id="op-cashiers" title={t('operationalSettings.cashiers.title')} subtitle={t('operationalSettings.cashiers.subtitle')}>
+                        <SuffixInput
+                            icon={Wallet}
+                            label={t('operationalSettings.cashiers.dailyTarget')}
+                            hint={t('operationalSettings.cashiers.dailyTargetHint')}
+                            value={form.cashier_daily_target ?? 0}
+                            min={0}
+                            max={100_000_000}
+                            suffix={t('common.currency')}
+                            onChange={(v) => set('cashier_daily_target', v || null)}
+                        />
+                    </SectionCard>
+
                     <SectionCard id="op-offline" title={t('operationalSettings.offline.title')} subtitle={t('operationalSettings.offline.subtitle')}>
                         <SuffixInput
                             label={t('operationalSettings.offline.syncInterval')}

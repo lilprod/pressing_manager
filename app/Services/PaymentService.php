@@ -37,6 +37,7 @@ class PaymentService
                 'status' => 'complete',
                 'received_by' => $actor->id,
                 'paid_at' => now(),
+                'cash_session_id' => $this->openSessionId($data['agency_id'], $actor),
             ]);
 
             $this->applyToInvoiceIfPaid($payment);
@@ -75,6 +76,7 @@ class PaymentService
                 'received_by' => $actor->id,
                 'paid_at' => now(),
                 'external_reference' => $data['external_reference'] ?? null,
+                'cash_session_id' => $this->openSessionId($data['agency_id'], $actor),
             ]);
 
             $this->applyToInvoiceIfPaid($payment);
@@ -148,6 +150,17 @@ class PaymentService
 
             return $payment;
         });
+    }
+
+    /** Session de caisse ouverte du caissier dans cette agence, s'il en a une. */
+    private function openSessionId(int $agencyId, User $actor): ?int
+    {
+        return \App\Models\CashSession::query()
+            ->where('agency_id', $agencyId)
+            ->where('user_id', $actor->id)
+            ->where('status', 'open')
+            ->latest('opened_at')
+            ->value('id');
     }
 
     /** Notification « Paiement reçu » (évènement transactionnel, jamais différé). */

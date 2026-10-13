@@ -45,6 +45,20 @@ class ReportController extends ApiController
         return $this->exporter->download($data);
     }
 
+    public function exportPdf(Request $request): \Illuminate\Http\Response
+    {
+        $this->authorizePermission($request->user(), 'reports.view');
+        $agencyId = $this->resolveAgencyId($request);
+        $date = $this->resolveDate($request);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('reports.daily-pdf', [
+            'agency' => \App\Models\Agency::findOrFail($agencyId),
+            'report' => $this->dailyReport->build($agencyId, $date),
+        ]);
+
+        return $pdf->download('bilan-'.$date->toDateString().'.pdf');
+    }
+
     private function resolveDate(Request $request): Carbon
     {
         return $request->filled('date') ? Carbon::parse($request->string('date')->value()) : now();

@@ -28,6 +28,7 @@ class UpdateClientRequest extends FormRequest
             'address' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:255'],
             'contact_preference' => ['nullable', 'string', Rule::in(['whatsapp', 'call', 'sms', 'email'])],
+            'care_instructions' => ['nullable', 'string', 'max:500'],
             'referral_code' => ['nullable', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
             'is_active' => ['sometimes', 'boolean'],

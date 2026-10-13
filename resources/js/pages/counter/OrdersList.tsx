@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
     Banknote,
     CalendarClock,
@@ -33,6 +33,8 @@ type InvoiceStatusFilter = (typeof INVOICE_STATUSES)[number];
 type Period = '' | 'today' | 'week' | 'month';
 
 export default function OrdersList() {
+    const [urlParams] = useSearchParams();
+    const clientFilter = urlParams.get('client_id');
     const { t } = useI18n();
     const { money, dateTime } = useFormat();
     const { activeAgencyId } = useAuth();
@@ -70,6 +72,7 @@ export default function OrdersList() {
         if (period) params.set('period', period);
         if (readyToday) params.set('ready_today', '1');
         if (search) params.set('search', search);
+        if (clientFilter) params.set('client_id', clientFilter);
         if (activeAgencyId) params.set('agency_id', String(activeAgencyId));
         api
             .get<Paginated<Order>>(`/orders?${params}`)
@@ -123,6 +126,7 @@ export default function OrdersList() {
         if (period) params.set('period', period);
         if (readyToday) params.set('ready_today', '1');
         if (search) params.set('search', search);
+        if (clientFilter) params.set('client_id', clientFilter);
         if (activeAgencyId) params.set('agency_id', String(activeAgencyId));
         const blob = await api.blob(`/orders/export?${params}`);
         const url = URL.createObjectURL(blob);

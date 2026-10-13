@@ -137,6 +137,13 @@ export interface Client {
     // Présent sur GET /orders/{id} (carte « Client » de la fiche dépôt) : solde dû
     // sur les AUTRES dépôts du client (celui-ci est déjà couvert par order.balance_due).
     other_balance_due?: number;
+    care_instructions?: string | null;
+    // Présents sur GET /clients?with_metrics=1 et GET /clients/{id}.
+    client_code?: string;
+    orders_per_month?: number;
+    last_order_at?: string | null;
+    lifetime_value?: number;
+    tier_id?: number | null;
 }
 
 export interface ClientDetail extends Client {
@@ -145,6 +152,27 @@ export interface ClientDetail extends Client {
     lifetime_value: number;
     balance_due: number;
     recent_pickups: OrderPickup[];
+    basket_trend: number | null;
+    loyalty: ClientLoyaltyBlock;
+    preferences: { favorite_treatment: string | null; pickup_slot: 'morning' | 'midday' | 'afternoon' | 'evening' | null };
+}
+
+export interface ClientLoyaltyBlock {
+    points: number;
+    point_value_fcfa: number | null;
+    points_value: number | null;
+    spend_12m: number;
+    current_tier: { id: number; name: string } | null;
+    next_tier: { id: number; name: string; remaining: number } | null;
+    progress: number;
+    movements: { id: number; points: number; reason: string; expired_at: string | null; created_at: string }[];
+}
+
+export interface ClientNote {
+    id: number;
+    body: string;
+    created_at: string;
+    author: { id: number; name: string } | null;
 }
 
 export interface LoyaltyTier {
@@ -452,6 +480,10 @@ export interface ClientStats {
     new_this_month: number;
     vip_count: number;
     points_issued: number;
+    new_this_week: number;
+    points_issued_this_month: number;
+    points_issued_previous_month: number;
+    by_tier: { id: number; name: string; count: number }[];
 }
 
 export type OrderItemStatus =

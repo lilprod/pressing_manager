@@ -16,7 +16,7 @@ class Client extends Model
 
     protected $fillable = [
         'agency_id', 'first_name', 'last_name', 'phone', 'phone_secondary', 'email', 'address', 'city',
-        'contact_preference', 'referral_code', 'loyalty_points', 'notes', 'is_active', 'sms_consent', 'email_consent',
+        'contact_preference', 'referral_code', 'care_instructions', 'loyalty_points', 'notes', 'is_active', 'sms_consent', 'email_consent',
     ];
 
     protected $appends = ['loyalty_discount_rate', 'loyalty_tier_name'];
@@ -77,6 +77,11 @@ class Client extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function internalNotes(): HasMany
+    {
+        return $this->hasMany(ClientNote::class)->latest();
     }
 
     public function subscriptions(): HasMany

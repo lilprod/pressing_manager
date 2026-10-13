@@ -58,6 +58,7 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
     const [agencyIdSelected, setAgencyIdSelected] = useState<number | null>(client?.agency_id ?? activeAgencyId);
     const [contactPreference, setContactPreference] = useState<ClientContactPreference | null>(client?.contact_preference ?? null);
     const [referralCode, setReferralCode] = useState(client?.referral_code ?? '');
+    const [careInstructions, setCareInstructions] = useState(client?.care_instructions ?? '');
     const [notes, setNotes] = useState(client?.notes ?? '');
     const [isActive, setIsActive] = useState(client?.is_active ?? true);
     const [smsConsent, setSmsConsent] = useState(client?.sms_consent ?? false);
@@ -131,6 +132,7 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
             city: city || null,
             contact_preference: contactPreference,
             referral_code: referralCode || null,
+            care_instructions: careInstructions || null,
             notes: notes || null,
             is_active: isActive,
             sms_consent: smsConsent,
@@ -268,6 +270,10 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
                                 <span className={label}>{t('client.referralCode')}</span>
                                 <input value={referralCode} onChange={(e) => setReferralCode(e.target.value)} className={input} />
                                 <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{t('client.referralCodeHint')}</p>
+                            </label>
+                            <label className="block sm:col-span-2">
+                                <span className={label}>{t('client.careInstructions')}</span>
+                                <input value={careInstructions} onChange={(e) => setCareInstructions(e.target.value)} maxLength={500} placeholder={t('client.careInstructionsPlaceholder')} className={input} />
                             </label>
                         </div>
                     </section>

@@ -438,6 +438,8 @@ export interface CashLedgerEntry {
     method: string | null;
     source_id: number;
     movement_id: number | null;
+    order_id: number | null;
+    order_number: number | null;
 }
 
 export interface CashLedgerFilters {

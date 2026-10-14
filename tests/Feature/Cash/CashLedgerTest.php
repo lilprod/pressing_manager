@@ -6,6 +6,8 @@ use App\Models\Agency;
 use App\Models\CashClosure;
 use App\Models\CashMovement;
 use App\Models\Client;
+use App\Models\Invoice;
+use App\Models\Order;
 use App\Models\Payment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\SeedsRbac;
@@ -49,6 +51,30 @@ class CashLedgerTest extends TestCase
         $response->assertOk();
         $kinds = collect($response->json('data'))->pluck('kind')->sort()->values()->all();
         $this->assertSame(['cloture', 'encaissement', 'mouvement'], $kinds);
+    }
+
+    public function test_a_payment_entry_points_to_its_deposit_and_is_searchable_by_its_number(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $order = Order::factory()->create(['agency_id' => $agency->id, 'client_id' => $client->id, 'order_number' => 4321]);
+        $invoice = Invoice::create([
+            'agency_id' => $agency->id, 'client_id' => $client->id, 'order_id' => $order->id, 'invoice_number' => 9001,
+            'subtotal' => 5000, 'discount_amount' => 0, 'tax_amount' => 0, 'total_amount' => 5000, 'status' => 'emise', 'issued_at' => now(),
+        ]);
+        Payment::create([
+            'agency_id' => $agency->id, 'client_id' => $client->id, 'invoice_id' => $invoice->id, 'method' => 'espece',
+            'amount' => 5000, 'status' => 'complete', 'paid_at' => now(),
+        ]);
+
+        $entry = $this->actingAs($accueil)->getJson('/api/cash/ledger?type=encaissement')->assertOk()->json('data.0');
+        $this->assertSame($order->id, $entry['order_id']);
+        $this->assertSame(4321, $entry['order_number']);
+
+        $found = $this->actingAs($accueil)->getJson('/api/cash/ledger?search=4321')->assertOk()->json('data');
+        $this->assertCount(1, $found);
     }
 
     public function test_the_ledger_can_be_filtered_by_type(): void

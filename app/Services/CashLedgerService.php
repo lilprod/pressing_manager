@@ -45,12 +45,17 @@ class CashLedgerService
                 'mouvement' as kind,
                 'espece' as method,
                 cash_movements.id as source_id,
-                cash_movements.id as movement_id
+                cash_movements.id as movement_id,
+                cast(null as bigint) as order_id,
+                cast(null as integer) as order_number
             SQL)
             ->toBase();
 
         $payments = Payment::query()
             ->leftJoin('users as p_receiver', 'p_receiver.id', '=', 'payments.received_by')
+            // Dépôt réel de l'encaissement (paiement → facture → dépôt), pour la colonne Référence.
+            ->leftJoin('invoices as p_invoice', 'p_invoice.id', '=', 'payments.invoice_id')
+            ->leftJoin('orders as p_order', 'p_order.id', '=', 'p_invoice.order_id')
             ->where('payments.agency_id', $agencyId)
             ->when($from, fn ($query) => $query->whereDate(DB::raw('coalesce(payments.paid_at, payments.created_at)'), '>=', $from))
             ->when($to, fn ($query) => $query->whereDate(DB::raw('coalesce(payments.paid_at, payments.created_at)'), '<=', $to))
@@ -65,7 +70,9 @@ class CashLedgerService
                 'encaissement' as kind,
                 payments.method as method,
                 payments.id as source_id,
-                null as movement_id
+                null as movement_id,
+                p_order.id as order_id,
+                p_order.order_number as order_number
             SQL)
             ->toBase();
 
@@ -85,7 +92,9 @@ class CashLedgerService
                 'cloture' as kind,
                 cast(null as text) as method,
                 cash_closures.id as source_id,
-                null as movement_id
+                null as movement_id,
+                cast(null as bigint) as order_id,
+                cast(null as integer) as order_number
             SQL)
             ->toBase();
 
@@ -103,7 +112,8 @@ class CashLedgerService
                 $query->where(function ($inner) use ($like) {
                     $inner->where('reference', 'ilike', $like)
                         ->orWhere('category', 'ilike', $like)
-                        ->orWhere('agent_name', 'ilike', $like);
+                        ->orWhere('agent_name', 'ilike', $like)
+                        ->orWhereRaw('cast(order_number as text) ilike ?', [$like]);
                 });
             })
             ->orderByDesc('date');

@@ -35,6 +35,16 @@ function downloadBlob(blob: Blob, filename: string) {
  * unifie mouvements manuels, encaissements et clôtures (voir CashLedgerService) —
  * remplace les deux listes simples « Mouvements récents »/« Clôtures récentes ».
  */
+const STATUS_TONES: Record<string, 'emerald' | 'amber' | 'rose' | 'neutral' | 'sky'> = {
+    valide: 'emerald',
+    complete: 'emerald',
+    conforme: 'emerald',
+    en_attente: 'amber',
+    ecart: 'amber',
+    echoue: 'rose',
+    rembourse: 'sky',
+};
+
 export default function CashJournalSection({ agencyId }: { agencyId: number }) {
     const { t } = useI18n();
     const { money, dateTime } = useFormat();
@@ -126,26 +136,26 @@ export default function CashJournalSection({ agencyId }: { agencyId: number }) {
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-end gap-3 px-5 pt-4">
-                <label className="block min-w-[200px] flex-1 basis-full sm:basis-auto">
+            <div className="grid grid-cols-1 items-end gap-3 px-5 pt-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_repeat(5,minmax(0,1fr))]">
+                <label className="block min-w-0 sm:col-span-2 lg:col-span-1">
                     <span className={labelClass}>{t('cash.ledger.search')}</span>
                     <div className="relative">
                         <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400" />
                         <input value={search} onChange={(e) => setSearch(e.target.value)} className={cx(input, 'pl-9')} placeholder={t('cash.ledger.searchPlaceholder')} />
                     </div>
                 </label>
-                <label className="block basis-full sm:basis-auto">
+                <label className="block min-w-0">
                     <span className={labelClass}>{t('cash.ledger.filterType')}</span>
-                    <select value={type} onChange={(e) => setType(e.target.value)} className={cx(input, 'sm:w-44')}>
+                    <select value={type} onChange={(e) => setType(e.target.value)} className={cx(input, 'w-full')}>
                         <option value="">{t('cash.ledger.allTypes')}</option>
                         <option value="mouvement">{t('cash.ledger.kind.mouvement')}</option>
                         <option value="encaissement">{t('cash.ledger.kind.encaissement')}</option>
                         <option value="cloture">{t('cash.ledger.kind.cloture')}</option>
                     </select>
                 </label>
-                <label className="block basis-full sm:basis-auto">
+                <label className="block min-w-0">
                     <span className={labelClass}>{t('cash.ledger.filterStatus')}</span>
-                    <select value={status} onChange={(e) => setStatus(e.target.value)} className={cx(input, 'sm:w-40')}>
+                    <select value={status} onChange={(e) => setStatus(e.target.value)} className={cx(input, 'w-full')}>
                         <option value="">{t('cash.ledger.allStatuses')}</option>
                         <option value="valide">{statusLabel('valide')}</option>
                         <option value="en_attente">{statusLabel('en_attente')}</option>
@@ -156,9 +166,9 @@ export default function CashJournalSection({ agencyId }: { agencyId: number }) {
                         <option value="ecart">{statusLabel('ecart')}</option>
                     </select>
                 </label>
-                <label className="block basis-full sm:basis-auto">
+                <label className="block min-w-0">
                     <span className={labelClass}>{t('cash.ledger.filterMethod')}</span>
-                    <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className={cx(input, 'sm:w-40')}>
+                    <select value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)} className={cx(input, 'w-full')}>
                         <option value="">{t('cash.ledger.allMethods')}</option>
                         <option value="espece">{t('cash.method.espece')}</option>
                         <option value="carte">{t('cash.method.carte')}</option>
@@ -166,13 +176,13 @@ export default function CashJournalSection({ agencyId }: { agencyId: number }) {
                         <option value="tmoney">{t('payment.tmoney')}</option>
                     </select>
                 </label>
-                <label className="block basis-full sm:basis-auto">
+                <label className="block min-w-0">
                     <span className={labelClass}>{t('cash.ledger.filters.from')}</span>
-                    <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} className={cx(input, 'sm:w-40')} />
+                    <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} className={cx(input, 'w-full')} />
                 </label>
-                <label className="block basis-full sm:basis-auto">
+                <label className="block min-w-0">
                     <span className={labelClass}>{t('cash.ledger.filters.to')}</span>
-                    <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className={cx(input, 'sm:w-40')} />
+                    <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} className={cx(input, 'w-full')} />
                 </label>
             </div>
 
@@ -183,14 +193,15 @@ export default function CashJournalSection({ agencyId }: { agencyId: number }) {
                     <EmptyState icon={ScrollText} title={t('cash.ledger.none')} compact />
                 ) : (
                     <div className="overflow-x-auto">
-                        <div className="min-w-[820px]">
+                        <div className="min-w-[900px]">
                             <div
                                 role="row"
                                 className="flex items-center gap-4 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
                             >
                                 <span className="w-36 shrink-0">{t('cash.ledger.table.date')}</span>
                                 <span className="w-28 shrink-0">{t('cash.ledger.table.type')}</span>
-                                <span className="flex-1">{t('cash.ledger.table.reference')}</span>
+                                <span className="w-40 shrink-0">{t('cash.ledger.table.reference')}</span>
+                                <span className="min-w-0 flex-1">{t('cash.ledger.table.category')}</span>
                                 <span className="w-32 shrink-0">{t('cash.ledger.table.agent')}</span>
                                 <span className="w-32 shrink-0 text-right">{t('cash.ledger.table.amount')}</span>
                                 <span className="w-28 shrink-0">{t('cash.ledger.table.status')}</span>
@@ -203,10 +214,18 @@ export default function CashJournalSection({ agencyId }: { agencyId: number }) {
                                             <div className="w-28 shrink-0">
                                                 <Pill tone={KIND_TONES[entry.kind]}>{t(`cash.ledger.kind.${entry.kind}`)}</Pill>
                                             </div>
-                                            <div className="min-w-0 flex-1">
-                                                <p className="truncate text-sm font-medium text-ink-900 dark:text-white">{entry.reference ?? categoryLabel(entry)}</p>
-                                                <p className="truncate text-xs text-ink-500 dark:text-ink-400">{categoryLabel(entry)}</p>
-                                            </div>
+                                            <p className="w-40 shrink-0 truncate text-sm text-ink-700 dark:text-ink-200" title={entry.reference ?? undefined}>
+                                                {entry.order_number !== null ? (
+                                                    <span className="font-semibold">
+                                                        {t('order.number')}
+                                                        {entry.order_number}
+                                                    </span>
+                                                ) : (
+                                                    <span className="font-mono text-xs">{entry.reference ?? '—'}</span>
+                                                )}
+                                                {entry.order_number !== null && entry.reference && <span className="block truncate font-mono text-[11px] text-ink-500">{entry.reference}</span>}
+                                            </p>
+                                            <p className="min-w-0 flex-1 truncate text-sm font-medium text-ink-900 dark:text-white">{categoryLabel(entry)}</p>
                                             <p className="w-32 shrink-0 truncate text-sm text-ink-600 dark:text-ink-350">{entry.agent_name ?? '—'}</p>
                                             <p
                                                 className={cx(
@@ -218,16 +237,16 @@ export default function CashJournalSection({ agencyId }: { agencyId: number }) {
                                                 {money(entry.amount)}
                                             </p>
                                             <div className="w-28 shrink-0">
-                                                <Pill tone="neutral">{statusLabel(entry.status)}</Pill>
+                                                <Pill tone={STATUS_TONES[entry.status] ?? 'neutral'}>{statusLabel(entry.status)}</Pill>
                                             </div>
                                         </>
                                     );
 
                                     return (
                                         <li key={`${entry.kind}-${entry.source_id}-${index}`}>
-                                            {entry.movement_id ? (
+                                            {entry.movement_id || entry.order_id ? (
                                                 <Link
-                                                    to={`/cash/movements/${entry.movement_id}`}
+                                                    to={entry.movement_id ? `/cash/movements/${entry.movement_id}` : `/orders/${entry.order_id}`}
                                                     className="flex items-center gap-4 px-5 py-3 transition hover:bg-ink-50 dark:hover:bg-ink-800/60"
                                                 >
                                                     {row}

@@ -33,6 +33,8 @@ class StoreOrderPickupRequest extends FormRequest
                 'nullable', 'string', 'max:255',
             ],
             'override_unpaid' => ['nullable', 'boolean'],
+            // Bascule « Notifier le client » de l'écran : absent = notifier (comportement historique).
+            'notify_client' => ['nullable', 'boolean'],
             'override_reason' => ['required_if:override_unpaid,true', 'nullable', 'string', 'max:1000'],
         ];
     }

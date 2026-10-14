@@ -143,7 +143,9 @@ class PickupService
             $this->statusSync->sync($order->fresh());
 
             $pickup->setRelation('order', $order);
-            $this->notifications->notify($order->agency_id, 'pickup_completed', $order->client, new PickupCompletedNotification($pickup), $order->id);
+            if ($data['notify_client'] ?? true) {
+                $this->notifications->notify($order->agency_id, 'pickup_completed', $order->client, new PickupCompletedNotification($pickup), $order->id);
+            }
 
             return $pickup->load('items.orderItem', 'processor');
         });

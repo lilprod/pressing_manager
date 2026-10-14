@@ -191,6 +191,30 @@ class NotificationTest extends TestCase
         Notification::assertSentOnDemand(PickupCompletedNotification::class);
     }
 
+    public function test_a_pickup_can_skip_the_client_notification(): void
+    {
+        $this->seedRbac();
+        Notification::fake();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->create(['agency_id' => $agency->id, 'email' => 'client@example.com']);
+        $order = Order::factory()->create(['agency_id' => $agency->id, 'client_id' => $client->id, 'status' => 'pret']);
+        $item = OrderItem::factory()->create([
+            'order_id' => $order->id, 'agency_id' => $agency->id, 'service_id' => Service::factory()->create()->id,
+            'quantity' => 1, 'unit_price' => 1000, 'status' => 'pret',
+        ]);
+
+        $this->actingAs($accueil)->postJson("/api/orders/{$order->id}/pickups", [
+            'recipient_type' => 'client',
+            'recipient_name' => 'Client',
+            'condition_status' => 'conforme',
+            'items' => [['order_item_id' => $item->id, 'quantity' => 1]],
+            'notify_client' => false,
+        ])->assertCreated();
+
+        Notification::assertNothingSent();
+    }
+
     public function test_notification_settings_endpoint_returns_defaults_for_unconfigured_events(): void
     {
         $this->seedRbac();

@@ -2,23 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
     ArrowLeft,
-    ArrowUpRight,
-    Award,
     Ban,
     Banknote,
-    CalendarDays,
     ClipboardCheck,
-    Clock,
-    HandCoins,
+    CloudCheck,
+    Plus,
     PackageCheck,
-    SlidersHorizontal,
     FileQuestion,
     Pencil,
-    Phone,
     Printer,
-    ScrollText,
-    StickyNote,
-    Star,
     Workflow,
     X,
     Zap,
@@ -54,8 +46,8 @@ const NOT_EDITABLE_STATUSES = ['livre', 'annule'];
 
 export default function OrderDetail() {
     const { id } = useParams<{ id: string }>();
-    const { t } = useI18n();
-    const { money, date, dateTime } = useFormat();
+    const { t, lang } = useI18n();
+    const { money, dateTime } = useFormat();
     const [order, setOrder] = useState<Order | null>(null);
     const [loading, setLoading] = useState(true);
     const [printTarget, setPrintTarget] = useState<PrintTarget>(null);
@@ -63,6 +55,7 @@ export default function OrderDetail() {
     const [itemsView, setItemsView] = useState<'summary' | 'tracking'>('summary');
     const [showFullTimeline, setShowFullTimeline] = useState(false);
     const [showFullAudit, setShowFullAudit] = useState(false);
+    const [paymentSignal, setPaymentSignal] = useState(0);
 
     const [editing, setEditing] = useState(false);
     const [editNotes, setEditNotes] = useState('');
@@ -212,230 +205,313 @@ export default function OrderDetail() {
     const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
     const treatmentNames = [...new Set(order.items.map((i) => i.treatment_type?.name).filter((n): n is string => !!n))];
     const finishNames = [...new Set(order.items.map((i) => i.finish_option?.name).filter((n): n is string => !!n))];
-    // Reliquat de remise saisi à la main au comptoir (ni fidélité ni promotion) — même découpage que le serveur.
-    const manualDiscount = Math.max(0, order.discount_amount - (order.loyalty_discount_amount ?? 0) - (order.promotion_discount_amount ?? 0));
-    const invoiceStatus = order.invoice?.[0]?.status;
+    const invoice = order.invoice?.[0] ?? null;
+    const invoiceStatus = invoice?.status;
     const canAddPayment = order.status !== 'annule' && invoiceStatus !== 'payee' && invoiceStatus !== 'annulee';
+    const editable = !NOT_EDITABLE_STATUSES.includes(order.status);
+    const activeStatus = ['recu', 'trie', 'en_traitement', 'controle_qualite', 'pret'].includes(order.status);
+    const paidAmount = (invoice?.payments ?? []).filter((p) => p.status === 'complete').reduce((sum, p) => sum + p.amount, 0);
+    const commercialLabel = invoice ? t(`invoice.status.${invoice.status}`) : t('order.commercialStatus.notInvoiced');
+    const itemsSubtotal = order.items.reduce((sum, item) => sum + lineTotal(item), 0);
+    const hasWeight = order.items.some((i) => i.weight_kg);
+    const hasPieces = order.items.some((i) => !i.weight_kg);
+    const billingKind = hasWeight && hasPieces ? 'mixed' : hasWeight ? 'kg' : 'piece';
+    const flaggedCount = order.items.filter((i) => (i.intake_conditions?.length ?? 0) > 0 || i.intake_notes).length;
+    const turnaroundHours = order.promised_at
+        ? Math.max(0, Math.round((new Date(order.promised_at).getTime() - new Date(order.created_at).getTime()) / 3_600_000))
+        : null;
+    // Dernière transition réelle d'un article (chronologie atelier, hors création du dépôt).
+    const lastStep = workshopTimeline.find((entry) => entry.id !== 'order-created') ?? null;
 
     function focusPayment() {
-        const panel = document.getElementById('invoice-panel');
-        panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        window.setTimeout(() => document.getElementById(`invoice-amount-${order!.id}`)?.focus({ preventScroll: true }), 400);
+        setPaymentSignal((n) => n + 1);
+        window.setTimeout(() => {
+            document.getElementById('invoice-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            document.getElementById(`invoice-amount-${order!.id}`)?.focus({ preventScroll: true });
+        }, 100);
+    }
+
+    function dayTime(value: string): string {
+        const d = new Date(value);
+        const today = new Date();
+        const hm = hourMinute(value);
+        if (d.toDateString() === today.toDateString()) return t('order.table.todayAt', { time: hm });
+        return dateTime(value);
+    }
+
+    function hourMinute(value: string): string {
+        return new Date(value).toLocaleTimeString(lang === 'en' ? 'en-GB' : 'fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    /** Heure seule pour aujourd'hui, sinon jour + heure (une liste mêlant plusieurs jours reste lisible). */
+    function shortStamp(value: string): string {
+        const d = new Date(value);
+        if (d.toDateString() === new Date().toDateString()) return hourMinute(value);
+        return new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'fr-FR', { day: '2-digit', month: 'short' }).format(d) + ' ' + hourMinute(value);
+    }
+
+    function monthYear(value: string): string {
+        return new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'fr-FR', { month: 'long', year: 'numeric' }).format(new Date(value));
     }
 
     return (
         <div className="space-y-6">
             {backLink}
 
-            <header className={cx(cardPadded, 'relative overflow-hidden')}>
-                <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-brand-100/60 blur-2xl dark:bg-brand-400/10"
-                />
-                <div className="relative flex flex-wrap items-start justify-between gap-5">
-                    <div className="min-w-0 space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <h1 className="font-display text-2xl font-extrabold text-ink-900 sm:text-3xl dark:text-white">
-                                {t('order.number')}
-                                {order.order_number_formatted ?? order.order_number}
-                            </h1>
-                            <StatusBadge kind="order" status={order.status} size="md" />
-                            {order.is_express && (
-                                <Pill tone="accent" icon={Zap}>
-                                    {t('order.expressShort')}
-                                </Pill>
-                            )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink-600 dark:text-ink-350">
-                            <span className="inline-flex items-center gap-2">
-                                <Avatar firstName={order.client?.first_name} lastName={order.client?.last_name} size="sm" />
-                                <span className="font-semibold text-ink-900 dark:text-ink-50">
-                                    {order.client?.first_name} {order.client?.last_name}
-                                </span>
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                                <Phone aria-hidden="true" className="h-4 w-4" />
-                                {order.client?.phone}
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                                <CalendarDays aria-hidden="true" className="h-4 w-4" />
-                                {dateTime(order.created_at)}
-                            </span>
-                            {order.promised_at && (
-                                <span className="inline-flex items-center gap-1.5 font-semibold text-brand-700 dark:text-brand-300">
-                                    <Clock aria-hidden="true" className="h-4 w-4" />
-                                    {t('order.promisedAt')} {dateTime(order.promised_at)}
-                                </span>
-                            )}
-                        </div>
+            <header className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h1 className="font-display text-2xl font-extrabold text-ink-900 sm:text-3xl dark:text-white">
+                            {t('order.detail.title', { code: String(order.order_number_formatted ?? order.order_number) })}
+                        </h1>
+                        <Pill tone={invoice ? statusTone('invoice', invoice.status) : 'neutral'}>{commercialLabel}</Pill>
+                        <StatusBadge kind="order" status={order.status} size="md" />
                     </div>
-
-                    <div className="flex flex-col items-start gap-3 sm:items-end">
-                        <div className="sm:text-right">
-                            <p className="text-xs font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('common.total')}</p>
-                            <p className="font-display text-3xl font-extrabold tabular-nums text-ink-900 dark:text-white">{money(order.total_amount)}</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2 no-print">
-                            <button type="button" onClick={() => setPrintTarget({ kind: 'ticket' })} className={button('secondary')}>
-                                <Printer aria-hidden="true" className="h-4 w-4" />
-                                {t('order.printTicket')}
-                            </button>
-                            {canAddPayment && (
-                                <button type="button" onClick={focusPayment} className={button('accent')}>
-                                    <HandCoins aria-hidden="true" className="h-4 w-4" />
-                                    {t('order.addPayment')}
-                                </button>
-                            )}
-                        </div>
-                    </div>
+                    <p className="text-sm text-ink-600 dark:text-ink-350">
+                        {[
+                            t('order.detail.createdAt', { when: dayTime(order.created_at) }),
+                            order.agency ? t('order.detail.agency', { name: order.agency.name }) : null,
+                            order.creator ? t('order.detail.by', { name: order.creator.name }) : null,
+                        ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                    </p>
+                </div>
+                <div className="no-print flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setPrintTarget({ kind: 'ticket' })} className={button('secondary')}>
+                        <Printer aria-hidden="true" className="h-4 w-4" />
+                        {t('common.print')}
+                    </button>
+                    {editable && (
+                        <button type="button" onClick={openEdit} className={button('secondary')}>
+                            <Pencil aria-hidden="true" className="h-4 w-4" />
+                            {t('common.edit')}
+                        </button>
+                    )}
+                    {canAddPayment && (
+                        <button type="button" onClick={focusPayment} className={button('primary')}>
+                            <Plus aria-hidden="true" className="h-4 w-4" />
+                            {t('order.addDeposit')}
+                        </button>
+                    )}
                 </div>
             </header>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4">
                 <StatCard
                     label={t('order.commercialStatus.title')}
-                    value={order.invoice && order.invoice.length > 0 ? t(`invoice.status.${order.invoice[0].status}`) : t('order.commercialStatus.notInvoiced')}
+                    value={invoice ? t(`order.commercialShort.${invoice.status}`) : t('order.commercialStatus.notInvoiced')}
                     icon={ClipboardCheck}
-                    tone={order.invoice && order.invoice.length > 0 ? statusTone('invoice', order.invoice[0].status) : 'neutral'}
+                    tone={invoice ? statusTone('invoice', invoice.status) : 'neutral'}
+                    hint={order.promised_at ? t('order.detail.pickupDue', { when: dayTime(order.promised_at) }) : undefined}
                 />
-                <StatCard label={t('order.workshopStatus.title')} value={t(`status.${order.status}`)} icon={Workflow} tone={statusTone('order', order.status)} />
+                <StatCard
+                    label={t('order.workshopStatus.title')}
+                    value={t(`status.${order.status}`)}
+                    icon={Workflow}
+                    tone={statusTone('order', order.status)}
+                    hint={lastStep ? t('order.detail.lastStep', { when: dayTime(lastStep.at) }) : undefined}
+                />
+                <StatCard
+                    label={t('order.detail.syncTitle')}
+                    value={t('order.sync.upToDate')}
+                    icon={CloudCheck}
+                    tone="emerald"
+                    hint={
+                        order.source === 'offline_sync'
+                            ? t('order.detail.syncOffline', { when: dayTime(order.created_at) })
+                            : t('order.detail.syncOnline')
+                    }
+                />
                 <StatCard
                     label={t('order.balanceDue.title')}
-                    value={order.invoice && order.invoice.length > 0 ? (order.balance_due ? money(order.balance_due) : t('order.balanceDue.settled')) : '—'}
+                    value={invoice ? (order.balance_due ? money(order.balance_due) : t('order.balanceDue.settled')) : '—'}
                     icon={Banknote}
                     tone={order.balance_due ? 'rose' : 'emerald'}
+                    hint={invoice ? (paidAmount > 0 ? t('order.detail.depositOf', { amount: money(paidAmount) }) : t('order.detail.noDeposit')) : t('order.commercialStatus.notInvoiced')}
                 />
             </div>
 
-            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-                <section aria-labelledby="items-heading" className="min-w-0 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                            <h2 id="items-heading" className={sectionTitle}>
-                                {t('order.items')}
-                            </h2>
-                            <Pill tone="neutral">{t('order.itemsCount', { count: itemCount })}</Pill>
-                        </div>
-                        <div role="group" aria-label={t('order.itemsView.label')} className="flex h-9 items-center gap-1 rounded-xl bg-ink-100 p-1 dark:bg-ink-800">
-                            {(['summary', 'tracking'] as const).map((view) => (
-                                <button
-                                    key={view}
-                                    type="button"
-                                    aria-pressed={itemsView === view}
-                                    onClick={() => setItemsView(view)}
-                                    className={cx(
-                                        'h-full whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition',
-                                        itemsView === view ? 'bg-white text-ink-900 shadow-sm dark:bg-ink-700 dark:text-white' : 'text-ink-600 hover:text-ink-900 dark:text-ink-300',
-                                    )}
-                                >
-                                    {t(`order.itemsView.${view}`)}
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+                <div className="min-w-0 space-y-6">
+                    <section aria-labelledby="items-heading" className={cx(card, 'overflow-hidden')}>
+                        <div className="flex flex-wrap items-start justify-between gap-2 px-5 pt-5">
+                            <div>
+                                <h2 id="items-heading" className={sectionTitle}>
+                                    {t('order.detail.itemsTitle')}
+                                </h2>
+                                <p className="text-xs text-ink-600 dark:text-ink-350">
+                                    {t('order.itemsCount', { count: itemCount })} · {t(`order.detail.billing.${billingKind}`)}
+                                </p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-3 text-sm">
+                                <button type="button" onClick={() => setItemsView((v) => (v === 'summary' ? 'tracking' : 'summary'))} className={textLink}>
+                                    {itemsView === 'summary' ? t('order.itemsView.tracking') : t('order.itemsView.summary')}
                                 </button>
-                            ))}
+                                <Link to={`/orders/${order.id}/documents`} className={textLink}>
+                                    {t('order.detail.viewTicket')}
+                                </Link>
+                            </div>
                         </div>
-                    </div>
 
-                    {itemsView === 'summary' ? (
-                        <div className={cx(card, 'overflow-hidden')}>
-                            <div className="overflow-x-auto">
-                                <table className="w-full min-w-[640px] text-sm">
+                        {itemsView === 'summary' ? (
+                            <div className="mt-3 overflow-x-auto">
+                                <table className="w-full min-w-[560px] text-sm">
                                     <thead className="bg-ink-50 text-left text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:bg-ink-950/40 dark:text-ink-400">
                                         <tr>
-                                            <th scope="col" className="px-5 py-2.5">{t('order.itemsTable.article')}</th>
-                                            <th scope="col" className="px-3 py-2.5">{t('order.itemsTable.prestation')}</th>
-                                            <th scope="col" className="px-3 py-2.5 text-right">{t('order.itemsTable.quantity')}</th>
-                                            <th scope="col" className="px-3 py-2.5 text-right">{t('order.itemsTable.price')}</th>
-                                            <th scope="col" className="px-5 py-2.5 text-right">{t('order.itemsTable.status')}</th>
+                                            <th scope="col" className="px-5 py-2.5">{t('order.detail.articleState')}</th>
+                                            <th scope="col" className="px-3 py-2.5 text-right">{t('order.detail.qty')}</th>
+                                            <th scope="col" className="px-3 py-2.5 text-right">{t('order.detail.unitPrice')}</th>
+                                            <th scope="col" className="px-5 py-2.5 text-right">{t('common.total')}</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
-                                        {order.items.map((item) => (
-                                            <tr key={item.id}>
-                                                <td className="px-5 py-3">
-                                                    <p className="font-medium text-ink-900 dark:text-white">{item.service?.name ?? t('order.item')}</p>
-                                                    {(item.intake_conditions?.length ?? 0) > 0 && (
-                                                        <p className="text-xs text-amber-700 dark:text-amber-300">
-                                                            {item.intake_conditions!.map((c) => c.label).join(', ')}
-                                                        </p>
-                                                    )}
-                                                </td>
-                                                <td className="px-3 py-3 text-ink-700 dark:text-ink-200">{itemPrestationLabel(item) || '—'}</td>
-                                                <td className="px-3 py-3 text-right tabular-nums text-ink-700 dark:text-ink-200">
-                                                    {item.weight_kg ? `${item.weight_kg} kg` : `× ${item.quantity}`}
-                                                </td>
-                                                <td className="px-3 py-3 text-right font-semibold tabular-nums text-ink-900 dark:text-white">{money(lineTotal(item))}</td>
-                                                <td className="px-5 py-3 text-right">
-                                                    <StatusBadge kind="order" status={item.status} />
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {order.items.map((item) => {
+                                            const detail = [
+                                                itemPrestationLabel(item),
+                                                item.description,
+                                                ...(item.intake_conditions ?? []).map((c) => c.label),
+                                                item.intake_notes,
+                                            ].filter(Boolean);
+                                            return (
+                                                <tr key={item.id}>
+                                                    <td className="px-5 py-3">
+                                                        <p className="font-medium text-ink-900 dark:text-white">{item.service?.name ?? t('order.item')}</p>
+                                                        {detail.length > 0 && <p className="text-xs text-ink-500 dark:text-ink-400">{detail.join(' · ')}</p>}
+                                                    </td>
+                                                    <td className="px-3 py-3 text-right tabular-nums text-ink-700 dark:text-ink-200">
+                                                        {item.weight_kg ? `${item.weight_kg} kg` : item.quantity}
+                                                    </td>
+                                                    <td className="px-3 py-3 text-right tabular-nums text-ink-700 dark:text-ink-200">
+                                                        {item.weight_kg ? '—' : money(item.unit_price)}
+                                                    </td>
+                                                    <td className="px-5 py-3 text-right font-semibold tabular-nums text-ink-900 dark:text-white">{money(lineTotal(item))}</td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                     <tfoot className="border-t border-ink-200/80 dark:border-ink-800">
-                                        {order.discount_amount > 0 && (
-                                            <tr>
-                                                <td colSpan={3} className="px-5 py-2 text-right text-ink-600 dark:text-ink-350">{t('invoice.discount')}</td>
-                                                <td className="px-3 py-2 text-right tabular-nums text-ink-700 dark:text-ink-200">-{money(order.discount_amount)}</td>
-                                                <td />
-                                            </tr>
-                                        )}
                                         <tr>
-                                            <td colSpan={3} className="px-5 py-2.5 text-right font-semibold text-ink-900 dark:text-white">{t('common.total')}</td>
-                                            <td className="px-3 py-2.5 text-right font-display font-bold tabular-nums text-ink-900 dark:text-white">{money(order.total_amount)}</td>
-                                            <td />
+                                            <td colSpan={3} className="px-5 py-3 text-ink-600 dark:text-ink-350">
+                                                {t('order.detail.itemsSubtotal')}
+                                            </td>
+                                            <td className="px-5 py-3 text-right font-display font-bold tabular-nums text-ink-900 dark:text-white">{money(itemsSubtotal)}</td>
                                         </tr>
                                     </tfoot>
                                 </table>
                             </div>
-                        </div>
-                    ) : (
-                        <>
-                            <div
-                                role="row"
-                                className="hidden items-center gap-4 rounded-xl border border-ink-200/80 bg-ink-50 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
-                            >
-                                <span className="min-w-0 flex-1">{t('order.itemsTable.article')}</span>
-                                <span className="w-28 shrink-0 text-right">{t('order.itemsTable.price')}</span>
-                                <span className="w-32 shrink-0 text-right">{t('order.itemsTable.status')}</span>
-                            </div>
-                            <ul className="space-y-3">
+                        ) : (
+                            <ul className="space-y-3 p-5">
                                 {order.items.map((item) => (
                                     <OrderItemRow key={item.id} item={item} onUpdated={handleItemUpdated} onPrintLabel={printLabel} />
                                 ))}
                             </ul>
-                        </>
-                    )}
-
-                    <section aria-labelledby="options-heading" className={cx(cardPadded, 'space-y-3')}>
-                        <h2 id="options-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
-                            <SlidersHorizontal aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                            {t('order.options.title')}
-                        </h2>
-                        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
-                            <OptionRow label={t('order.options.delay')} value={order.is_express ? t('order.expressShort') : t('order.standard')} />
-                            <OptionRow label={t('order.options.treatments')} value={treatmentNames.length > 0 ? treatmentNames.join(', ') : '—'} />
-                            <OptionRow label={t('order.options.finishes')} value={finishNames.length > 0 ? finishNames.join(', ') : '—'} />
-                            <OptionRow label={t('order.promisedAt')} value={order.promised_at ? dateTime(order.promised_at) : '—'} />
-                            <OptionRow
-                                label={t('order.options.loyaltyDiscount')}
-                                value={order.loyalty_discount_amount ? `-${money(order.loyalty_discount_amount)}` : '—'}
-                            />
-                            <OptionRow
-                                label={t('order.options.promotion')}
-                                value={
-                                    order.promotion_discount_amount
-                                        ? `${order.promotion ? `${order.promotion.code} · ` : ''}-${money(order.promotion_discount_amount)}`
-                                        : '—'
-                                }
-                            />
-                            {manualDiscount > 0 && <OptionRow label={t('order.options.manualDiscount')} value={`-${money(manualDiscount)}`} />}
-                        </dl>
-                        {order.notes && (
-                            <p className="flex items-start gap-1.5 rounded-xl bg-ink-50 px-3.5 py-2.5 text-sm text-ink-700 dark:bg-ink-950/60 dark:text-ink-300">
-                                <StickyNote aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                                {order.notes}
-                            </p>
                         )}
                     </section>
-                </section>
+
+                    <section aria-labelledby="options-heading" className={cx(cardPadded, 'space-y-4')}>
+                        <div>
+                            <h2 id="options-heading" className={sectionTitle}>
+                                {t('order.options.title')}
+                            </h2>
+                            <p className="text-xs text-ink-600 dark:text-ink-350">{t('order.options.subtitle')}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <Pill tone={order.is_express ? 'accent' : 'neutral'} icon={order.is_express ? Zap : undefined}>
+                                {order.is_express ? t('order.expressShort') : t('order.standard')}
+                                {turnaroundHours !== null ? ` · ${t('order.options.hours', { count: turnaroundHours })}` : ''}
+                            </Pill>
+                            {flaggedCount > 0 && <Pill tone="amber">{t('order.options.flagged', { count: flaggedCount })}</Pill>}
+                            {finishNames.map((name) => (
+                                <Pill key={name} tone="emerald">
+                                    {t('order.options.finish', { name })}
+                                </Pill>
+                            ))}
+                            {treatmentNames.map((name) => (
+                                <Pill key={name} tone="neutral">
+                                    {name}
+                                </Pill>
+                            ))}
+                            <Pill tone="sky">{t('order.options.piecesCounted', { count: itemCount })}</Pill>
+                        </div>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:text-ink-400">{t('order.options.collect')}</p>
+                                <dl className="space-y-1.5 text-sm">
+                                    <div className="flex justify-between gap-3">
+                                        <dt className="text-ink-600 dark:text-ink-350">{t('order.options.mode')}</dt>
+                                        <dd className="font-medium text-ink-900 dark:text-ink-50">{t('order.options.pickupInAgency')}</dd>
+                                    </div>
+                                    {order.agency && (
+                                        <div className="flex justify-between gap-3">
+                                            <dt className="text-ink-600 dark:text-ink-350">{t('order.options.agency')}</dt>
+                                            <dd className="font-medium text-ink-900 dark:text-ink-50">{order.agency.name}</dd>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between gap-3">
+                                        <dt className="text-ink-600 dark:text-ink-350">{t('order.promisedAt')}</dt>
+                                        <dd className="font-medium text-ink-900 dark:text-ink-50">{order.promised_at ? dayTime(order.promised_at) : '—'}</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                            <div className="rounded-xl bg-ink-50 p-3.5 dark:bg-ink-950/60">
+                                <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:text-ink-400">{t('order.options.remarks')}</p>
+                                <p className="text-sm text-ink-800 dark:text-ink-100">{order.notes || t('order.options.noRemarks')}</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                        <section aria-labelledby="timeline-heading" className={cx(cardPadded, 'space-y-4')}>
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <h2 id="timeline-heading" className={sectionTitle}>
+                                        {t('order.timeline.title')}
+                                    </h2>
+                                    <p className="text-xs text-ink-600 dark:text-ink-350">{t('order.timeline.subtitle')}</p>
+                                </div>
+                                {activeStatus && (
+                                    <Link to={`/atelier?order=${order.id}`} className={cx(textLink, 'text-xs')}>
+                                        {t('order.followWorkshop')}
+                                    </Link>
+                                )}
+                            </div>
+                            <Timeline entries={showFullTimeline ? workshopTimeline : workshopTimeline.slice(0, 5)} emptyLabel={t('order.timeline.empty')} />
+                            {workshopTimeline.length > 5 && (
+                                <button type="button" onClick={() => setShowFullTimeline((v) => !v)} className={cx(textLink, 'text-sm')}>
+                                    {showFullTimeline ? t('order.journal.showLess') : t('order.journal.showAll', { count: workshopTimeline.length })}
+                                </button>
+                            )}
+                        </section>
+
+                        <section aria-labelledby="audit-heading" className={cx(cardPadded, 'space-y-3')}>
+                            <div>
+                                <h2 id="audit-heading" className={sectionTitle}>
+                                    {t('order.audit.title')}
+                                </h2>
+                                <p className="text-xs text-ink-600 dark:text-ink-350">{t('order.audit.subtitle')}</p>
+                            </div>
+                            {auditTimeline.length === 0 ? (
+                                <p className="text-sm text-ink-500">{t('order.audit.empty')}</p>
+                            ) : (
+                                <ul className="divide-y divide-ink-100 text-sm dark:divide-ink-800">
+                                    {(showFullAudit ? auditTimeline : auditTimeline.slice(0, 6)).map((entry) => (
+                                        <li key={entry.id} className="grid grid-cols-[4.5rem_minmax(0,6rem)_minmax(0,1fr)] gap-3 py-2">
+                                            <span className="tabular-nums text-ink-500 dark:text-ink-400">{shortStamp(entry.at)}</span>
+                                            <span className="truncate font-semibold text-ink-800 dark:text-ink-100">{entry.actor}</span>
+                                            <span className="text-ink-700 dark:text-ink-200">{entry.label}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                            {auditTimeline.length > 6 && (
+                                <button type="button" onClick={() => setShowFullAudit((v) => !v)} className={cx(textLink, 'text-sm')}>
+                                    {showFullAudit ? t('order.journal.showLess') : t('order.journal.showAll', { count: auditTimeline.length })}
+                                </button>
+                            )}
+                        </section>
+                    </div>
+                </div>
 
                 <div className="space-y-6 lg:sticky lg:top-20">
                     {order.client && (
@@ -444,9 +520,8 @@ export default function OrderDetail() {
                                 <h2 id="client-card-heading" className={sectionTitle}>
                                     {t('order.client')}
                                 </h2>
-                                <Link to={`/clients/${order.client_id}`} className={cx(textLink, 'inline-flex items-center gap-1 text-xs')}>
+                                <Link to={`/clients/${order.client_id}`} className={cx(textLink, 'text-xs')}>
                                     {t('order.openClient')}
-                                    <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
                                 </Link>
                             </div>
                             <div className="flex items-center gap-3">
@@ -456,110 +531,83 @@ export default function OrderDetail() {
                                         {order.client.first_name} {order.client.last_name}
                                     </p>
                                     <p className="truncate text-xs text-ink-600 dark:text-ink-350">
-                                        {order.client.phone} · {t('order.clientSince', { date: date(order.client.created_at) })}
+                                        {order.client.phone} · {t('order.clientSince', { date: monthYear(order.client.created_at) })}
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Pill tone="accent" icon={Award}>
-                                    {t('client.pointsCount', { count: order.client.loyalty_points })}
-                                </Pill>
-                                {order.client.loyalty_tier_name && (
-                                    <Pill tone="amber" icon={Star}>
-                                        {order.client.loyalty_tier_name}
-                                    </Pill>
-                                )}
-                            </div>
-                            <div className="border-t border-ink-200/80 pt-3 dark:border-ink-800">
-                                <p className="text-xs font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">
-                                    {t('order.clientBalance.title')}
-                                </p>
-                                <p
-                                    className={cx(
-                                        'font-display text-lg font-bold tabular-nums',
-                                        order.client.other_balance_due ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300',
-                                    )}
-                                >
-                                    {order.client.other_balance_due ? money(order.client.other_balance_due) : t('order.clientBalance.none')}
-                                </p>
-                            </div>
+                            <dl className="space-y-2 text-sm">
+                                <div className="flex justify-between gap-3">
+                                    <dt className="text-ink-600 dark:text-ink-350">{t('order.detail.loyalty')}</dt>
+                                    <dd className="font-medium text-ink-900 dark:text-ink-50">
+                                        {t('order.detail.pointsAvailable', { count: order.client.loyalty_points })}
+                                        {order.client.loyalty_tier_name ? ` · ${order.client.loyalty_tier_name}` : ''}
+                                    </dd>
+                                </div>
+                                <div className="flex justify-between gap-3">
+                                    <dt className="text-ink-600 dark:text-ink-350">{t('order.detail.clientBalance')}</dt>
+                                    <dd
+                                        className={cx(
+                                            'font-medium',
+                                            order.client.other_balance_due ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300',
+                                        )}
+                                    >
+                                        {order.client.other_balance_due ? money(order.client.other_balance_due) : t('order.clientBalance.none')}
+                                    </dd>
+                                </div>
+                            </dl>
                         </section>
                     )}
 
+                    <InvoicePanel order={order} openPaymentSignal={paymentSignal} />
+
                     <section aria-labelledby="actions-heading" className={cx(cardPadded, 'space-y-3 no-print')}>
-                        <h2 id="actions-heading" className={sectionTitle}>
-                            {t('order.actions.title')}
-                        </h2>
+                        <div>
+                            <h2 id="actions-heading" className={sectionTitle}>
+                                {t('order.actions.title')}
+                            </h2>
+                            <p className="text-xs text-ink-600 dark:text-ink-350">{t('order.actions.subtitle')}</p>
+                        </div>
                         <div className="grid grid-cols-1 gap-2">
-                            <Link to={`/orders/${order.id}/documents`} className={button('secondary', 'md', 'w-full justify-start')}>
-                                <ScrollText aria-hidden="true" className="h-4 w-4" />
-                                {t('documents.title')}
-                            </Link>
+                            <button type="button" onClick={() => setPrintTarget({ kind: 'ticket' })} className={button('secondary', 'md', 'w-full')}>
+                                <Printer aria-hidden="true" className="h-4 w-4" />
+                                {t('order.printTicket')}
+                            </button>
                             {order.status === 'pret' && (
-                                <Link to={`/pickups/${order.id}`} className={button('secondary', 'md', 'w-full justify-start')}>
+                                <Link to={`/pickups/${order.id}`} className={button('secondary', 'md', 'w-full')}>
                                     <PackageCheck aria-hidden="true" className="h-4 w-4" />
                                     {t('order.actions.pickup')}
                                 </Link>
                             )}
-                            {['recu', 'trie', 'en_traitement', 'controle_qualite', 'pret'].includes(order.status) && (
-                                <Link to={`/atelier?order=${order.id}`} className={button('secondary', 'md', 'w-full justify-start')}>
+                            {editable && (
+                                <button type="button" onClick={openEdit} className={button('secondary', 'md', 'w-full')}>
+                                    <Pencil aria-hidden="true" className="h-4 w-4" />
+                                    {t('order.edit.action')}
+                                </button>
+                            )}
+                            {activeStatus && (
+                                <Link to={`/atelier?order=${order.id}`} className={button('secondary', 'md', 'w-full')}>
                                     <Workflow aria-hidden="true" className="h-4 w-4" />
                                     {t('order.followWorkshop')}
                                 </Link>
                             )}
-                            {!NOT_EDITABLE_STATUSES.includes(order.status) && (
-                                <>
-                                    <button type="button" onClick={openEdit} className={button('secondary', 'md', 'w-full justify-start')}>
-                                        <Pencil aria-hidden="true" className="h-4 w-4" />
-                                        {t('order.edit.action')}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setCancelReason('');
-                                            setCancelError(null);
-                                            setCancelling(true);
-                                        }}
-                                        className={button('danger', 'md', 'w-full justify-start')}
-                                    >
-                                        <Ban aria-hidden="true" className="h-4 w-4" />
-                                        {t('order.cancel.action')}
-                                    </button>
-                                </>
+                            {editable && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setCancelReason('');
+                                        setCancelError(null);
+                                        setCancelling(true);
+                                    }}
+                                    className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 text-sm font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300"
+                                >
+                                    <Ban aria-hidden="true" className="h-4 w-4" />
+                                    {t('order.cancel.action')}
+                                </button>
                             )}
                         </div>
+                        {editable && <p className="text-xs text-ink-500 dark:text-ink-400">{t('order.actions.note')}</p>}
                     </section>
-
-                    <InvoicePanel order={order} />
                 </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <section aria-labelledby="timeline-heading" className={cx(cardPadded, 'space-y-4')}>
-                    <h2 id="timeline-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
-                        <Workflow aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                        {t('order.timeline.title')}
-                    </h2>
-                    <Timeline entries={showFullTimeline ? workshopTimeline : workshopTimeline.slice(0, 5)} emptyLabel={t('order.timeline.empty')} />
-                    {workshopTimeline.length > 5 && (
-                        <button type="button" onClick={() => setShowFullTimeline((v) => !v)} className={cx(textLink, 'text-sm')}>
-                            {showFullTimeline ? t('order.journal.showLess') : t('order.journal.showAll', { count: workshopTimeline.length })}
-                        </button>
-                    )}
-                </section>
-
-                <section aria-labelledby="audit-heading" className={cx(cardPadded, 'space-y-4')}>
-                    <h2 id="audit-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
-                        <ScrollText aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                        {t('order.audit.title')}
-                    </h2>
-                    <Timeline entries={showFullAudit ? auditTimeline : auditTimeline.slice(0, 5)} emptyLabel={t('order.audit.empty')} />
-                    {auditTimeline.length > 5 && (
-                        <button type="button" onClick={() => setShowFullAudit((v) => !v)} className={cx(textLink, 'text-sm')}>
-                            {showFullAudit ? t('order.journal.showLess') : t('order.journal.showAll', { count: auditTimeline.length })}
-                        </button>
-                    )}
-                </section>
             </div>
 
             {printTarget?.kind === 'ticket' && <PrintableTicket order={order} />}
@@ -665,15 +713,6 @@ export default function OrderDetail() {
                     </section>
                 </div>
             )}
-        </div>
-    );
-}
-
-function OptionRow({ label, value }: { label: string; value: string }) {
-    return (
-        <div className="min-w-0">
-            <dt className="text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">{label}</dt>
-            <dd className="truncate font-medium text-ink-900 dark:text-ink-50">{value}</dd>
         </div>
     );
 }

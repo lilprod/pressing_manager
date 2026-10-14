@@ -667,6 +667,8 @@ export interface Order {
     order_number_formatted?: string;
     client_local_uuid: string | null;
     sync_status: 'synced' | 'pending' | 'conflict';
+    /** Canal de saisie réel : comptoir en ligne, ou file hors ligne rejouée au retour du réseau. */
+    source?: 'comptoir' | 'offline_sync' | string;
     status: OrderStatus;
     is_express: boolean;
     total_amount: number;

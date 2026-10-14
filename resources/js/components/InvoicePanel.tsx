@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../contexts/I18nContext';
 import { api, ApiError } from '../lib/api';
@@ -10,7 +10,7 @@ const PAYMENT_METHOD_LABEL_KEYS: Record<PaymentMethod, string> = {
     flooz: 'payment.flooz',
     tmoney: 'payment.tmoney',
 };
-import { CircleCheck, FileDown, FilePlus2, HandCoins, History, Receipt } from 'lucide-react';
+import { FileDown, FilePlus2, HandCoins, Plus } from 'lucide-react';
 import { useFormat } from '../lib/format';
 import PaymentMethodPicker from './PaymentMethodPicker';
 import PaymentReferenceField from './PaymentReferenceField';
@@ -23,7 +23,7 @@ function paidOf(invoice: Invoice): number {
     return (invoice.payments ?? []).filter((p) => p.status === 'complete').reduce((sum, p) => sum + p.amount, 0);
 }
 
-export default function InvoicePanel({ order }: { order: Order }) {
+export default function InvoicePanel({ order, openPaymentSignal = 0 }: { order: Order; openPaymentSignal?: number }) {
     const { t } = useI18n();
     const { money, dateTime } = useFormat();
     const { user } = useAuth();
@@ -36,6 +36,12 @@ export default function InvoicePanel({ order }: { order: Order }) {
     const initialInvoice = order.invoice?.[0] ?? null;
     const [amount, setAmount] = useState<number>(initialInvoice ? Math.max(0, initialInvoice.total_amount - paidOf(initialInvoice)) : order.total_amount);
     const [reference, setReference] = useState('');
+    const [formOpen, setFormOpen] = useState(false);
+
+    // « Ajouter un acompte » depuis l'en-tête de la fiche : ouvre le formulaire d'encaissement.
+    useEffect(() => {
+        if (openPaymentSignal > 0) setFormOpen(true);
+    }, [openPaymentSignal]);
 
     const referenceRequired = method !== 'espece';
     const referenceMissing = referenceRequired && reference.trim() === '';
@@ -85,6 +91,7 @@ export default function InvoicePanel({ order }: { order: Order }) {
                 });
             }
             setReference('');
+            setFormOpen(false);
             const refreshed = await api.get<Invoice>(`/invoices/${invoice.id}`);
             setInvoice(refreshed);
             setAmount(Math.max(0, refreshed.total_amount - paidOf(refreshed)));
@@ -95,84 +102,130 @@ export default function InvoicePanel({ order }: { order: Order }) {
         }
     }
 
+    const paid = invoice ? paidOf(invoice) : 0;
+    const remaining = invoice ? Math.max(0, invoice.total_amount - paid) : 0;
+    const loyaltyDiscount = order.loyalty_discount_amount ?? 0;
+    const promotionDiscount = order.promotion_discount_amount ?? 0;
+    const manualDiscount = Math.max(0, (invoice?.discount_amount ?? order.discount_amount) - loyaltyDiscount - promotionDiscount);
+    const completedPayments = (invoice?.payments ?? [])
+        .slice()
+        .sort((a, b) => new Date(b.paid_at ?? 0).getTime() - new Date(a.paid_at ?? 0).getTime());
+    const row = 'flex items-center justify-between gap-3 text-sm';
+
     return (
-        <section id="invoice-panel" aria-labelledby="invoice-heading" className={cx(card, 'overflow-hidden scroll-mt-24')}>
-            <div className="flex items-center justify-between gap-2 border-b border-ink-200/80 px-5 py-4 dark:border-ink-800">
-                <h2 id="invoice-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
-                    <Receipt aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                    {t('order.totalAndPayments')}
-                </h2>
+        <section id="invoice-panel" aria-labelledby="invoice-heading" className={cx(card, 'scroll-mt-24 space-y-4 p-5')}>
+            <div className="flex items-start justify-between gap-2">
+                <div>
+                    <h2 id="invoice-heading" className={sectionTitle}>
+                        {t('order.totalAndPayments')}
+                    </h2>
+                    <p className="text-xs text-ink-600 dark:text-ink-350">{t('invoice.amountsTtc')}</p>
+                </div>
                 {invoice && <StatusBadge kind="invoice" status={invoice.status} />}
             </div>
 
-            <div className="space-y-5 p-5">
-                {error && <Alert tone="error">{error}</Alert>}
+            {error && <Alert tone="error">{error}</Alert>}
 
-                {!invoice ? (
-                    <div className="space-y-4 text-center">
-                        <p className="text-sm text-ink-600 dark:text-ink-350">{t('invoice.noneYet')}</p>
-                        <button type="button" onClick={() => void createInvoice()} disabled={busy} className={button('primary', 'lg', 'w-full')}>
-                            {busy ? <Spinner className="h-5 w-5" /> : <FilePlus2 aria-hidden="true" className="h-5 w-5" />}
-                            {t('order.createInvoice')}
-                        </button>
+            {!invoice ? (
+                <div className="space-y-3">
+                    <div className={row}>
+                        <span className="text-ink-600 dark:text-ink-350">{t('order.detail.itemsSubtotal')}</span>
+                        <span className="font-semibold tabular-nums">{money(order.total_amount + order.discount_amount)}</span>
                     </div>
-                ) : (
-                    <div className="space-y-5">
-                        <div className="space-y-3 rounded-xl bg-ink-50 px-4 py-3.5 dark:bg-ink-950/60">
-                            <dl className="space-y-1 text-sm">
-                                <div className="flex items-center justify-between text-ink-600 dark:text-ink-350">
-                                    <dt>{t('invoice.subtotal')}</dt>
-                                    <dd className="tabular-nums">{money(invoice.subtotal)}</dd>
-                                </div>
-                                {invoice.discount_amount > 0 && (
-                                    <div className="flex items-center justify-between text-ink-600 dark:text-ink-350">
-                                        <dt>{t('invoice.discount')}</dt>
-                                        <dd className="tabular-nums">-{money(invoice.discount_amount)}</dd>
-                                    </div>
-                                )}
-                                <div className="flex items-center justify-between text-ink-600 dark:text-ink-350">
-                                    <dt>{t('invoice.tax')}</dt>
-                                    <dd className="tabular-nums">{money(invoice.tax_amount)}</dd>
-                                </div>
-                            </dl>
-                            <div className="flex flex-wrap items-end justify-between gap-3 border-t border-ink-200/80 pt-3 dark:border-ink-800">
-                                <div>
-                                    <p className="text-xs font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('invoice.amountDue')}</p>
-                                    <p className="whitespace-nowrap font-display text-2xl font-extrabold tabular-nums text-ink-900 dark:text-white">{money(invoice.total_amount)}</p>
-                                </div>
-                                <div className="text-right text-sm">
-                                    <p className="text-ink-600 dark:text-ink-350">
-                                        {t('order.table.paid')} <span className="font-semibold tabular-nums text-ink-900 dark:text-white">{money(paidOf(invoice))}</span>
-                                    </p>
-                                    <p className="text-ink-600 dark:text-ink-350">
-                                        {t('order.table.remaining')}{' '}
-                                        <span
-                                            className={cx(
-                                                'font-semibold tabular-nums',
-                                                invoice.total_amount - paidOf(invoice) > 0 ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300',
-                                            )}
-                                        >
-                                            {money(Math.max(0, invoice.total_amount - paidOf(invoice)))}
-                                        </span>
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex justify-end">
-                                {invoice.pdf_path && (
-                                    <button type="button" onClick={() => void downloadPdf()} className={button('secondary', 'sm')}>
-                                        <FileDown aria-hidden="true" className="h-4 w-4" />
-                                        {t('order.downloadPdf')}
-                                    </button>
-                                )}
-                            </div>
+                    <p className="text-sm text-ink-600 dark:text-ink-350">{t('invoice.noneYet')}</p>
+                    <button type="button" onClick={() => void createInvoice()} disabled={busy} className={button('primary', 'md', 'w-full')}>
+                        {busy ? <Spinner className="h-5 w-5" /> : <FilePlus2 aria-hidden="true" className="h-5 w-5" />}
+                        {t('order.createInvoice')}
+                    </button>
+                </div>
+            ) : (
+                <>
+                    <dl className="space-y-1.5">
+                        <div className={row}>
+                            <dt className="text-ink-600 dark:text-ink-350">{t('order.detail.itemsSubtotal')}</dt>
+                            <dd className="tabular-nums">{money(invoice.subtotal)}</dd>
                         </div>
+                        {manualDiscount > 0 && (
+                            <div className={row}>
+                                <dt className="text-ink-600 dark:text-ink-350">{t('invoice.commercialDiscount')}</dt>
+                                <dd className="tabular-nums text-emerald-700 dark:text-emerald-300">−{money(manualDiscount)}</dd>
+                            </div>
+                        )}
+                        {loyaltyDiscount > 0 && (
+                            <div className={row}>
+                                <dt className="text-ink-600 dark:text-ink-350">{t('invoice.loyaltyDiscount')}</dt>
+                                <dd className="tabular-nums text-emerald-700 dark:text-emerald-300">−{money(loyaltyDiscount)}</dd>
+                            </div>
+                        )}
+                        {promotionDiscount > 0 && (
+                            <div className={row}>
+                                <dt className="text-ink-600 dark:text-ink-350">
+                                    {t('invoice.promotionDiscount')}
+                                    {order.promotion ? ` · ${order.promotion.code}` : ''}
+                                </dt>
+                                <dd className="tabular-nums text-emerald-700 dark:text-emerald-300">−{money(promotionDiscount)}</dd>
+                            </div>
+                        )}
+                        <div className={row}>
+                            <dt className="text-ink-600 dark:text-ink-350">{t('invoice.tax')}</dt>
+                            <dd className="tabular-nums">{money(invoice.tax_amount)}</dd>
+                        </div>
+                        <div className={cx(row, 'border-t border-ink-200/80 pt-2 dark:border-ink-800')}>
+                            <dt className="font-semibold text-ink-900 dark:text-white">{t('common.total')}</dt>
+                            <dd className="font-display text-lg font-bold tabular-nums text-ink-900 dark:text-white">{money(invoice.total_amount)}</dd>
+                        </div>
+                    </dl>
 
-                        {invoice.status === 'payee' ? (
-                            <Alert tone="success" icon={CircleCheck}>
-                                {t('invoice.fullyPaid')}
-                            </Alert>
-                        ) : (
-                            <div className="space-y-4">
+                    {completedPayments.length > 0 && (
+                        <ul className="space-y-2">
+                            {completedPayments.map((p) => (
+                                <li
+                                    key={p.id}
+                                    className={cx(
+                                        'rounded-xl px-3.5 py-2.5 text-sm',
+                                        p.status === 'complete'
+                                            ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-400/10 dark:text-emerald-100'
+                                            : 'bg-ink-50 text-ink-700 dark:bg-ink-950/60 dark:text-ink-200',
+                                    )}
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="font-medium">
+                                            {t('invoice.depositLine', { method: t(PAYMENT_METHOD_LABEL_KEYS[p.method]) })}
+                                        </span>
+                                        <span className="font-semibold tabular-nums">{money(p.amount)}</span>
+                                    </div>
+                                    <p className="text-xs opacity-80">
+                                        {p.paid_at ? dateTime(p.paid_at) : '—'}
+                                        {p.receiver && ` · ${t('invoice.receivedBy', { name: p.receiver.name })}`}
+                                        {p.status !== 'complete' && ` · ${t(`payment.status.${p.status}`)}`}
+                                    </p>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+
+                    <div
+                        className={cx(
+                            'flex items-center justify-between gap-3 rounded-xl px-4 py-3',
+                            remaining > 0 ? 'bg-amber-50 dark:bg-amber-400/10' : 'bg-emerald-50 dark:bg-emerald-400/10',
+                        )}
+                    >
+                        <span className={cx('text-sm font-medium', remaining > 0 ? 'text-amber-900 dark:text-amber-100' : 'text-emerald-900 dark:text-emerald-100')}>
+                            {remaining > 0 ? t('order.balanceDue.title') : t('invoice.fullyPaid')}
+                        </span>
+                        <span
+                            className={cx(
+                                'font-display text-xl font-extrabold tabular-nums',
+                                remaining > 0 ? 'text-amber-800 dark:text-amber-200' : 'text-emerald-800 dark:text-emerald-200',
+                            )}
+                        >
+                            {money(remaining)}
+                        </span>
+                    </div>
+
+                    {invoice.status !== 'payee' && invoice.status !== 'annulee' && (
+                        formOpen ? (
+                            <div className="space-y-4 border-t border-ink-200/80 pt-4 dark:border-ink-800">
                                 <div>
                                     <label htmlFor={`invoice-amount-${order.id}`} className={label}>
                                         {t('payment.amount')}
@@ -190,58 +243,39 @@ export default function InvoicePanel({ order }: { order: Order }) {
                                         </span>
                                     </div>
                                 </div>
-
                                 <PaymentMethodPicker name={`invoice-method-${order.id}`} value={method} onChange={setMethod} layout="compact" />
-
-                                {referenceRequired && (
-                                    <PaymentReferenceField method={method} value={reference} onChange={setReference} />
-                                )}
-
-                                <button
-                                    type="button"
-                                    onClick={() => void pay()}
-                                    disabled={busy || referenceMissing}
-                                    className={button('success', 'lg', 'w-full')}
-                                >
-                                    {busy ? <Spinner className="h-5 w-5" /> : <HandCoins aria-hidden="true" className="h-5 w-5" />}
-                                    {t('payment.pay')}
-                                </button>
+                                {referenceRequired && <PaymentReferenceField method={method} value={reference} onChange={setReference} />}
+                                <div className="flex gap-2">
+                                    <button type="button" onClick={() => setFormOpen(false)} className={button('secondary', 'md')}>
+                                        {t('common.cancel')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void pay()}
+                                        disabled={busy || referenceMissing || amount <= 0}
+                                        className={button('primary', 'md', 'flex-1')}
+                                    >
+                                        {busy ? <Spinner className="h-5 w-5" /> : <HandCoins aria-hidden="true" className="h-5 w-5" />}
+                                        {t('payment.pay')}
+                                    </button>
+                                </div>
                             </div>
-                        )}
+                        ) : (
+                            <button type="button" onClick={() => setFormOpen(true)} className={button('primary', 'md', 'w-full')}>
+                                <Plus aria-hidden="true" className="h-4 w-4" />
+                                {t('order.addDeposit')}
+                            </button>
+                        )
+                    )}
 
-                        {invoice.payments && invoice.payments.length > 0 && (
-                            <div className="space-y-2.5 border-t border-ink-200/80 pt-4 dark:border-ink-800">
-                                <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">
-                                    <History aria-hidden="true" className="h-3.5 w-3.5" />
-                                    {t('invoice.paymentHistory')}
-                                </h3>
-                                <ul className="space-y-2">
-                                    {[...invoice.payments]
-                                        .sort((a, b) => new Date(b.paid_at ?? 0).getTime() - new Date(a.paid_at ?? 0).getTime())
-                                        .map((p) => (
-                                            <li
-                                                key={p.id}
-                                                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-ink-200 px-3.5 py-3 text-sm dark:border-ink-700"
-                                            >
-                                                <div className="min-w-0">
-                                                    <p className="inline-flex items-center gap-2 font-medium text-ink-800 dark:text-ink-100">
-                                                        {money(p.amount)}
-                                                        <span className="font-normal text-ink-500 dark:text-ink-400">{t(PAYMENT_METHOD_LABEL_KEYS[p.method])}</span>
-                                                    </p>
-                                                    <p className="truncate text-xs text-ink-500 dark:text-ink-400">
-                                                        {p.paid_at ? dateTime(p.paid_at) : '—'}
-                                                        {p.receiver && ` · ${t('invoice.receivedBy', { name: p.receiver.name })}`}
-                                                    </p>
-                                                </div>
-                                                <StatusBadge kind="payment" status={p.status} />
-                                            </li>
-                                        ))}
-                                </ul>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
+                    {invoice.pdf_path && (
+                        <button type="button" onClick={() => void downloadPdf()} className={cx(button('secondary', 'sm'), 'w-full')}>
+                            <FileDown aria-hidden="true" className="h-4 w-4" />
+                            {t('order.downloadPdf')}
+                        </button>
+                    )}
+                </>
+            )}
         </section>
     );
 }

@@ -8,6 +8,8 @@ export interface PendingOrderPayload {
     promised_at?: string | null;
     notes?: string | null;
     discount_amount?: number;
+    discount_is_loyalty_auto?: boolean;
+    promotion_code?: string;
     items: Array<{
         service_id: number;
         quantity: number;
@@ -76,6 +78,19 @@ export async function markPendingOrderError(clientLocalUuid: string, message: st
     if (record) {
         record.status = 'error';
         record.error = message;
+        await db.put('pending_orders', record);
+    }
+}
+
+/** Remet une opération en erreur dans la file (statut « en attente »), avec un payload
+ * éventuellement corrigé — utilisé par la résolution de conflit de l'écran Synchronisation. */
+export async function resetPendingOrder(clientLocalUuid: string, payload?: PendingOrderPayload): Promise<void> {
+    const db = await getDb();
+    const record = await db.get('pending_orders', clientLocalUuid);
+    if (record) {
+        record.status = 'pending';
+        record.error = undefined;
+        if (payload) record.payload = payload;
         await db.put('pending_orders', record);
     }
 }

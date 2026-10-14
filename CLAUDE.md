@@ -4324,3 +4324,56 @@ Tests : `PressingOverviewActivityTest` (3), `PressingConfigurationTest` (4). Sui
 **675/675**, `tsc`/build propres, parité i18n, Playwright 1440/390 sans débordement,
 parcours réels (édition superadmin persistée puis restaurée, brouillon client restauré
 après rechargement).
+
+**Audit de conformité « 02 Dépôts & POS » — 5 écrans (2026-10-14)** — cinq captures
+(« Vérifie la conformité des écrans de ce module ») : Gestion des dépôts, Dépôt
+DEP-240928, Ticket et facture, Nouveau dépôt (hors ligne), Retour en ligne et
+synchronisation. Même décision « tout construire » que les passes précédentes, un commit
+par écran.
+- **Gestion des dépôts** (`OrdersList.tsx`) : le code affiché est désormais le **code formaté
+  par agence** (`order_number_formatted`, « Codes dépôt ») aussi dans la liste — la crainte
+  de N+1 documentée plus haut est levée par un eager-load `agency.settings`
+  (`Agency::formatOrderNumber()` lit la relation chargée), relation retirée de la réponse
+  ensuite (testé). Période en pastilles Tous/Jour/Semaine/Mois, avatar dans la colonne
+  client (en-têtes réalignés). **Piège 390 px** : un groupe de pastilles `flex` dans un
+  enfant de `flex-wrap` débordait — l'enfant doit être `min-w-0 max-w-full` et le groupe
+  `overflow-x-auto`.
+- **Fiche dépôt** (`OrderDetail.tsx`) : en-tête réduit à « Imprimer le ticket » + **« Ajouter
+  un paiement »** (gold, défile vers le panneau d'encaissement et y place le focus) ; articles
+  en **tableau résumé** (article, prestation traitement·rendu, états à la réception,
+  quantité/poids, prix figé, état) avec bascule vers le « Suivi atelier » détaillé
+  (`OrderItemRow`, transitions inchangées) ; carte **« Traitement et options »** (délai,
+  traitements, rendus, retrait prévu, remise fidélité / promotion — code chargé via
+  `promotion:id,code,name` — / reliquat manuel, notes) ; carte **Actions** (Ticket et
+  facture, Traiter le retrait si prêt, Suivre l'atelier, Modifier, Annuler) ; panneau
+  **« Total et paiements »** avec Payé/Reste réels et montant par défaut = reste dû (et non
+  plus le total) ; chronologie et journal limités à 5 entrées (« Voir tout »).
+- **Ticket et facture** : ticket rendu en **ticket thermique** (monospace, en-tête centré,
+  séparateurs pointillés, ligne par pièce avec QR, TVA/TOTAL TTC/Payé/Reste quand une facture
+  existe — même rendu à l'impression) ; **aperçu HTML de la facture** (en-tête pressing,
+  facturé à, lignes, sous-total/remise/TVA/TTC/payé/reste, mentions légales) à la place du
+  visualiseur PDF natif illisible en colonne étroite — le PDF archivé reste ouvrable et fait
+  foi ; formats en lignes sélectionnables (Ticket thermique 80 mm / Facture A4, « Aucune
+  facture émise » si absente) ; Télécharger/Imprimer dans l'en-tête.
+- **Nouveau dépôt** : tuiles du catalogue compactes, jusqu'à 4 colonnes (`xl`).
+- **Retour en ligne et synchronisation** (`SyncPage.tsx`, `lib/sync.ts`) — reconstruit sur des
+  données réelles de l'appareil : 4 KPI (connexion + dernière synchro, en attente, à
+  résoudre, synchronisés), **progression réelle** de la passe en cours (`getSyncProgress()`),
+  reprise automatique (intervalle réellement configuré), file détaillée avec UUID, **résolution
+  de conflit réelle** sur un refus serveur : Réessayer, Réessayer sans le code promo,
+  Réessayer sans la remise (payload corrigé via `resetPendingOrder`), Retirer de la file
+  (confirmation) ; **contrôles d'intégrité** dérivés (déduplication par `client_local_uuid`,
+  renumérotations, encaissements rapprochés N/M, conflits) ; **historique local** des 50
+  dernières opérations synchronisées (`pm.syncHistory` : numéro local → numéro serveur avec
+  lien, encaissement rapproché ou non). **Changement de comportement** : une opération en
+  erreur (422) n'est plus rejouée automatiquement à chaque passe (elle échouait à
+  l'identique toutes les 20 s) — elle attend la décision de l'opérateur.
+- **Omis, catégorie (c)** : bouton « Colonnes » et synchro par ligne dans la liste ; envoi
+  WhatsApp ; imprimante nommée ; impression du ticket hors ligne ; synchronisation des
+  encaissements/fiches client (seuls les dépôts passent par la file hors ligne) ; vue
+  multi-appareils de la synchronisation (l'historique est propre à l'appareil).
+Tests : `OrderListTest` +1 (code formaté). Suite **676/676**, `tsc`/build propres, parité
+i18n, Playwright 1440/390 sans débordement sur les 5 écrans ; parcours réel Synchronisation
+(deux opérations injectées dans IndexedDB : la valide synchronisée et renumérotée avec
+encaissement rapproché, le conflit « code promo inconnu » résolu par « Réessayer sans le
+code » ; dépôts de test supprimés ensuite).

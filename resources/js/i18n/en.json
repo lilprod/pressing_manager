@@ -373,7 +373,7 @@
     "order.stats.todayRevenue": "Revenue",
     "order.stats.dueToday": "Due for pickup today",
     "order.stats.outstanding": "Outstanding balance",
-    "order.servicesHint": "Tap an item to add it to the ticket.",
+    "order.servicesHint": "Tap an item, choose the treatment and quantity, then add it to the cart.",
     "order.changeClient": "Change",
     "order.selectAgency": "No agency selected",
     "order.selectAgencyHint": "Choose an agency at the top of the screen to load its catalogue.",
@@ -2452,5 +2452,17 @@
     "order.commercialShort.emise": "To collect",
     "order.commercialShort.partiellement_payee": "In progress",
     "order.commercialShort.payee": "Settled",
-    "order.commercialShort.annulee": "Cancelled"
+    "order.commercialShort.annulee": "Cancelled",
+    "order.cart.title": "Cart",
+    "order.cart.summary": "{lines} line(s) · {count} item(s)",
+    "order.payment.cardTitle": "Payment and ticket",
+    "order.payment.cardHint": "Payment at creation is optional",
+    "order.picker.selected": "Selected item: {name}",
+    "order.picker.none": "Tap a catalogue item to configure it",
+    "order.picker.treatment": "Treatment",
+    "order.picker.noTreatment": "No treatment",
+    "order.picker.delay": "Turnaround",
+    "order.picker.quantity": "Quantity",
+    "order.picker.weight": "Weight (kg)",
+    "order.picker.add": "Add to cart"
 }

@@ -4377,3 +4377,47 @@ i18n, Playwright 1440/390 sans débordement sur les 5 écrans ; parcours réel S
 (deux opérations injectées dans IndexedDB : la valide synchronisée et renumérotée avec
 encaissement rapproché, le conflit « code promo inconnu » résolu par « Réessayer sans le
 code » ; dépôts de test supprimés ensuite).
+
+**Dépôts — second passage sur des captures plus nettes (2026-10-14)** — trois captures
+renvoyées en meilleure définition (« Voici les écrans dépôt plus clair ») : Gestion des
+dépôts, Dépôt DEP-240928, Nouveau dépôt (hors ligne). Elles révélaient des zones illisibles
+au premier passage. Un commit par écran.
+- **Gestion des dépôts** (`OrdersList.tsx`) : sous-libellés réels des 4 indicateurs
+  (`OrderController::stats()` gagne `same_day_last_week_count` — variation vs même jour
+  de la semaine passée —, `today_deposited_amount` — montant des dépôts du jour hors
+  annulés, distinct du CA encaissé —, `ready_due_today`, `open_invoices_count`) ; filtre
+  agence pour un compte global ; colonne **Synchro** honnête (une ligne serveur est « À
+  jour » par construction ; les dépôts encore dans la file locale de l'appareil sont
+  affichés en tête de la page 1 sans filtre, « En attente »/« Refusé ») ; choix des
+  colonnes optionnelles mémorisé par appareil ; menu ⋯ par ligne (ouvrir, ticket et
+  facture, traiter le retrait si prêt, suivre l'atelier) ; pied « N–M sur T ». **Piège
+  390 px** : un `sr-only` (absolu) dans un en-tête de tableau échappe au rognage du
+  conteneur `overflow-x-auto` s'il n'est pas positionné — ajouter `relative` au conteneur.
+- **Fiche dépôt** (`OrderDetail.tsx`, `InvoicePanel.tsx`) : 4 indicateurs de la capture
+  (statut commercial en libellé court — `order.commercialShort.*`, la valeur longue
+  était tronquée par `StatCard` —, état atelier, **Synchronisation** = « À jour » avec
+  l'origine réelle du dépôt saisi en ligne ou hors ligne via `source`, reste à payer) ;
+  articles en tableau quantité/poids × prix figé ; « Total et paiements » ventilé
+  (sous-total, remise fidélité / promotion / manuelle d'après les colonnes dédiées, TVA,
+  TTC), encaissements affichés en « Acompte · moyen », bouton « Ajouter un acompte »
+  qui ouvre le formulaire pré-rempli au reste dû (aussi déclenché par le bouton
+  d'en-tête).
+- **Nouveau dépôt** (`NewOrder.tsx`) : panier et « Paiement et ticket » séparés en deux
+  cartes (le panier n'est plus sticky) ; **sélection puis configuration** comme sur la
+  capture — toucher une tuile la sélectionne (bordure dorée), une barre sous le catalogue
+  propose Traitement (traitements actifs, Express par défaut si le dépôt est express,
+  sinon le traitement de référence ×1), **Délai réel** (délai du traitement sur
+  l'article, sinon durée standard — même règle que `ServicePricingService::delayFor()`)
+  et Quantité ou Poids (kg pour un article au kilo), puis « Ajouter au panier » (fusionne
+  avec une ligne existante du même article ; la bascule Express suit les lignes). Ce
+  point était noté « omis » au passage précédent ; la capture nette montre clairement ce
+  flux, il est désormais construit. Le réglage par ligne dans le panier reste disponible.
+- **Toujours omis, catégorie (c)** : ligne « Express +30 % » dans la ventilation (le
+  supplément n'est pas reconstructible après coup, `unit_price` étant figé), imprimante
+  « POS-01 », mention « chiffré » du stockage local (IndexedDB n'est pas chiffré ici —
+  l'affirmer serait faux), boutons fidélité/promo désactivés en hors ligne au-delà du
+  code promo déjà grisé.
+Tests : `OrderStatsTest` +1, `OrderListTest` +1. Suite **677/677**, `tsc`/build propres,
+parité i18n, Playwright 1440/390 sans débordement sur `/orders`, `/orders/:id` et `/`,
+parcours réel au comptoir (tuile sélectionnée → Express → ajout : ligne à 9 500 FCFA au
+prix explicite de l'article, totaux recalculés).

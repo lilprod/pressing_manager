@@ -129,6 +129,10 @@ export default function NewOrder() {
     // Le traitement « Express » d'un article porte le tarif express : la bascule Express
     // du dépôt et le traitement des lignes restent donc toujours cohérents.
     const expressTreatment = treatmentTypes.find((t) => t.code === 'express' && t.is_active) ?? null;
+    // Article choisi dans le catalogue, configuré (traitement, quantité ou poids) avant l'ajout au panier.
+    const [pickedServiceId, setPickedServiceId] = useState<number | null>(null);
+    const [pickedTreatmentId, setPickedTreatmentId] = useState<number | null>(null);
+    const [pickedQuantity, setPickedQuantity] = useState('1');
     const [notes, setNotes] = useState('');
     const [discount, setDiscount] = useState(0);
     const [discountEdited, setDiscountEdited] = useState(false);
@@ -327,6 +331,53 @@ export default function NewOrder() {
                 },
             ];
         });
+    }
+
+    function pickService(serviceId: number) {
+        const service = services.find((s) => s.id === serviceId);
+        const reference = treatmentTypes.find((tt) => tt.is_active && Number(tt.price_ratio) === 1) ?? null;
+        setPickedServiceId(serviceId);
+        setPickedTreatmentId(isExpress && expressTreatment ? expressTreatment.id : (reference?.id ?? null));
+        setPickedQuantity(service?.billing_mode === 'kg' ? '' : '1');
+    }
+
+    function addPicked() {
+        const service = services.find((s) => s.id === pickedServiceId);
+        if (!service) return;
+        const byWeight = service.billing_mode === 'kg';
+        const amount = Number(pickedQuantity.replace(',', '.'));
+        if (!(amount > 0)) return;
+        const next = (() => {
+            const existing = cart.find((l) => l.service_id === service.id);
+            if (existing) {
+                return cart.map((l) =>
+                    l.service_id === service.id
+                        ? {
+                              ...l,
+                              quantity: byWeight ? 1 : l.quantity + Math.round(amount),
+                              weight_kg: byWeight ? amount : l.weight_kg,
+                              treatment_type_id: pickedTreatmentId,
+                          }
+                        : l,
+                );
+            }
+            return [
+                ...cart,
+                {
+                    service_id: service.id,
+                    quantity: byWeight ? 1 : Math.max(1, Math.round(amount)),
+                    weight_kg: byWeight ? amount : null,
+                    description: '',
+                    intake_condition_ids: [],
+                    intake_notes: '',
+                    treatment_type_id: pickedTreatmentId,
+                    finish_option_id: null,
+                },
+            ];
+        })();
+        setCart(next);
+        if (expressTreatment) setIsExpress(next.some((l) => l.treatment_type_id === expressTreatment.id));
+        setPickedServiceId(null);
     }
 
     function setLineTreatmentType(serviceId: number, treatmentTypeId: number | null) {
@@ -763,8 +814,9 @@ export default function NewOrder() {
                                                             <ServiceCard
                                                                 key={service.id}
                                                                 service={service}
+                                                                selected={pickedServiceId === service.id}
                                                                 inCart={cart.find((l) => l.service_id === service.id)?.quantity ?? 0}
-                                                                onAdd={() => addLine(service.id)}
+                                                                onAdd={() => pickService(service.id)}
                                                             />
                                                         ))}
                                                     </div>
@@ -778,27 +830,35 @@ export default function NewOrder() {
                                         })}
                                     </div>
                                 )}
+
+                                <PickedServiceBar
+                                    service={services.find((sv) => sv.id === pickedServiceId) ?? null}
+                                    treatmentTypes={treatmentTypes.filter((tt) => tt.is_active)}
+                                    treatmentId={pickedTreatmentId}
+                                    onTreatmentChange={setPickedTreatmentId}
+                                    quantity={pickedQuantity}
+                                    onQuantityChange={setPickedQuantity}
+                                    onAdd={addPicked}
+                                />
                             </div>
                         )}
                     </section>
                 </div>
 
-                <aside
-                    aria-labelledby="cart-heading"
-                    className={cx(card, 'flex flex-col overflow-hidden md:sticky md:top-20 md:max-h-[calc(100vh-9rem)] md:min-h-[26rem]')}
-                >
-                    <div className="flex items-center justify-between gap-2 border-b border-ink-200/80 px-5 py-3.5 dark:border-ink-800">
-                        <h2 id="cart-heading" className="flex scroll-mt-40 items-center gap-2 font-display text-base font-bold text-ink-900 dark:text-ink-50">
-                            <Receipt aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                            {t('order.items')}
-                        </h2>
-                        <span className="flex items-center gap-1.5">
-                            {!online && <Pill tone="amber">{t('order.offline.local')}</Pill>}
-                            <Pill tone={cartCount > 0 ? 'brand' : 'neutral'}>{t('order.itemsCount', { count: cartCount })}</Pill>
-                        </span>
+                <aside aria-labelledby="cart-heading" className="min-w-0 space-y-4">
+                    <div className={cx(card, 'flex flex-col overflow-hidden')}>
+                    <div className="flex items-start justify-between gap-2 border-b border-ink-200/80 px-5 py-3.5 dark:border-ink-800">
+                        <div>
+                            <h2 id="cart-heading" className="flex scroll-mt-40 items-center gap-2 font-display text-base font-bold text-ink-900 dark:text-ink-50">
+                                <Receipt aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
+                                {t('order.cart.title')}
+                            </h2>
+                            <p className="text-xs text-ink-600 dark:text-ink-350">{t('order.cart.summary', { lines: cart.length, count: cartCount })}</p>
+                        </div>
+                        {!online && <Pill tone="amber">{t('order.offline.local')}</Pill>}
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-y-auto">
+                    <div className="max-h-[45vh] min-h-0 overflow-y-auto">
                         {cart.length === 0 ? (
                             <EmptyState compact icon={ShoppingBasket} title={t('order.cartEmpty')} description={t('order.cartEmptyHint')} />
                         ) : (
@@ -1133,9 +1193,19 @@ export default function NewOrder() {
                             </span>
                         </div>
 
-                        <div className="space-y-3 border-t border-ink-200/80 pt-3 dark:border-ink-800">
-                            <StepHeading id="payment-heading" step={3} title={t('order.payment.title')} />
-                            {!online && <p className="-mt-1 text-xs text-ink-600 dark:text-ink-350">{t('order.offline.paymentSynced')}</p>}
+                    </div>
+                    </div>
+
+                    <section aria-labelledby="payment-heading" className={cx(card, 'space-y-3 p-5')}>
+                        <div className="space-y-3">
+                            <div>
+                                <h2 id="payment-heading" className="font-display text-base font-bold text-ink-900 dark:text-ink-50">
+                                    {t('order.payment.cardTitle')}
+                                </h2>
+                                <p className="text-xs text-ink-600 dark:text-ink-350">
+                                    {online ? t('order.payment.cardHint') : t('order.offline.paymentSynced')}
+                                </p>
+                            </div>
                             <label className="flex items-center justify-between gap-3 rounded-xl border border-ink-200 bg-white px-3.5 py-3 dark:border-ink-700 dark:bg-ink-900">
                                 <span className="text-sm font-semibold text-ink-900 dark:text-ink-50">{t('order.payment.toggle')}</span>
                                 <input
@@ -1235,7 +1305,7 @@ export default function NewOrder() {
                                 </section>
                             </>
                         )}
-                    </div>
+                    </section>
                 </aside>
             </div>
 
@@ -1264,10 +1334,12 @@ export default function NewOrder() {
 function ServiceCard({
     service,
     inCart,
+    selected = false,
     onAdd,
 }: {
     service: Service & { effective_price: number };
     inCart: number;
+    selected?: boolean;
     onAdd: () => void;
 }) {
     const { t } = useI18n();
@@ -1279,9 +1351,12 @@ function ServiceCard({
         <button
             type="button"
             onClick={onAdd}
+            aria-pressed={selected}
             className={cx(
                 'group relative flex min-h-[6rem] flex-col items-start gap-2 rounded-2xl border-2 p-3 text-left transition duration-150 active:scale-[0.97]',
-                inCart > 0
+                selected
+                    ? 'border-accent-500 bg-accent-50 shadow-card-hover ring-2 ring-accent-300/60 dark:border-accent-400 dark:bg-accent-400/10'
+                    : inCart > 0
                     ? 'border-brand-600 bg-brand-50/70 shadow-card-hover dark:border-brand-300 dark:bg-brand-400/10'
                     : 'border-ink-200/80 bg-white hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-card-hover dark:border-ink-800 dark:bg-ink-900 dark:hover:border-brand-400/50',
             )}
@@ -1325,6 +1400,84 @@ function StepHeading({ id, step, title, hint }: { id: string; step: number; titl
                 </h2>
                 {hint && <p className="text-xs text-ink-600 dark:text-ink-350">{hint}</p>}
             </div>
+        </div>
+    );
+}
+
+/** Barre de configuration de l'article choisi : traitement, délai qui en découle (délai du
+ * traitement sur l'article, sinon durée standard de l'article — même règle que
+ * ServicePricingService::delayFor côté API) et quantité ou poids, puis ajout au panier. */
+function PickedServiceBar({
+    service,
+    treatmentTypes,
+    treatmentId,
+    onTreatmentChange,
+    quantity,
+    onQuantityChange,
+    onAdd,
+}: {
+    service: Service | null;
+    treatmentTypes: TreatmentType[];
+    treatmentId: number | null;
+    onTreatmentChange: (id: number | null) => void;
+    quantity: string;
+    onQuantityChange: (value: string) => void;
+    onAdd: () => void;
+}) {
+    const { t } = useI18n();
+    const byWeight = service?.billing_mode === 'kg';
+    const treatment = treatmentTypes.find((tt) => tt.id === treatmentId) ?? null;
+    const delay = service
+        ? (service.treatment_rates?.find((r) => r.treatment_type_id === treatmentId)?.delay_hours ?? service.estimated_duration_hours)
+        : null;
+    const amount = Number(quantity.replace(',', '.'));
+
+    return (
+        <div className="space-y-3 border-t border-ink-200/80 pt-4 dark:border-ink-800">
+            <p className="text-sm font-semibold text-ink-900 dark:text-ink-50">
+                {service ? t('order.picker.selected', { name: service.name }) : t('order.picker.none')}
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <label className="block">
+                    <span className={label}>{t('order.picker.treatment')}</span>
+                    <select
+                        value={treatmentId ?? ''}
+                        onChange={(e) => onTreatmentChange(e.target.value ? Number(e.target.value) : null)}
+                        disabled={!service}
+                        className={inputSm}
+                    >
+                        <option value="">{t('order.picker.noTreatment')}</option>
+                        {treatmentTypes.map((tt) => (
+                            <option key={tt.id} value={tt.id}>
+                                {tt.name}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <div>
+                    <span className={label}>{t('order.picker.delay')}</span>
+                    <p className={cx(inputSm, 'flex items-center bg-ink-50 text-ink-700 dark:bg-ink-950/60 dark:text-ink-200')}>
+                        {delay !== null ? `${treatment?.name ?? t('order.standard')} · ${t('order.options.hours', { count: delay })}` : '—'}
+                    </p>
+                </div>
+                <label className="block">
+                    <span className={label}>{byWeight ? t('order.picker.weight') : t('order.picker.quantity')}</span>
+                    <input
+                        type="number"
+                        min={byWeight ? 0.1 : 1}
+                        step={byWeight ? 0.1 : 1}
+                        value={quantity}
+                        onChange={(e) => onQuantityChange(e.target.value)}
+                        disabled={!service}
+                        placeholder={byWeight ? 'kg' : '1'}
+                        className={cx(inputSm, 'tabular-nums')}
+                    />
+                </label>
+            </div>
+            <button type="button" onClick={onAdd} disabled={!service || !(amount > 0)} className={button('primary', 'md')}>
+                <Plus aria-hidden="true" className="h-4 w-4" />
+                {t('order.picker.add')}
+            </button>
         </div>
     );
 }

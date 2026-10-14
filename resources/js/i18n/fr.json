@@ -373,7 +373,7 @@
     "order.stats.todayRevenue": "Chiffre d'affaires",
     "order.stats.dueToday": "À retirer aujourd'hui",
     "order.stats.outstanding": "Reste à encaisser",
-    "order.servicesHint": "Touchez un article pour l'ajouter au ticket.",
+    "order.servicesHint": "Touchez un article, choisissez le traitement et la quantité, puis ajoutez-le au panier.",
     "order.changeClient": "Changer",
     "order.selectAgency": "Aucune agence sélectionnée",
     "order.selectAgencyHint": "Choisissez une agence en haut de l'écran pour afficher son catalogue.",
@@ -2452,5 +2452,17 @@
     "order.commercialShort.emise": "À encaisser",
     "order.commercialShort.partiellement_payee": "En cours",
     "order.commercialShort.payee": "Soldé",
-    "order.commercialShort.annulee": "Annulée"
+    "order.commercialShort.annulee": "Annulée",
+    "order.cart.title": "Panier",
+    "order.cart.summary": "{lines} ligne(s) · {count} article(s)",
+    "order.payment.cardTitle": "Paiement et ticket",
+    "order.payment.cardHint": "Encaissement facultatif à la création",
+    "order.picker.selected": "Article sélectionné : {name}",
+    "order.picker.none": "Touchez un article du catalogue pour le configurer",
+    "order.picker.treatment": "Traitement",
+    "order.picker.noTreatment": "Sans traitement",
+    "order.picker.delay": "Délai",
+    "order.picker.quantity": "Quantité",
+    "order.picker.weight": "Poids (kg)",
+    "order.picker.add": "Ajouter au panier"
 }

@@ -2250,5 +2250,15 @@
     "order.steps.client": "Client",
     "order.steps.items": "Articles",
     "order.steps.payment": "Paiement",
-    "order.steps.ticket": "Ticket"
+    "order.steps.ticket": "Ticket",
+    "pickup.searchCard.title": "Retrouver un dépôt instantanément",
+    "pickup.searchCard.subtitle": "Code dépôt, téléphone ou nom du client.",
+    "pickup.searchCard.scan": "Scanner",
+    "pickup.searchCard.hint": "Astuce : scannez l'étiquette QR d'une pièce pour ouvrir son dépôt.",
+    "pickup.table.title": "Dépôts prêts au retrait",
+    "pickup.table.subtitle": "Triés par date de retrait prévue.",
+    "pickup.table.actions": "Actions",
+    "pickup.rowMenu": "Plus d'actions",
+    "pickup.menu.openDeposit": "Ouvrir le dépôt",
+    "pickup.menu.documents": "Ticket et facture"
 }

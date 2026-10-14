@@ -2250,5 +2250,15 @@
     "order.steps.client": "Client",
     "order.steps.items": "Items",
     "order.steps.payment": "Payment",
-    "order.steps.ticket": "Ticket"
+    "order.steps.ticket": "Ticket",
+    "pickup.searchCard.title": "Find a deposit instantly",
+    "pickup.searchCard.subtitle": "Deposit code, phone or client name.",
+    "pickup.searchCard.scan": "Scan",
+    "pickup.searchCard.hint": "Tip: scan an item's QR label to open its deposit.",
+    "pickup.table.title": "Deposits ready for pickup",
+    "pickup.table.subtitle": "Sorted by planned pickup date.",
+    "pickup.table.actions": "Actions",
+    "pickup.rowMenu": "More actions",
+    "pickup.menu.openDeposit": "Open the deposit",
+    "pickup.menu.documents": "Ticket and invoice"
 }

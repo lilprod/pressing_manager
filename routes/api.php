@@ -138,6 +138,9 @@ Route::prefix('platform')->group(function () {
         Route::get('/pressings/{pressing}', [PlatformPressingController::class, 'show']);
         Route::get('/pressings/{pressing}/agencies', [PlatformPressingController::class, 'agencies']);
         Route::get('/pressings/{pressing}/settings', [PlatformPressingController::class, 'settings']);
+        Route::get('/pressings/{pressing}/logo', [PlatformPressingController::class, 'logo']);
+        Route::post('/pressings/{pressing}/logo', [PlatformPressingController::class, 'uploadLogo']);
+        Route::delete('/pressings/{pressing}/logo', [PlatformPressingController::class, 'deleteLogo']);
         Route::get('/pressings/{pressing}/overview', [PlatformPressingController::class, 'overview']);
         Route::get('/pressings/{pressing}/activity/export', [PlatformPressingController::class, 'activityExport']);
         Route::get('/pressings/{pressing}/activity', [PlatformPressingController::class, 'activity']);

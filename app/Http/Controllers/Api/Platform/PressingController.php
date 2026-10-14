@@ -29,6 +29,13 @@ class PressingController extends PlatformApiController
 {
     private const LICENSE_FIELDS = ['platform_plan_id', 'license_starts_at', 'license_expires_at'];
 
+    private const LOYALTY_RULE_COLUMNS = [
+        'amount_per_point' => 'loyalty_amount_per_point',
+        'point_value_fcfa' => 'loyalty_point_value_fcfa',
+        'expiry_months' => 'loyalty_point_expiry_months',
+        'accrue_on_promotions' => 'loyalty_accrue_on_promotions',
+    ];
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -434,7 +441,89 @@ class PressingController extends PlatformApiController
                 'password_expiry_days' => $appSetting->password_expiry_days,
             ],
             'loyalty_tiers' => $tiers,
-        ]);
+        ] + $this->configurationExtras($pressing, $appSetting));
+    }
+
+    /**
+     * Éléments de l'écran « Configuration du pressing » lus en direct : nom commercial et
+     * logo (AppSetting), règles de fidélité et étapes atelier telles qu'elles sont
+     * réellement réglées dans les agences (`uniform` = toutes les agences ont la même
+     * valeur), indicateurs de validation (MFA des administrateurs, manager actif) et
+     * dernière modification plateforme.
+     */
+    private function configurationExtras(Pressing $pressing, AppSetting $appSetting): array
+    {
+        $agencyIds = $pressing->agencies()->pluck('id');
+        $settings = $agencyIds->map(fn ($id) => \App\Models\AgencySetting::forAgency($id));
+        $rule = function (string $column) use ($settings) {
+            $values = $settings->pluck($column)->map(fn ($v) => $v === null ? null : (is_bool($v) ? $v : (float) $v))->unique()->values();
+
+            return ['value' => $values->count() === 1 ? $values->first() : null, 'uniform' => $values->count() <= 1];
+        };
+
+        $admins = \App\Models\User::query()->where('pressing_id', $pressing->id)->where('is_active', true)
+            ->whereHas('role', fn ($q) => $q->whereIn('slug', ['admin', 'manager']))->get(['id', 'mfa_enabled_at']);
+        $last = \App\Models\PlatformAuditLog::query()->with('platformUser:id,name')
+            ->where('auditable_type', Pressing::class)->where('auditable_id', $pressing->id)->latest('created_at')->first();
+
+        return [
+            'commercial_name' => $appSetting->pressing_name,
+            'has_logo' => $appSetting->logo_path !== null,
+            'loyalty_rules' => [
+                'amount_per_point' => $rule('loyalty_amount_per_point'),
+                'point_value_fcfa' => $rule('loyalty_point_value_fcfa'),
+                'expiry_months' => $rule('loyalty_point_expiry_months'),
+                'accrue_on_promotions' => $rule('loyalty_accrue_on_promotions'),
+            ],
+            'default_amount_per_point' => (int) config('loyalty.amount_per_point'),
+            'agencies_total' => $agencyIds->count(),
+            'washer_step_count' => $settings->where('washer_step_enabled', true)->count(),
+            'sorter_step_count' => $settings->where('sorter_step_enabled', true)->count(),
+            'admins_total' => $admins->count(),
+            'admins_with_mfa' => $admins->whereNotNull('mfa_enabled_at')->count(),
+            'manager_active' => $this->managerOf($pressing) !== null,
+            'last_change' => $last ? ['actor' => $last->platformUser?->name, 'at' => $last->created_at?->toIso8601String()] : null,
+        ];
+    }
+
+    public function uploadLogo(Request $request, Pressing $pressing): JsonResponse
+    {
+        $this->authorizePressing($request->user(), $pressing->id);
+        $this->authorizePermission($request->user(), 'pressings.manage');
+        $request->validate(['logo' => ['required', 'image', 'mimes:png,jpg,jpeg,svg,webp', 'max:2048']]);
+
+        $settings = AppSetting::current($pressing->id);
+        $disk = \Illuminate\Support\Facades\Storage::disk(config('filesystems.default'));
+        if ($settings->logo_path !== null) {
+            $disk->delete($settings->logo_path);
+        }
+        $settings->update(['logo_path' => $request->file('logo')->store('settings', ['disk' => config('filesystems.default')])]);
+
+        return response()->json(['has_logo' => true]);
+    }
+
+    public function deleteLogo(Request $request, Pressing $pressing): JsonResponse
+    {
+        $this->authorizePressing($request->user(), $pressing->id);
+        $this->authorizePermission($request->user(), 'pressings.manage');
+
+        $settings = AppSetting::current($pressing->id);
+        if ($settings->logo_path !== null) {
+            \Illuminate\Support\Facades\Storage::disk(config('filesystems.default'))->delete($settings->logo_path);
+            $settings->update(['logo_path' => null]);
+        }
+
+        return response()->json(['has_logo' => false]);
+    }
+
+    public function logo(Request $request, Pressing $pressing): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $this->authorizePressing($request->user(), $pressing->id);
+        $path = AppSetting::current($pressing->id)->logo_path;
+        $disk = \Illuminate\Support\Facades\Storage::disk(config('filesystems.default'));
+        abort_if($path === null || ! $disk->exists($path), 404);
+
+        return $disk->response($path);
     }
 
     public function update(UpdatePressingRequest $request, Pressing $pressing): JsonResponse
@@ -456,7 +545,7 @@ class PressingController extends PlatformApiController
             $this->authorizePermission($user, 'pressings.manage');
         }
 
-        $pressingFields = Arr::except($data, ['primary_color', 'secondary_color', 'security_policy', 'loyalty_tiers']);
+        $pressingFields = Arr::except($data, ['primary_color', 'secondary_color', 'security_policy', 'loyalty_tiers', 'commercial_name', 'loyalty_rules']);
 
         DB::transaction(function () use ($data, $pressingFields, $pressing) {
             $pressing->update($pressingFields);
@@ -473,6 +562,23 @@ class PressingController extends PlatformApiController
 
             if (array_key_exists('loyalty_tiers', $data)) {
                 $this->syncLoyaltyTiers($pressing, $data['loyalty_tiers']);
+            }
+
+            if (array_key_exists('commercial_name', $data) && $data['commercial_name'] !== null) {
+                AppSetting::current($pressing->id)->update(['pressing_name' => $data['commercial_name']]);
+            }
+
+            // Règles de fidélité : réglages par agence — appliquées à toutes les agences
+            // du pressing, uniquement pour les clés réellement envoyées.
+            $rules = Arr::only($data['loyalty_rules'] ?? [], array_keys(self::LOYALTY_RULE_COLUMNS));
+            if ($rules !== []) {
+                $columns = [];
+                foreach ($rules as $key => $value) {
+                    $columns[self::LOYALTY_RULE_COLUMNS[$key]] = $value;
+                }
+                foreach ($pressing->agencies()->pluck('id') as $agencyId) {
+                    \App\Models\AgencySetting::forAgency($agencyId)->update($columns);
+                }
             }
         });
 

@@ -41,10 +41,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         method: options.method ?? 'GET',
         headers: {
             Accept: 'application/json',
-            ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+            ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: options.body ? JSON.stringify(options.body) : undefined,
+        body: options.body instanceof FormData ? options.body : options.body ? JSON.stringify(options.body) : undefined,
     });
 
     if (response.status === 204) {
@@ -65,6 +65,8 @@ export const platformApi = {
     get: <T>(path: string) => request<T>(path),
     post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body }),
     patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
+    postForm: <T>(path: string, form: FormData) => request<T>(path, { method: 'POST', body: form }),
+    delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
     async blob(path: string): Promise<Blob> {
         const token = getPlatformToken();
         const response = await fetch(`/api/platform${path}`, {

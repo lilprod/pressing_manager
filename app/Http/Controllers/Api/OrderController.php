@@ -70,7 +70,7 @@ class OrderController extends ApiController
         $search = trim((string) $request->string('search'));
 
         return Order::query()
-            ->with('client', 'items.treatmentType', 'invoice.payments')
+            ->with('client', 'agency.settings', 'items.treatmentType', 'invoice.payments')
             ->whereIn('agency_id', $agencyId)
             // État atelier (pipeline de production), distinct du statut commercial ci-dessous.
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
@@ -121,6 +121,10 @@ class OrderController extends ApiController
         $paidAmount = $invoice ? (int) $invoice->payments->where('status', 'complete')->sum('amount') : 0;
         $order->setAttribute('paid_amount', $invoice ? $paidAmount : null);
         $order->setAttribute('balance_due', $invoice ? max(0, $invoice->total_amount - $paidAmount) : null);
+        // Code dépôt affiché (préfixe/suffixe d'agence) — `agency.settings` est chargé avec
+        // la liste, donc aucun N+1 ; la colonne brute `order_number` reste intacte.
+        $order->setAttribute('order_number_formatted', $order->agency?->formatOrderNumber((int) $order->order_number));
+        $order->unsetRelation('agency');
 
         $treatmentNames = $order->items->pluck('treatmentType.name')->filter()->unique();
         $order->setAttribute('treatment_name', $treatmentNames->count() === 1 ? $treatmentNames->first() : null);

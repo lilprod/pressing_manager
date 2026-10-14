@@ -32,10 +32,17 @@ const INVOICE_STATUSES = ['non_facture', 'emise', 'partiellement_payee', 'payee'
 type InvoiceStatusFilter = (typeof INVOICE_STATUSES)[number];
 type Period = '' | 'today' | 'week' | 'month';
 
+function displayCodeFor(order: { order_number: number | string; order_number_formatted?: string | null }, prefix: string): string {
+    const formatted = order.order_number_formatted;
+    if (formatted && /\D/.test(formatted)) return formatted;
+    return `${prefix}${formatted ?? order.order_number}`;
+}
+
 export default function OrdersList() {
     const [urlParams] = useSearchParams();
     const clientFilter = urlParams.get('client_id');
     const { t } = useI18n();
+    const displayCode = (order: Order) => displayCodeFor(order, 'N° ');
     const { money, dateTime } = useFormat();
     const { activeAgencyId } = useAuth();
     const pending = useSyncQueue();
@@ -182,15 +189,32 @@ export default function OrdersList() {
                 </label>
 
                 <div className="flex flex-wrap items-end gap-3">
-                    <label className="block">
+                    <div className="block min-w-0 max-w-full">
                         <span className={labelClass}>{t('order.filters.period')}</span>
-                        <select value={period} onChange={(e) => setPeriod(e.target.value as Period)} className={cx(input, 'sm:w-44')}>
-                            <option value="">{t('order.filters.periodAll')}</option>
-                            <option value="today">{t('order.filters.periodToday')}</option>
-                            <option value="week">{t('order.filters.periodWeek')}</option>
-                            <option value="month">{t('order.filters.periodMonth')}</option>
-                        </select>
-                    </label>
+                        <div role="group" aria-label={t('order.filters.period')} className="flex h-11 max-w-full items-center gap-1 overflow-x-auto rounded-xl bg-ink-100 p-1 dark:bg-ink-800">
+                            {(
+                                [
+                                    ['', t('order.filters.periodAll')],
+                                    ['today', t('order.filters.periodToday')],
+                                    ['week', t('order.filters.periodWeek')],
+                                    ['month', t('order.filters.periodMonth')],
+                                ] as [Period, string][]
+                            ).map(([value, text]) => (
+                                <button
+                                    key={value || 'all'}
+                                    type="button"
+                                    aria-pressed={period === value}
+                                    onClick={() => setPeriod(value)}
+                                    className={cx(
+                                        'h-full shrink-0 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition',
+                                        period === value ? 'bg-white text-ink-900 shadow-sm dark:bg-ink-700 dark:text-white' : 'text-ink-600 hover:text-ink-900 dark:text-ink-300',
+                                    )}
+                                >
+                                    {text}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
 
                     <label className="block">
                         <span className={labelClass}>{t('order.commercialStatus.title')}</span>
@@ -295,8 +319,7 @@ export default function OrdersList() {
                                 role="row"
                                 className="flex items-center gap-4 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
                             >
-                                <span className="w-8 shrink-0" aria-hidden="true" />
-                                <span className="w-28 shrink-0">{t('order.table.code')}</span>
+                                <span className="w-36 shrink-0">{t('order.table.code')}</span>
                                 <span className="min-w-[160px] flex-1">{t('order.client')}</span>
                                 <span className="w-24 shrink-0">{t('order.table.service')}</span>
                                 <span className="w-28 shrink-0">{t('order.items')}</span>
@@ -315,21 +338,19 @@ export default function OrdersList() {
                                             to={`/orders/${order.id}`}
                                             className="group flex items-center gap-4 px-5 py-3 transition hover:bg-ink-50 focus-visible:bg-ink-50 dark:hover:bg-ink-800/50 dark:focus-visible:bg-ink-800/50"
                                         >
-                                            <Avatar firstName={order.client?.first_name} lastName={order.client?.last_name} size="sm" className="shrink-0" />
-
-                                            <div className="w-28 shrink-0">
-                                                <p className="font-display font-bold text-ink-900 dark:text-white">
-                                                    {t('order.number')}
-                                                    {order.order_number}
-                                                </p>
+                                            <div className="w-36 shrink-0">
+                                                <p className="truncate font-display font-bold text-ink-900 dark:text-white">{displayCode(order)}</p>
                                                 <p className="text-xs text-ink-500 dark:text-ink-400">{dateTime(order.created_at)}</p>
                                             </div>
 
-                                            <div className="min-w-[160px] flex-1">
-                                                <p className="truncate font-medium text-ink-900 dark:text-white">
-                                                    {order.client?.first_name} {order.client?.last_name}
-                                                </p>
-                                                {order.client?.phone && <p className="truncate text-xs text-ink-500 dark:text-ink-400">{order.client.phone}</p>}
+                                            <div className="flex min-w-[160px] flex-1 items-center gap-3">
+                                                <Avatar firstName={order.client?.first_name} lastName={order.client?.last_name} size="sm" className="shrink-0" />
+                                                <div className="min-w-0">
+                                                    <p className="truncate font-medium text-ink-900 dark:text-white">
+                                                        {order.client?.first_name} {order.client?.last_name}
+                                                    </p>
+                                                    {order.client?.phone && <p className="truncate text-xs text-ink-500 dark:text-ink-400">{order.client.phone}</p>}
+                                                </div>
                                             </div>
 
                                             <div className="w-24 shrink-0">

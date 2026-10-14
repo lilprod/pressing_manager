@@ -279,4 +279,20 @@ class OrderListTest extends TestCase
         $response->assertOk();
         $this->assertCount(0, $response->json('data'));
     }
+
+    public function test_each_listed_deposit_carries_its_agency_formatted_code(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        \App\Models\AgencySetting::forAgency($agency->id)->update(['order_number_prefix' => 'DEP-', 'order_number_padding' => 6]);
+        $accueil = $this->makeUser('accueil', $agency);
+        $client = Client::factory()->for($agency, 'agency')->create();
+        $this->makeOrder($agency, $client, ['order_number' => 42]);
+
+        $response = $this->actingAs($accueil)->getJson('/api/orders');
+
+        $response->assertOk();
+        $this->assertSame('DEP-000042', $response->json('data.0.order_number_formatted'));
+        $this->assertArrayNotHasKey('agency', $response->json('data.0'));
+    }
 }

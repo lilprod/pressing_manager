@@ -2327,5 +2327,22 @@
     "order.actions.title": "Actions",
     "order.actions.pickup": "Traiter le retrait",
     "order.journal.showAll": "Voir tout ({count})",
-    "order.journal.showLess": "Réduire"
+    "order.journal.showLess": "Réduire",
+    "ticket.depositedAt": "Déposé le",
+    "ticket.pickupAt": "Retrait prévu",
+    "ticket.totalTtc": "TOTAL TTC",
+    "documents.invoiceSheet.title": "Facture",
+    "documents.invoiceSheet.number": "N° {number}",
+    "documents.invoiceSheet.issuedAt": "Émise le {date}",
+    "documents.invoiceSheet.billedTo": "Facturé à",
+    "documents.invoiceSheet.deposit": "Dépôt {code}",
+    "documents.invoiceSheet.unitPrice": "Prix unitaire",
+    "documents.invoiceSheet.amount": "Montant",
+    "documents.invoiceSheet.openPdf": "Ouvrir le PDF archivé",
+    "documents.invoiceSheet.hint": "Aperçu des données de la facture ; le PDF archivé fait foi.",
+    "documents.formatRows.ticket": "Ticket thermique 80 mm",
+    "documents.formatRows.ticketHint": "Remis au client au dépôt, QR par pièce",
+    "documents.formatRows.invoice": "Facture A4",
+    "documents.formatRows.invoiceHint": "PDF archivé à l'émission",
+    "documents.formatRows.unavailable": "Aucune facture émise"
 }

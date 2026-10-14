@@ -4,58 +4,107 @@ import { useFormat } from '../lib/format';
 import type { Order } from '../types';
 
 /** Contenu visuel du ticket de dépôt — partagé entre l'impression (PrintableTicket, masqué
- * hors impression) et l'aperçu visible de l'écran « Ticket et facture ». */
+ * hors impression) et l'aperçu visible de l'écran « Ticket et facture ». Mise en forme de
+ * ticket thermique (80 mm) : en-tête centré, séparateurs pointillés, lignes article/prix. */
 export default function TicketReceiptContent({ order }: { order: Order }) {
     const { t } = useI18n();
     const { settings } = useSettings();
     const { money, dateTime } = useFormat();
+    const invoice = order.invoice?.[0] ?? null;
+    const paid = (invoice?.payments ?? []).filter((p) => p.status === 'complete').reduce((sum, p) => sum + p.amount, 0);
+    const separator = <div className="my-2 border-t border-dashed border-black" />;
 
     return (
-        <div className="p-4 text-sm">
-            <div className="mb-2 flex items-center gap-2 border-b border-black pb-2">
-                {settings?.logo_url && <img src={settings.logo_url} alt="" className="h-10 w-10 object-cover" />}
-                <div>
-                    <p className="text-base font-bold leading-tight">{settings?.pressing_name}</p>
-                    {order.agency && (
-                        <p className="text-xs leading-tight">
-                            {order.agency.name}
-                            {order.agency.address && ` — ${order.agency.address}`}
-                            {order.agency.phone && ` — ${order.agency.phone}`}
-                        </p>
-                    )}
-                </div>
+        <div className="p-4 font-mono text-[12px] leading-snug">
+            <div className="text-center">
+                {settings?.logo_url && <img src={settings.logo_url} alt="" className="mx-auto mb-1 h-10 w-10 object-cover" />}
+                <p className="text-sm font-bold uppercase">{settings?.pressing_name}</p>
+                {order.agency && (
+                    <>
+                        <p>{order.agency.name}</p>
+                        {order.agency.address && <p>{order.agency.address}</p>}
+                        {order.agency.phone && <p>{order.agency.phone}</p>}
+                    </>
+                )}
             </div>
-
-            <h2 className="text-base font-bold">{t('order.ticket')}</h2>
-            <p>
-                {t('order.number')}
-                {order.order_number_formatted ?? order.order_number}
-            </p>
-            <p>{dateTime(order.created_at)}</p>
-            <p>
-                {order.client?.first_name} {order.client?.last_name} — {order.client?.phone}
-            </p>
+            {separator}
+            <p className="text-center text-sm font-bold uppercase">{t('order.ticket')}</p>
+            <p className="text-center text-base font-bold">{order.order_number_formatted ?? order.order_number}</p>
+            {separator}
+            <div className="flex justify-between gap-2">
+                <span>{t('ticket.depositedAt')}</span>
+                <span>{dateTime(order.created_at)}</span>
+            </div>
             {order.promised_at && (
-                <p>
-                    {t('order.promisedAt')} {dateTime(order.promised_at)}
-                </p>
+                <div className="flex justify-between gap-2 font-bold">
+                    <span>{t('ticket.pickupAt')}</span>
+                    <span>{dateTime(order.promised_at)}</span>
+                </div>
             )}
-            <ul className="mt-2 list-disc pl-4">
+            <div className="flex justify-between gap-2">
+                <span>{t('order.client')}</span>
+                <span className="text-right">
+                    {order.client?.first_name} {order.client?.last_name}
+                </span>
+            </div>
+            {order.client?.phone && <p className="text-right">{order.client.phone}</p>}
+            {separator}
+            <ul className="space-y-1.5">
                 {order.items.map((item) => (
                     <li key={item.id}>
-                        {item.service?.name}
-                        {item.treatment_type ? ` (${item.treatment_type.name})` : ''}{item.finish_option ? ` · ${item.finish_option.name}` : ''} × {item.quantity} — {item.qr_code}
+                        <div className="flex justify-between gap-2">
+                            <span className="font-bold">
+                                {item.weight_kg ? `${item.weight_kg} kg` : `${item.quantity}×`} {item.service?.name}
+                            </span>
+                            <span className="whitespace-nowrap">{money(item.unit_price * item.quantity)}</span>
+                        </div>
+                        {(item.treatment_type || item.finish_option) && (
+                            <p>{[item.treatment_type?.name, item.finish_option?.name].filter(Boolean).join(' · ')}</p>
+                        )}
+                        <p className="text-[10px]">{item.qr_code}</p>
                     </li>
                 ))}
             </ul>
-            <p className="mt-2 font-semibold">
-                {t('common.total')} : {money(order.total_amount)}
-            </p>
-            {(settings?.ticket_conditions || settings?.ticket_footer) && (
-                <div className="mt-3 border-t border-dashed border-black pt-2 text-xs">
-                    {settings.ticket_conditions && <p>{settings.ticket_conditions}</p>}
-                    {settings.ticket_footer && <p className="mt-1 text-center">{settings.ticket_footer}</p>}
+            {separator}
+            {order.discount_amount > 0 && (
+                <div className="flex justify-between gap-2">
+                    <span>{t('invoice.discount')}</span>
+                    <span>-{money(order.discount_amount)}</span>
                 </div>
+            )}
+            {invoice ? (
+                <>
+                    <div className="flex justify-between gap-2">
+                        <span>{t('invoice.tax')}</span>
+                        <span>{money(invoice.tax_amount)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2 text-sm font-bold">
+                        <span>{t('ticket.totalTtc')}</span>
+                        <span>{money(invoice.total_amount)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                        <span>{t('order.table.paid')}</span>
+                        <span>{money(paid)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2 font-bold">
+                        <span>{t('order.table.remaining')}</span>
+                        <span>{money(Math.max(0, invoice.total_amount - paid))}</span>
+                    </div>
+                </>
+            ) : (
+                <div className="flex justify-between gap-2 text-sm font-bold">
+                    <span>{t('common.total')}</span>
+                    <span>{money(order.total_amount)}</span>
+                </div>
+            )}
+            {(settings?.ticket_conditions || settings?.ticket_footer) && (
+                <>
+                    {separator}
+                    <div className="text-[11px]">
+                        {settings.ticket_conditions && <p>{settings.ticket_conditions}</p>}
+                        {settings.ticket_footer && <p className="mt-1 text-center">{settings.ticket_footer}</p>}
+                    </div>
+                </>
             )}
         </div>
     );

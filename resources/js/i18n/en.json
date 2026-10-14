@@ -2327,5 +2327,22 @@
     "order.actions.title": "Actions",
     "order.actions.pickup": "Process pickup",
     "order.journal.showAll": "Show all ({count})",
-    "order.journal.showLess": "Show less"
+    "order.journal.showLess": "Show less",
+    "ticket.depositedAt": "Dropped off",
+    "ticket.pickupAt": "Pickup",
+    "ticket.totalTtc": "TOTAL INCL. TAX",
+    "documents.invoiceSheet.title": "Invoice",
+    "documents.invoiceSheet.number": "No. {number}",
+    "documents.invoiceSheet.issuedAt": "Issued {date}",
+    "documents.invoiceSheet.billedTo": "Billed to",
+    "documents.invoiceSheet.deposit": "Deposit {code}",
+    "documents.invoiceSheet.unitPrice": "Unit price",
+    "documents.invoiceSheet.amount": "Amount",
+    "documents.invoiceSheet.openPdf": "Open archived PDF",
+    "documents.invoiceSheet.hint": "Preview of the invoice data; the archived PDF is authoritative.",
+    "documents.formatRows.ticket": "80 mm thermal ticket",
+    "documents.formatRows.ticketHint": "Handed to the customer, one QR per piece",
+    "documents.formatRows.invoice": "A4 invoice",
+    "documents.formatRows.invoiceHint": "PDF archived at issue",
+    "documents.formatRows.unavailable": "No invoice issued"
 }

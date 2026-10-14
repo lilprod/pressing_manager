@@ -758,7 +758,7 @@ export default function NewOrder() {
                                                     <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-600 dark:text-ink-350">
                                                         {categoryLabel}
                                                     </h3>
-                                                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                                                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-4">
                                                         {items.map((service) => (
                                                             <ServiceCard
                                                                 key={service.id}
@@ -1280,19 +1280,19 @@ function ServiceCard({
             type="button"
             onClick={onAdd}
             className={cx(
-                'group relative flex min-h-[7rem] flex-col items-start gap-3 rounded-2xl border-2 p-4 text-left transition duration-150 active:scale-[0.97]',
+                'group relative flex min-h-[6rem] flex-col items-start gap-2 rounded-2xl border-2 p-3 text-left transition duration-150 active:scale-[0.97]',
                 inCart > 0
                     ? 'border-brand-600 bg-brand-50/70 shadow-card-hover dark:border-brand-300 dark:bg-brand-400/10'
                     : 'border-ink-200/80 bg-white hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-card-hover dark:border-ink-800 dark:bg-ink-900 dark:hover:border-brand-400/50',
             )}
         >
-            <span className={cx('flex h-10 w-10 items-center justify-center rounded-xl ring-1 ring-inset', TONES[meta.tone])}>
-                <Icon aria-hidden="true" className="h-5 w-5" />
+            <span className={cx('flex h-8 w-8 items-center justify-center rounded-lg ring-1 ring-inset', TONES[meta.tone])}>
+                <Icon aria-hidden="true" className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1">
-                <span className="block font-semibold leading-snug text-ink-900 dark:text-ink-50">{service.name}</span>
+                <span className="block text-sm font-semibold leading-snug text-ink-900 dark:text-ink-50">{service.name}</span>
             </span>
-            <span className="font-display text-lg font-bold tabular-nums text-brand-700 dark:text-brand-300">{money(service.effective_price)}</span>
+            <span className="font-display text-base font-bold tabular-nums text-brand-700 dark:text-brand-300">{money(service.effective_price)}</span>
             {inCart > 0 ? (
                 <span
                     key={inCart}

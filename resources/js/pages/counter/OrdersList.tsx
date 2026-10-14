@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
     Banknote,
     CalendarClock,
-    ChevronRight,
+    Columns3,
     ClipboardList,
     Clock,
-    CloudUpload,
     Download,
+    MoreVertical,
     PackageCheck,
     Package,
     PiggyBank,
@@ -19,10 +19,10 @@ import { useI18n } from '../../contexts/I18nContext';
 import { api } from '../../lib/api';
 import { elapsedLabel, useFormat } from '../../lib/format';
 import { useSyncQueue } from '../../lib/useSyncQueue';
-import PageHeader, { Avatar } from '../../components/ui/PageHeader';
+import PageHeader from '../../components/ui/PageHeader';
 import StatusBadge, { Pill } from '../../components/ui/StatusBadge';
 import { EmptyState, LoadingState } from '../../components/ui/Feedback';
-import { StatCard } from '../../components/ui/Metrics';
+import { StatCard, percentChange, trend } from '../../components/ui/Metrics';
 import Pagination from '../../components/ui/Pagination';
 import { button, card, cx, input, label as labelClass, textLink } from '../../components/ui/styles';
 import type { Order, OrderStats, OrderStatus, Paginated } from '../../types';
@@ -38,17 +38,135 @@ function displayCodeFor(order: { order_number: number | string; order_number_for
     return `${prefix}${formatted ?? order.order_number}`;
 }
 
+type OptionalColumn = 'service' | 'items' | 'total' | 'paid' | 'remaining' | 'promised' | 'status' | 'sync';
+const OPTIONAL_COLUMNS: OptionalColumn[] = ['service', 'items', 'total', 'paid', 'remaining', 'promised', 'status', 'sync'];
+const COLUMNS_KEY = 'pm.ordersList.columns';
+
+function loadVisibleColumns(): OptionalColumn[] {
+    try {
+        const stored = JSON.parse(localStorage.getItem(COLUMNS_KEY) ?? 'null') as OptionalColumn[] | null;
+        if (Array.isArray(stored)) return stored.filter((c) => OPTIONAL_COLUMNS.includes(c));
+    } catch {
+        /* préférence absente ou illisible : toutes les colonnes */
+    }
+    return OPTIONAL_COLUMNS;
+}
+
+function SyncDot({ tone, label }: { tone: 'emerald' | 'amber' | 'red'; label: string }) {
+    const dot = { emerald: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-red-500' }[tone];
+    return (
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-ink-700 dark:text-ink-200">
+            <span aria-hidden="true" className={cx('h-2 w-2 rounded-full', dot)} />
+            {label}
+        </span>
+    );
+}
+
+function ColumnsMenu({ visible, onToggle }: { visible: OptionalColumn[]; onToggle: (column: OptionalColumn) => void }) {
+    const { t } = useI18n();
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!open) return;
+        const close = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, [open]);
+    return (
+        <div ref={ref} className="relative">
+            <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className={button('secondary', 'sm')}>
+                <Columns3 aria-hidden="true" className="h-4 w-4" />
+                {t('order.columns.title')}
+            </button>
+            {open && (
+                <div className={cx(card, 'absolute right-0 z-20 mt-2 w-56 space-y-1 p-2 shadow-lg')}>
+                    {OPTIONAL_COLUMNS.map((column) => (
+                        <label key={column} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-ink-50 dark:hover:bg-ink-800">
+                            <input type="checkbox" checked={visible.includes(column)} onChange={() => onToggle(column)} className="h-4 w-4 rounded" />
+                            {t(`order.columns.${column}`)}
+                        </label>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function RowMenu({ order }: { order: Order }) {
+    const { t } = useI18n();
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!open) return;
+        const close = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, [open]);
+    const item = 'block rounded-lg px-3 py-2 text-sm text-ink-800 hover:bg-ink-50 dark:text-ink-100 dark:hover:bg-ink-800';
+    return (
+        <div ref={ref} className="relative">
+            <button
+                type="button"
+                aria-label={t('common.actions')}
+                aria-expanded={open}
+                onClick={() => setOpen((v) => !v)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 dark:hover:bg-ink-800"
+            >
+                <MoreVertical aria-hidden="true" className="h-4 w-4" />
+            </button>
+            {open && (
+                <div className={cx(card, 'absolute right-0 z-20 mt-1 w-52 p-1.5 shadow-lg')}>
+                    <Link to={`/orders/${order.id}`} className={item}>
+                        {t('order.rowMenu.open')}
+                    </Link>
+                    <Link to={`/orders/${order.id}/documents`} className={item}>
+                        {t('documents.title')}
+                    </Link>
+                    {order.status === 'pret' && (
+                        <Link to={`/pickups/${order.id}`} className={item}>
+                            {t('order.actions.pickup')}
+                        </Link>
+                    )}
+                    {['recu', 'trie', 'en_traitement', 'controle_qualite', 'pret'].includes(order.status) && (
+                        <Link to={`/atelier?order=${order.id}`} className={item}>
+                            {t('order.followWorkshop')}
+                        </Link>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function OrdersList() {
     const [urlParams] = useSearchParams();
     const clientFilter = urlParams.get('client_id');
-    const { t } = useI18n();
+    const { t, lang } = useI18n();
     const displayCode = (order: Order) => displayCodeFor(order, 'N° ');
     const { money, dateTime } = useFormat();
-    const { activeAgencyId } = useAuth();
+    const { activeAgencyId, setActiveAgencyId, agencies, user } = useAuth();
+    const isGlobal = user?.agency_id == null;
+    const [visibleColumns, setVisibleColumns] = useState<OptionalColumn[]>(loadVisibleColumns);
+    const show = (column: OptionalColumn) => visibleColumns.includes(column);
+    function toggleColumn(column: OptionalColumn) {
+        setVisibleColumns((current) => {
+            const next = current.includes(column) ? current.filter((c) => c !== column) : [...current, column];
+            try {
+                localStorage.setItem(COLUMNS_KEY, JSON.stringify(next));
+            } catch {
+                /* préférence d'affichage seulement */
+            }
+            return next;
+        });
+    }
     const pending = useSyncQueue();
     const [orders, setOrders] = useState<Order[]>([]);
     const [stats, setStats] = useState<OrderStats | null>(null);
-    const [meta, setMeta] = useState<Pick<Paginated<Order>, 'current_page' | 'last_page' | 'total'>>({
+    const [meta, setMeta] = useState<Pick<Paginated<Order>, 'current_page' | 'last_page' | 'total' | 'from' | 'to'>>({
         current_page: 1,
         last_page: 1,
         total: 0,
@@ -85,7 +203,7 @@ export default function OrdersList() {
             .get<Paginated<Order>>(`/orders?${params}`)
             .then((res) => {
                 setOrders(res.data);
-                setMeta({ current_page: res.current_page, last_page: res.last_page, total: res.total });
+                setMeta({ current_page: res.current_page, last_page: res.last_page, total: res.total, from: res.from, to: res.to });
                 setLastFetchedAt(new Date());
             })
             .catch(() => setOrders([]))
@@ -144,6 +262,24 @@ export default function OrdersList() {
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
     }
 
+    const rangeFrom = meta.from ?? 0;
+    const rangeTo = meta.to ?? 0;
+    // Les dépôts encore dans la file locale de l'appareil apparaissent en tête de la 1re page,
+    // avec leur vrai état de synchronisation ; une ligne serveur est par définition « À jour ».
+    const localRows = page === 1 && !hasActiveFilters && !clientFilter ? pending : [];
+    const weekdayLabel = new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'fr-FR', { weekday: 'long' }).format(new Date());
+
+    function dayTime(value: string): string {
+        const d = new Date(value);
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 1);
+        const hm = d.toLocaleTimeString(lang === 'en' ? 'en-GB' : 'fr-FR', { hour: '2-digit', minute: '2-digit' });
+        if (d.toDateString() === today.toDateString()) return t('order.table.todayAt', { time: hm });
+        if (d.toDateString() === yesterday.toDateString()) return t('order.table.yesterdayAt', { time: hm });
+        return dateTime(value);
+    }
+
     function articlesLabel(order: Order): string {
         const parts: string[] = [];
         if (order.pieces_count) parts.push(t('order.itemsCount', { count: order.pieces_count }));
@@ -166,10 +302,34 @@ export default function OrdersList() {
 
             {stats && (
                 <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 sm:grid-cols-4">
-                    <StatCard label={t('order.stats.today')} value={stats.today_count} icon={PackageCheck} tone="brand" />
-                    <StatCard label={t('order.stats.todayRevenue')} value={money(stats.today_revenue)} icon={Banknote} tone="emerald" />
-                    <StatCard label={t('order.stats.dueToday')} value={stats.due_today} icon={CalendarClock} tone="sky" />
-                    <StatCard label={t('order.stats.outstanding')} value={money(stats.outstanding_balance)} icon={PiggyBank} tone="amber" />
+                    <StatCard
+                        label={t('order.stats.today')}
+                        value={stats.today_count}
+                        icon={PackageCheck}
+                        tone="brand"
+                        {...trend(percentChange(stats.today_count, stats.same_day_last_week_count), t('order.stats.vsLastWeekDay', { day: weekdayLabel }))}
+                    />
+                    <StatCard
+                        label={t('order.stats.todayRevenue')}
+                        value={money(stats.today_deposited_amount)}
+                        icon={Banknote}
+                        tone="emerald"
+                        hint={t('order.stats.collected', { amount: money(stats.today_revenue) })}
+                    />
+                    <StatCard
+                        label={t('order.stats.dueToday')}
+                        value={stats.due_today}
+                        icon={CalendarClock}
+                        tone="sky"
+                        hint={t('order.stats.alreadyReady', { count: stats.ready_due_today })}
+                    />
+                    <StatCard
+                        label={t('order.stats.outstanding')}
+                        value={money(stats.outstanding_balance)}
+                        icon={PiggyBank}
+                        tone="amber"
+                        hint={t('order.stats.openDeposits', { count: stats.open_invoices_count })}
+                    />
                 </div>
             )}
 
@@ -240,6 +400,24 @@ export default function OrdersList() {
                         </select>
                     </label>
 
+                    {isGlobal && agencies.length > 1 && (
+                        <label className="block">
+                            <span className={labelClass}>{t('order.filters.agency')}</span>
+                            <select
+                                value={activeAgencyId ?? ''}
+                                onChange={(e) => setActiveAgencyId(e.target.value ? Number(e.target.value) : null)}
+                                className={cx(input, 'sm:w-48')}
+                            >
+                                <option value="">{t('order.filters.allAgencies')}</option>
+                                {agencies.map((agency) => (
+                                    <option key={agency.id} value={agency.id}>
+                                        {agency.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    )}
+
                     <button
                         type="button"
                         aria-pressed={readyToday}
@@ -264,35 +442,6 @@ export default function OrdersList() {
                 </div>
             </section>
 
-            {pending.length > 0 && (
-                <section aria-labelledby="pending-heading" className="space-y-2.5">
-                    <h2 id="pending-heading" className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
-                        <CloudUpload aria-hidden="true" className="h-4 w-4" />
-                        {t('order.pending')}
-                    </h2>
-                    <ul aria-label={t('order.pending')} className="space-y-2">
-                        {pending.map((p) => (
-                            <li
-                                key={p.client_local_uuid}
-                                className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-sm dark:border-amber-400/30 dark:bg-amber-400/5"
-                            >
-                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
-                                    <CloudUpload aria-hidden="true" className="h-[18px] w-[18px]" />
-                                </span>
-                                <div className="min-w-0 flex-1">
-                                    <p className="font-semibold text-ink-900 dark:text-ink-50">{p.preview.client_label}</p>
-                                    <p className="text-ink-700 dark:text-ink-300">
-                                        {p.preview.items_count} {t('order.items').toLowerCase()} · {money(p.preview.total_amount)}
-                                    </p>
-                                    {p.status === 'error' && <p className="mt-1 font-medium text-red-700 dark:text-red-300">{p.error}</p>}
-                                </div>
-                                <Pill tone="amber">{t('order.pending')}</Pill>
-                            </li>
-                        ))}
-                    </ul>
-                </section>
-            )}
-
             <div className={cx(card, 'overflow-hidden')}>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-ink-200/80 px-5 py-3.5 dark:border-ink-800">
                     <div>
@@ -302,58 +451,82 @@ export default function OrdersList() {
                             {lastFetchedAt && ` · ${t('order.lastRefresh', { elapsed: elapsedLabel(lastFetchedAt.toISOString()) })}`}
                         </p>
                     </div>
-                    <button type="button" onClick={() => void exportOrders()} className={button('secondary', 'sm')}>
-                        <Download aria-hidden="true" className="h-4 w-4" />
-                        {t('order.export')}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={() => void exportOrders()} className={button('secondary', 'sm')}>
+                            <Download aria-hidden="true" className="h-4 w-4" />
+                            {t('order.export')}
+                        </button>
+                        <ColumnsMenu visible={visibleColumns} onToggle={toggleColumn} />
+                    </div>
                 </div>
 
                 {loading ? (
                     <LoadingState />
-                ) : orders.length === 0 ? (
+                ) : orders.length === 0 && localRows.length === 0 ? (
                     <EmptyState icon={Package} title={t('order.noOrders')} description={t('order.noOrdersHint')} />
                 ) : (
-                    <div className="overflow-x-auto">
-                        <div className="min-w-[1280px]">
-                            <div
-                                role="row"
-                                className="flex items-center gap-4 border-b border-ink-200/80 bg-ink-50 px-5 py-2.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
-                            >
-                                <span className="w-36 shrink-0">{t('order.table.code')}</span>
-                                <span className="min-w-[160px] flex-1">{t('order.client')}</span>
-                                <span className="w-24 shrink-0">{t('order.table.service')}</span>
-                                <span className="w-28 shrink-0">{t('order.items')}</span>
-                                <span className="w-24 shrink-0 text-right">{t('common.total')}</span>
-                                <span className="w-24 shrink-0 text-right">{t('order.table.paid')}</span>
-                                <span className="w-24 shrink-0 text-right">{t('order.table.remaining')}</span>
-                                <span className="w-32 shrink-0">{t('order.table.status')}</span>
-                                <span className="w-36 shrink-0">{t('order.table.promised')}</span>
-                                <span className="w-5 shrink-0" aria-hidden="true" />
-                            </div>
-
-                            <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                    <div className="relative overflow-x-auto">
+                        <table className="w-full min-w-[1180px] text-sm">
+                            <thead className="border-b border-ink-200/80 bg-ink-50 text-left text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400">
+                                <tr>
+                                    <th scope="col" className="px-5 py-2.5">{t('order.table.code')}</th>
+                                    <th scope="col" className="px-3 py-2.5">{t('order.client')}</th>
+                                    {show('service') && <th scope="col" className="px-3 py-2.5">{t('order.table.service')}</th>}
+                                    {show('items') && <th scope="col" className="px-3 py-2.5">{t('order.table.itemsWeight')}</th>}
+                                    {show('total') && <th scope="col" className="px-3 py-2.5 text-right">{t('common.total')}</th>}
+                                    {show('paid') && <th scope="col" className="px-3 py-2.5 text-right">{t('order.table.paid')}</th>}
+                                    {show('remaining') && <th scope="col" className="px-3 py-2.5 text-right">{t('order.table.remaining')}</th>}
+                                    {show('promised') && <th scope="col" className="px-3 py-2.5">{t('order.table.promised')}</th>}
+                                    {show('status') && <th scope="col" className="px-3 py-2.5">{t('order.columns.status')}</th>}
+                                    {show('sync') && <th scope="col" className="px-3 py-2.5">{t('order.table.sync')}</th>}
+                                    <th scope="col" className="w-12 px-3 py-2.5">
+                                        <span className="sr-only">{t('common.actions')}</span>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
+                                {localRows.map((p) => (
+                                    <tr key={p.client_local_uuid} className="bg-amber-50/60 dark:bg-amber-400/5">
+                                        <td className="px-5 py-3">
+                                            <p className="font-display font-bold text-ink-900 dark:text-white">{p.preview.local_reference ?? t('order.pending')}</p>
+                                            <p className="text-xs text-ink-500 dark:text-ink-400">{dayTime(p.created_at)}</p>
+                                        </td>
+                                        <td className="px-3 py-3 font-medium text-ink-900 dark:text-white">{p.preview.client_label}</td>
+                                        {show('service') && <td className="px-3 py-3 text-ink-500">—</td>}
+                                        {show('items') && <td className="px-3 py-3">{t('order.itemsCount', { count: p.preview.items_count })}</td>}
+                                        {show('total') && <td className="px-3 py-3 text-right font-bold tabular-nums">{money(p.preview.total_amount)}</td>}
+                                        {show('paid') && <td className="px-3 py-3 text-right text-ink-500">—</td>}
+                                        {show('remaining') && <td className="px-3 py-3 text-right text-ink-500">—</td>}
+                                        {show('promised') && <td className="px-3 py-3 text-ink-500">—</td>}
+                                        {show('status') && <td className="px-3 py-3 text-ink-500">—</td>}
+                                        {show('sync') && (
+                                            <td className="px-3 py-3">
+                                                <SyncDot tone={p.status === 'error' ? 'red' : 'amber'} label={p.status === 'error' ? t('order.sync.error') : t('order.sync.pending')} />
+                                            </td>
+                                        )}
+                                        <td className="px-3 py-3">
+                                            <Link to="/synchronisation" className={cx(textLink, 'text-xs')}>
+                                                {t('order.sync.open')}
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                ))}
                                 {orders.map((order) => (
-                                    <li key={order.id}>
-                                        <Link
-                                            to={`/orders/${order.id}`}
-                                            className="group flex items-center gap-4 px-5 py-3 transition hover:bg-ink-50 focus-visible:bg-ink-50 dark:hover:bg-ink-800/50 dark:focus-visible:bg-ink-800/50"
-                                        >
-                                            <div className="w-36 shrink-0">
-                                                <p className="truncate font-display font-bold text-ink-900 dark:text-white">{displayCode(order)}</p>
-                                                <p className="text-xs text-ink-500 dark:text-ink-400">{dateTime(order.created_at)}</p>
-                                            </div>
-
-                                            <div className="flex min-w-[160px] flex-1 items-center gap-3">
-                                                <Avatar firstName={order.client?.first_name} lastName={order.client?.last_name} size="sm" className="shrink-0" />
-                                                <div className="min-w-0">
-                                                    <p className="truncate font-medium text-ink-900 dark:text-white">
-                                                        {order.client?.first_name} {order.client?.last_name}
-                                                    </p>
-                                                    {order.client?.phone && <p className="truncate text-xs text-ink-500 dark:text-ink-400">{order.client.phone}</p>}
-                                                </div>
-                                            </div>
-
-                                            <div className="w-24 shrink-0">
+                                    <tr key={order.id} className="group transition hover:bg-ink-50 dark:hover:bg-ink-800/50">
+                                        <td className="px-5 py-3">
+                                            <Link to={`/orders/${order.id}`} className="font-display font-bold text-ink-900 hover:underline dark:text-white">
+                                                {displayCode(order)}
+                                            </Link>
+                                            <p className="text-xs text-ink-500 dark:text-ink-400">{dayTime(order.created_at)}</p>
+                                        </td>
+                                        <td className="px-3 py-3">
+                                            <p className="font-medium text-ink-900 dark:text-white">
+                                                {order.client?.first_name} {order.client?.last_name}
+                                            </p>
+                                            {order.client?.phone && <p className="text-xs text-ink-500 dark:text-ink-400">{order.client.phone}</p>}
+                                        </td>
+                                        {show('service') && (
+                                            <td className="px-3 py-3">
                                                 {order.treatment_name ? (
                                                     <Pill tone={order.is_express ? 'accent' : 'neutral'}>{order.treatment_name}</Pill>
                                                 ) : order.is_express ? (
@@ -361,45 +534,61 @@ export default function OrdersList() {
                                                 ) : (
                                                     <Pill tone="neutral">{t('order.standard')}</Pill>
                                                 )}
-                                            </div>
-
-                                            <p className="w-28 shrink-0 text-sm text-ink-700 dark:text-ink-200">{articlesLabel(order)}</p>
-
-                                            <span className="w-24 shrink-0 text-right font-display font-bold tabular-nums text-ink-900 dark:text-white">
-                                                {money(order.total_amount)}
-                                            </span>
-
-                                            <span className="w-24 shrink-0 text-right text-sm tabular-nums text-ink-600 dark:text-ink-350">
+                                            </td>
+                                        )}
+                                        {show('items') && <td className="px-3 py-3 text-ink-700 dark:text-ink-200">{articlesLabel(order)}</td>}
+                                        {show('total') && (
+                                            <td className="px-3 py-3 text-right font-display font-bold tabular-nums text-ink-900 dark:text-white">{money(order.total_amount)}</td>
+                                        )}
+                                        {show('paid') && (
+                                            <td className="px-3 py-3 text-right tabular-nums text-ink-600 dark:text-ink-350">
                                                 {order.paid_amount != null ? money(order.paid_amount) : '—'}
-                                            </span>
-
-                                            <span
+                                            </td>
+                                        )}
+                                        {show('remaining') && (
+                                            <td
                                                 className={cx(
-                                                    'w-24 shrink-0 text-right text-sm font-semibold tabular-nums',
+                                                    'px-3 py-3 text-right font-semibold tabular-nums',
                                                     order.balance_due ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300',
                                                 )}
                                             >
                                                 {order.balance_due != null ? money(order.balance_due) : '—'}
-                                            </span>
-
-                                            <div className="w-32 shrink-0">
+                                            </td>
+                                        )}
+                                        {show('promised') && (
+                                            <td className="px-3 py-3 text-ink-600 dark:text-ink-350">
+                                                {order.status === 'livre' && order.delivered_at
+                                                    ? t('order.table.pickedUpAt', { time: dayTime(order.delivered_at) })
+                                                    : order.promised_at
+                                                      ? dayTime(order.promised_at)
+                                                      : '—'}
+                                            </td>
+                                        )}
+                                        {show('status') && (
+                                            <td className="px-3 py-3">
                                                 <StatusBadge kind="order" status={order.status} />
-                                            </div>
-
-                                            <p className="w-36 shrink-0 text-sm text-ink-600 dark:text-ink-350">{order.promised_at ? dateTime(order.promised_at) : '—'}</p>
-
-                                            <ChevronRight
-                                                aria-hidden="true"
-                                                className="h-5 w-5 shrink-0 text-ink-400 transition group-hover:translate-x-0.5 group-hover:text-brand-700 dark:group-hover:text-brand-300"
-                                            />
-                                        </Link>
-                                    </li>
+                                            </td>
+                                        )}
+                                        {show('sync') && (
+                                            <td className="px-3 py-3">
+                                                <SyncDot tone="emerald" label={t('order.sync.upToDate')} />
+                                            </td>
+                                        )}
+                                        <td className="px-3 py-3">
+                                            <RowMenu order={order} />
+                                        </td>
+                                    </tr>
                                 ))}
-                            </ul>
-                        </div>
+                            </tbody>
+                        </table>
                     </div>
                 )}
-                <Pagination meta={meta} onPageChange={setPage} />
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-ink-200/80 px-5 dark:border-ink-800">
+                    <p className="py-3 text-xs text-ink-600 dark:text-ink-350">
+                        {meta.total > 0 ? t('order.table.range', { from: rangeFrom, to: rangeTo, total: meta.total }) : ''}
+                    </p>
+                    <Pagination meta={meta} onPageChange={setPage} />
+                </div>
             </div>
         </div>
     );

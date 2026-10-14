@@ -167,11 +167,41 @@ class OrderController extends ApiController
             ->get()
             ->sum(fn (Invoice $invoice) => max(0, $invoice->total_amount - (int) ($invoice->paid_amount ?? 0)));
 
+        // Sous-libellés des cartes (capture « Gestion des dépôts ») — tous réels :
+        // même jour de la semaine précédente, montant déposé du jour (hors annulés),
+        // dépôts dus aujourd'hui déjà prêts, nombre de factures encore ouvertes.
+        $sameDayLastWeek = now()->subWeek()->toDateString();
+        $lastWeekCount = Order::query()
+            ->whereIn('agency_id', $agencyId)
+            ->whereDate('created_at', $sameDayLastWeek)
+            ->count();
+
+        $todayDeposited = (int) Order::query()
+            ->whereIn('agency_id', $agencyId)
+            ->whereDate('created_at', $today)
+            ->where('status', '!=', 'annule')
+            ->sum('total_amount');
+
+        $readyDueToday = Order::query()
+            ->whereIn('agency_id', $agencyId)
+            ->whereDate('promised_at', $today)
+            ->where('status', 'pret')
+            ->count();
+
+        $openInvoices = Invoice::query()
+            ->whereIn('status', ['emise', 'partiellement_payee'])
+            ->whereIn('agency_id', $agencyId)
+            ->count();
+
         return response()->json([
             'today_count' => $todayCount,
             'today_revenue' => $todayRevenue,
             'due_today' => $dueToday,
             'outstanding_balance' => $outstandingBalance,
+            'same_day_last_week_count' => $lastWeekCount,
+            'today_deposited_amount' => $todayDeposited,
+            'ready_due_today' => $readyDueToday,
+            'open_invoices_count' => $openInvoices,
         ]);
     }
 

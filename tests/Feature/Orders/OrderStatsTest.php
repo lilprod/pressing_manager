@@ -130,4 +130,30 @@ class OrderStatsTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('today_count', 2);
     }
+
+    public function test_it_reports_the_card_hints_from_real_data(): void
+    {
+        $this->seedRbac();
+        $agency = Agency::factory()->create();
+        $accueil = $this->makeUser('accueil', $agency);
+
+        Order::factory()->create(['agency_id' => $agency->id, 'created_at' => now(), 'total_amount' => 4000, 'status' => 'recu']);
+        Order::factory()->create(['agency_id' => $agency->id, 'created_at' => now(), 'total_amount' => 9000, 'status' => 'annule']);
+        Order::factory()->create(['agency_id' => $agency->id, 'created_at' => now()->subWeek(), 'total_amount' => 1000]);
+        Order::factory()->create(['agency_id' => $agency->id, 'created_at' => now()->subWeek(), 'total_amount' => 1000]);
+        Order::factory()->create(['agency_id' => $agency->id, 'promised_at' => now(), 'status' => 'pret']);
+        Order::factory()->create(['agency_id' => $agency->id, 'promised_at' => now(), 'status' => 'en_traitement']);
+
+        $response = $this->actingAs($accueil)->getJson('/api/orders/stats');
+
+        $response->assertOk();
+        $response->assertJsonPath('same_day_last_week_count', 2);
+        $response->assertJsonPath('ready_due_today', 1);
+        // Les fabriques créent d'autres dépôts du jour : on compare à la même définition (hors annulés).
+        $expected = (int) Order::whereIn('agency_id', [$agency->id])->whereDate('created_at', now()->toDateString())
+            ->where('status', '!=', 'annule')->sum('total_amount');
+        $response->assertJsonPath('today_deposited_amount', $expected);
+        $this->assertGreaterThanOrEqual(4000, $expected);
+        $response->assertJsonPath('open_invoices_count', 0);
+    }
 }

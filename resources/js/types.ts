@@ -565,6 +565,10 @@ export interface OrderStats {
     today_revenue: number;
     due_today: number;
     outstanding_balance: number;
+    same_day_last_week_count: number;
+    today_deposited_amount: number;
+    ready_due_today: number;
+    open_invoices_count: number;
 }
 
 export interface ClientStats {
@@ -883,6 +887,9 @@ export interface Paginated<T> {
     current_page: number;
     last_page: number;
     total: number;
+    /** Rang du premier et du dernier élément de la page (fournis par la pagination Laravel). */
+    from?: number | null;
+    to?: number | null;
 }
 
 export type StockUnit = 'unite' | 'kg' | 'litre' | 'paquet';

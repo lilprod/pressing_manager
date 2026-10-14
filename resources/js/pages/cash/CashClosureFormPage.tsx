@@ -9,7 +9,7 @@ import { ActionBar, actionBarGhostButton } from '../../components/ui/ActionBar';
 import { Alert, EmptyState, LoadingState, Spinner } from '../../components/ui/Feedback';
 import { Pill } from '../../components/ui/StatusBadge';
 import { StatCard } from '../../components/ui/Metrics';
-import { button, cardPadded, cx, input, label, sectionTitle, textLink } from '../../components/ui/styles';
+import { button, cardPadded, cx, input, label, sectionTitle } from '../../components/ui/styles';
 import type {
     CashClosureOperator,
     CashClosurePrecheck,
@@ -17,6 +17,22 @@ import type {
     CashReconciliationMethod,
     CashSummary,
 } from '../../types';
+
+function SynthesisRow({ label: text, value, tone }: { label: string; value: string; tone?: 'in' | 'out' }) {
+    return (
+        <div className="flex items-center justify-between gap-3 py-2.5">
+            <dt className="text-ink-700 dark:text-ink-200">{text}</dt>
+            <dd
+                className={cx(
+                    'font-semibold tabular-nums',
+                    tone === 'in' ? 'text-emerald-700 dark:text-emerald-400' : tone === 'out' ? 'text-red-700 dark:text-red-400' : 'text-ink-900 dark:text-white',
+                )}
+            >
+                {value}
+            </dd>
+        </div>
+    );
+}
 
 function today(): string {
     return new Date().toISOString().slice(0, 10);
@@ -36,7 +52,7 @@ const CHECKLIST_STEPS = [
 export default function CashClosureFormPage() {
     const navigate = useNavigate();
     const { t } = useI18n();
-    const { money } = useFormat();
+    const { money, dateTime } = useFormat();
     const { user, activeAgencyId } = useAuth();
     const isGlobal = user?.agency_id === null;
     const agencyId = user?.agency_id ?? activeAgencyId;
@@ -133,12 +149,44 @@ export default function CashClosureFormPage() {
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
     }
 
+    const countedSteps = CHECKLIST_STEPS.filter((step) => checklist.has(step)).length;
+    const blockers = [
+        !allCounted ? t('cash.closureForm.footer.missingCounts') : null,
+        !checklistComplete ? t('cash.closureForm.footer.missingChecklist', { done: countedSteps, total: CHECKLIST_STEPS.length }) : null,
+        hasAnyVariance && notes.trim() === '' ? t('cash.closureForm.footer.missingJustification') : null,
+    ].filter(Boolean) as string[];
+
     return (
         <div className="space-y-4">
-            <Link to="/cash" className={cx(textLink, 'inline-flex items-center gap-1.5 text-sm')}>
-                <ArrowLeft aria-hidden="true" className="h-4 w-4" />
-                {t('cash.backToRegister')}
-            </Link>
+            <header className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <h1 className="font-display text-2xl font-bold text-ink-900 dark:text-white">{t('cash.closureForm.heading')}</h1>
+                        <Pill tone={canSubmit ? 'emerald' : 'amber'}>{canSubmit ? t('cash.closureForm.readyBadge') : t('cash.closureForm.toCompleteBadge')}</Pill>
+                    </div>
+                    <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-350">{t('cash.closureForm.subtitle')}</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    <input
+                        type="date"
+                        value={businessDate}
+                        max={today()}
+                        onChange={(e) => setBusinessDate(e.target.value)}
+                        aria-label={t('cash.closureForm.date')}
+                        className={cx(input, 'h-10 !w-44')}
+                    />
+                    <Link to="/cash" className={button('secondary', 'sm')}>
+                        <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+                        {t('cash.closureForm.backToCenter')}
+                    </Link>
+                    <button type="button" onClick={() => void downloadLastClosurePdf()} disabled={!precheck?.last_closure} className={button('secondary', 'sm')}>
+                        <Download aria-hidden="true" className="h-4 w-4" />
+                        {t('cash.closureForm.reportPdf')}
+                    </button>
+                </div>
+            </header>
+
+            {error && <Alert tone="error">{error}</Alert>}
 
             {loading ? (
                 <LoadingState />
@@ -154,217 +202,238 @@ export default function CashClosureFormPage() {
                                 value={finalVariance !== null ? money(finalVariance) : '—'}
                                 icon={Scale}
                                 tone={finalVariance === null ? 'neutral' : finalVariance === 0 ? 'emerald' : 'amber'}
+                                hint={finalVariance === null ? t('cash.closureForm.stats.awaitingCount') : undefined}
                             />
                         </div>
                     )}
 
-                    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_320px]">
-                    <div className="space-y-6">
-                        <section className={cx(cardPadded, 'space-y-5')}>
-                            <div>
-                                <h1 className="font-display text-xl font-bold text-ink-900 dark:text-white">{t('cash.closureForm.title')}</h1>
-                                <p className="mt-0.5 text-sm text-ink-600 dark:text-ink-350">{t('cash.closureForm.subtitle')}</p>
-                            </div>
-
-                            {error && <Alert tone="error">{error}</Alert>}
-
-                            <label className="block">
-                                <span className={label}>{t('cash.closureForm.date')}</span>
-                                <input
-                                    type="date"
-                                    value={businessDate}
-                                    max={today()}
-                                    onChange={(e) => setBusinessDate(e.target.value)}
-                                    className={cx(input, 'w-full')}
-                                />
-                            </label>
-
+                    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+                        <div className="min-w-0 space-y-6">
                             {summary && breakdown && (
-                                <dl className="grid grid-cols-2 gap-4 rounded-xl border border-ink-200/80 p-4 text-sm sm:grid-cols-3 dark:border-ink-800">
+                                <section className={cx(cardPadded, 'space-y-3')}>
                                     <div>
-                                        <dt className="text-ink-500 dark:text-ink-400">{t('cash.summary.opening')}</dt>
-                                        <dd className="font-semibold tabular-nums text-ink-900 dark:text-white">{money(summary.opening_balance)}</dd>
+                                        <h2 className={sectionTitle}>{t('cash.closureForm.synthesis.title')}</h2>
+                                        <p className="text-sm text-ink-600 dark:text-ink-350">
+                                            {summary.since ? t('cash.summary.since', { date: dateTime(summary.since) }) : t('cash.summary.sinceNever')}
+                                        </p>
                                     </div>
-                                    <div>
-                                        <dt className="text-ink-500 dark:text-ink-400">{t('cash.summary.cashPayments')}</dt>
-                                        <dd className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">+{money(summary.cash_payments_total)}</dd>
+                                    <dl className="divide-y divide-ink-100 text-sm dark:divide-ink-800">
+                                        <SynthesisRow label={t('cash.summary.opening')} value={money(summary.opening_balance)} />
+                                        <SynthesisRow label={t('cash.summary.cashPayments')} value={`+${money(summary.cash_payments_total)}`} tone="in" />
+                                        <SynthesisRow label={t('cash.method.mobile_money')} value={`+${money(breakdown.by_method.mobile_money.amount)}`} tone="in" />
+                                        <SynthesisRow label={t('cash.method.carte')} value={`+${money(breakdown.by_method.carte.amount)}`} tone="in" />
+                                        <SynthesisRow label={t('cash.situation.manualIn')} value={`+${money(summary.manual_in_total)}`} tone="in" />
+                                        <SynthesisRow label={t('cash.situation.manualOut')} value={`-${money(summary.manual_out_total)}`} tone="out" />
+                                    </dl>
+                                    <div className="flex items-center justify-between gap-3 rounded-xl bg-brand-900 px-4 py-3 text-white">
+                                        <span>
+                                            <span className="block text-sm font-semibold">{t('cash.closureForm.synthesis.expected')}</span>
+                                            <span className="block text-xs text-brand-100/70">{t('cash.situation.expectedHint')}</span>
+                                        </span>
+                                        <span className="font-display text-xl font-bold tabular-nums">{money(summary.expected_balance)}</span>
                                     </div>
-                                    <div>
-                                        <dt className="text-ink-500 dark:text-ink-400">{t('cash.method.mobile_money')}</dt>
-                                        <dd className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">+{money(breakdown.by_method.mobile_money.amount)}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-ink-500 dark:text-ink-400">{t('cash.method.carte')}</dt>
-                                        <dd className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">+{money(breakdown.by_method.carte.amount)}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-ink-500 dark:text-ink-400">{t('cash.summary.manualIn')}</dt>
-                                        <dd className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">+{money(summary.manual_in_total)}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-ink-500 dark:text-ink-400">{t('cash.summary.manualOut')}</dt>
-                                        <dd className="font-semibold tabular-nums text-red-700 dark:text-red-400">-{money(summary.manual_out_total)}</dd>
-                                    </div>
-                                </dl>
+                                </section>
                             )}
 
                             {summary && (
-                                <div className="space-y-3">
-                                    <p className={label}>{t('cash.closureForm.reconciliation')}</p>
-                                    {METHODS.map((methodKey) => {
-                                        const v = variance(methodKey);
-                                        return (
-                                            <div key={methodKey} className="space-y-2 rounded-xl border border-ink-200/80 p-4 dark:border-ink-800">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="font-semibold text-ink-900 dark:text-ink-50">{t(`cash.method.${methodKey}`)}</span>
-                                                    <span className="text-xs text-ink-500 dark:text-ink-400">
-                                                        {t('cash.closureForm.theoretical')} : {money(summary.by_method[methodKey].theoretical)}
-                                                    </span>
-                                                </div>
-                                                <label className="block">
-                                                    <span className="sr-only">{t('cash.closureForm.counted')}</span>
-                                                    <input
-                                                        type="number"
-                                                        min={0}
-                                                        value={counts[methodKey]}
-                                                        onChange={(e) => setCounts((c) => ({ ...c, [methodKey]: e.target.value }))}
-                                                        className={cx(input, 'w-full')}
-                                                        placeholder={t('cash.closureForm.counted')}
-                                                    />
-                                                </label>
-                                                {v !== null && (
-                                                    <p
-                                                        className={cx(
-                                                            'text-sm font-semibold',
-                                                            v === 0
-                                                                ? 'text-emerald-700 dark:text-emerald-400'
-                                                                : v > 0
-                                                                  ? 'text-sky-700 dark:text-sky-400'
-                                                                  : 'text-red-700 dark:text-red-400',
-                                                        )}
-                                                    >
-                                                        {v === 0 ? t('cash.closureForm.varianceOk') : `${v > 0 ? '+' : ''}${money(v)}`}
+                                <section className={cx(cardPadded, 'space-y-4')}>
+                                    <div>
+                                        <h2 className={sectionTitle}>{t('cash.closureForm.reconciliation')}</h2>
+                                        <p className="text-sm text-ink-600 dark:text-ink-350">{t('cash.closureForm.reconciliationHint')}</p>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                        {METHODS.map((methodKey) => {
+                                            const v = variance(methodKey);
+                                            return (
+                                                <div key={methodKey} className="min-w-0 space-y-2 rounded-xl border border-ink-200/80 p-4 dark:border-ink-800">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="font-semibold text-ink-900 dark:text-ink-50">{t(`cash.method.${methodKey}`)}</span>
+                                                        <Pill tone={v === null ? 'neutral' : v === 0 ? 'emerald' : 'amber'}>
+                                                            {v === null ? t('cash.closureForm.toCount') : v === 0 ? t('cash.closureForm.compliant') : t('cash.closureForm.gap')}
+                                                        </Pill>
+                                                    </div>
+                                                    <dl className="text-xs">
+                                                        <div className="flex justify-between gap-2">
+                                                            <dt className="text-ink-500 dark:text-ink-400">{t('cash.closureForm.theoretical')}</dt>
+                                                            <dd className="font-semibold tabular-nums text-ink-900 dark:text-white">{money(summary.by_method[methodKey].theoretical)}</dd>
+                                                        </div>
+                                                    </dl>
+                                                    <label className="block">
+                                                        <span className="text-xs text-ink-500 dark:text-ink-400">{t('cash.closureForm.counted')}</span>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            value={counts[methodKey]}
+                                                            onChange={(e) => setCounts((c) => ({ ...c, [methodKey]: e.target.value }))}
+                                                            className={cx(input, 'w-full')}
+                                                        />
+                                                    </label>
+                                                    <p className="flex justify-between text-xs">
+                                                        <span className="text-ink-500 dark:text-ink-400">{t('cash.closureForm.gapLabel')}</span>
+                                                        <span
+                                                            className={cx(
+                                                                'font-semibold tabular-nums',
+                                                                v === null ? 'text-ink-400' : v === 0 ? 'text-emerald-700 dark:text-emerald-400' : v > 0 ? 'text-sky-700 dark:text-sky-400' : 'text-red-700 dark:text-red-400',
+                                                            )}
+                                                        >
+                                                            {v === null ? '—' : `${v > 0 ? '+' : ''}${money(v)}`}
+                                                        </span>
                                                     </p>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </section>
                             )}
 
-                            {allCounted && (
-                                <div
-                                    className={cx(
-                                        'flex items-center justify-between rounded-xl border px-4 py-3',
-                                        finalVariance === 0
-                                            ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-400/10'
-                                            : 'border-amber-200 bg-amber-50 dark:border-amber-400/20 dark:bg-amber-400/10',
-                                    )}
-                                >
-                                    <span className="text-sm font-semibold text-ink-900 dark:text-white">{t('cash.closureForm.reconciliationResult.title')}</span>
-                                    {finalVariance === 0 ? (
-                                        <Pill tone="emerald">{t('cash.closureForm.varianceOk')}</Pill>
-                                    ) : (
-                                        <Pill tone="amber">
-                                            {(finalVariance ?? 0) > 0 ? '+' : ''}
-                                            {money(finalVariance ?? 0)}
-                                        </Pill>
-                                    )}
+                            <section className={cx(cardPadded, 'space-y-4')}>
+                                <div>
+                                    <h2 className={sectionTitle}>{t('cash.closureForm.reconciliationResult.title')}</h2>
+                                    <p className="text-sm text-ink-600 dark:text-ink-350">{t('cash.closureForm.reconciliationResult.subtitle')}</p>
                                 </div>
-                            )}
+                                {!allCounted ? (
+                                    <p className="rounded-xl border border-dashed border-ink-300 px-4 py-3 text-sm text-ink-500 dark:border-ink-700 dark:text-ink-400">
+                                        {t('cash.closureForm.reconciliationResult.pending')}
+                                    </p>
+                                ) : finalVariance === 0 && !hasAnyVariance ? (
+                                    <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-400/20 dark:bg-emerald-400/10">
+                                        <span className="flex items-center gap-2 text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                                            <Check aria-hidden="true" className="h-4 w-4" />
+                                            {t('cash.closureForm.reconciliationResult.ok')}
+                                        </span>
+                                        <Pill tone="emerald">{t('cash.closureForm.reconciliationResult.zero')}</Pill>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-400/20 dark:bg-amber-400/10">
+                                        <p className="flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-200">
+                                            <ShieldAlert aria-hidden="true" className="h-4 w-4" />
+                                            {t('cash.closureForm.reconciliationResult.gap', { amount: money(finalVariance ?? 0) })}
+                                        </p>
+                                        <ul className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+                                            {METHODS.map((m, i) => (
+                                                <li key={m} className="rounded-lg bg-white/70 px-3 py-2 dark:bg-ink-900/60">
+                                                    <span className="block text-ink-500 dark:text-ink-400">{t(`cash.method.${m}`)}</span>
+                                                    <span className="font-semibold tabular-nums text-ink-900 dark:text-white">
+                                                        {(variances[i] ?? 0) > 0 ? '+' : ''}
+                                                        {money(variances[i] ?? 0)}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                                <label className="block">
+                                    <span className={label}>
+                                        {hasAnyVariance ? t('cash.closureForm.justification') : t('cash.closureForm.notes')}
+                                        {hasAnyVariance && <span className="text-red-600 dark:text-red-400"> *</span>}
+                                    </span>
+                                    <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={cx(input, 'w-full')} />
+                                    {hasAnyVariance && <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{t('cash.closureForm.notesRequiredHint')}</p>}
+                                </label>
+                            </section>
+                        </div>
 
-                            <div className="space-y-2">
-                                <span className={label}>{t('cash.closureForm.checklist')}</span>
-                                <ul className="space-y-1.5">
+                        <aside className="space-y-4 lg:sticky lg:top-6">
+                            <section className={cx(cardPadded, 'space-y-3')}>
+                                <div>
+                                    <h2 className={cx(sectionTitle, 'text-sm')}>{t('cash.closureForm.checklist')}</h2>
+                                    <p className="text-xs text-ink-500 dark:text-ink-400">{t('cash.closureForm.checklistProgress', { done: countedSteps, total: CHECKLIST_STEPS.length })}</p>
+                                </div>
+                                <ul className="space-y-2">
                                     {CHECKLIST_STEPS.map((step) => (
                                         <li key={step}>
-                                            <label className="flex items-center gap-2 text-sm text-ink-800 dark:text-ink-100">
-                                                <input type="checkbox" checked={checklist.has(step)} onChange={() => toggleStep(step)} className="h-4 w-4 rounded" />
+                                            <label
+                                                className={cx(
+                                                    'flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition',
+                                                    checklist.has(step)
+                                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-400/25 dark:bg-emerald-400/10 dark:text-emerald-200'
+                                                        : 'border-ink-200 text-ink-800 hover:bg-ink-50 dark:border-ink-700 dark:text-ink-100 dark:hover:bg-ink-800',
+                                                )}
+                                            >
+                                                <input type="checkbox" checked={checklist.has(step)} onChange={() => toggleStep(step)} className="h-4 w-4 rounded accent-emerald-600" />
                                                 {t(`cash.checklist.${step}`)}
                                             </label>
                                         </li>
                                     ))}
                                 </ul>
-                            </div>
+                            </section>
 
-                            <label className="block">
-                                <span className={label}>
-                                    {t('cash.closureForm.notes')}
-                                    {hasAnyVariance && <span className="text-red-600 dark:text-red-400"> *</span>}
-                                </span>
-                                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={cx(input, 'w-full')} />
-                                {hasAnyVariance && <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{t('cash.closureForm.notesRequiredHint')}</p>}
-                            </label>
-
-                        </section>
-                    </div>
-
-                    <aside className="space-y-4 lg:sticky lg:top-6">
-                        <section className={cx(cardPadded, 'space-y-3')}>
-                            <div className="flex items-center gap-2">
-                                <UsersRound aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
-                                <h2 className={cx(sectionTitle, 'text-sm')}>{t('cash.closureForm.operators.title')}</h2>
-                            </div>
-                            {operators && operators.length > 0 ? (
-                                <ul className="space-y-1.5">
-                                    {operators.map((op, i) => (
-                                        <li key={i} className="flex items-center justify-between gap-2 text-sm">
-                                            <span className="truncate font-medium text-ink-800 dark:text-ink-100">{op.user?.name ?? '—'}</span>
-                                            <Pill tone={op.status === 'verifie' ? 'emerald' : 'amber'}>
-                                                {t(`cash.closureForm.operators.status.${op.status}`)}
-                                            </Pill>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <EmptyState icon={UsersRound} title={t('cash.closureForm.operators.none')} compact />
-                            )}
-                        </section>
-
-                        <section className={cx(cardPadded, 'space-y-3')}>
-                            <div className="flex items-center gap-2">
-                                <ShieldAlert aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
-                                <h2 className={cx(sectionTitle, 'text-sm')}>{t('cash.closureForm.anomalies.title')}</h2>
-                            </div>
-                            <ul className="space-y-2 text-sm">
-                                <li className="flex items-center justify-between gap-2">
-                                    <span className="text-ink-700 dark:text-ink-200">{t('cash.closureForm.anomalies.pendingMovements')}</span>
-                                    <Pill tone={precheck && precheck.pending_movements_count > 0 ? 'rose' : 'emerald'}>
-                                        {precheck?.pending_movements_count ?? 0}
-                                    </Pill>
-                                </li>
-                                <li className="flex items-center justify-between gap-2">
-                                    <span className="text-ink-700 dark:text-ink-200">{t('cash.closureForm.anomalies.alreadyClosed')}</span>
-                                    <Pill tone={precheck?.already_closed ? 'rose' : 'emerald'}>
-                                        {precheck?.already_closed ? t('common.yes') : t('common.no')}
-                                    </Pill>
-                                </li>
-                            </ul>
-                        </section>
-
-                        <section className={cx(cardPadded, 'space-y-3')}>
-                            <div className="flex items-center gap-2">
-                                <Download aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
-                                <h2 className={cx(sectionTitle, 'text-sm')}>{t('cash.closureForm.report.title')}</h2>
-                            </div>
-                            {precheck?.last_closure ? (
-                                <div className="space-y-2">
-                                    <p className="text-xs text-ink-600 dark:text-ink-350">
-                                        {t('cash.closureForm.report.lastClosure', { date: precheck.last_closure.business_date })}
-                                    </p>
-                                    <button type="button" onClick={() => void downloadLastClosurePdf()} className={button('secondary', 'sm')}>
-                                        <Download aria-hidden="true" className="h-4 w-4" />
-                                        {t('cash.closureDetail.downloadPdf')}
-                                    </button>
+                            <section className={cx(cardPadded, 'space-y-3')}>
+                                <div className="flex items-center gap-2">
+                                    <UsersRound aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
+                                    <h2 className={cx(sectionTitle, 'text-sm')}>{t('cash.closureForm.operators.title')}</h2>
                                 </div>
-                            ) : (
-                                <p className="text-xs text-ink-500 dark:text-ink-400">{t('cash.closureForm.report.beforeClosure')}</p>
-                            )}
-                        </section>
-                    </aside>
+                                {operators && operators.length > 0 ? (
+                                    <ul className="space-y-1.5">
+                                        {operators.map((op, i) => (
+                                            <li key={i} className="flex items-center justify-between gap-2 text-sm">
+                                                <span className="truncate font-medium text-ink-800 dark:text-ink-100">{op.user?.name ?? '—'}</span>
+                                                <Pill tone={op.status === 'verifie' ? 'emerald' : 'amber'}>
+                                                    {t(`cash.closureForm.operators.status.${op.status}`)}
+                                                </Pill>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <EmptyState icon={UsersRound} title={t('cash.closureForm.operators.none')} compact />
+                                )}
+                            </section>
+
+                            <section className={cx(cardPadded, 'space-y-3')}>
+                                <div className="flex items-center gap-2">
+                                    <ShieldAlert aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
+                                    <h2 className={cx(sectionTitle, 'text-sm')}>{t('cash.closureForm.anomalies.title')}</h2>
+                                </div>
+                                <ul className="space-y-2 text-sm">
+                                    <li className="flex items-center justify-between gap-2">
+                                        <span className="text-ink-700 dark:text-ink-200">{t('cash.closureForm.anomalies.pendingMovements')}</span>
+                                        <Pill tone={precheck && precheck.pending_movements_count > 0 ? 'rose' : 'emerald'}>
+                                            {precheck?.pending_movements_count ?? 0}
+                                        </Pill>
+                                    </li>
+                                    <li className="flex items-center justify-between gap-2">
+                                        <span className="text-ink-700 dark:text-ink-200">{t('cash.closureForm.anomalies.alreadyClosed')}</span>
+                                        <Pill tone={precheck?.already_closed ? 'rose' : 'emerald'}>
+                                            {precheck?.already_closed ? t('common.yes') : t('common.no')}
+                                        </Pill>
+                                    </li>
+                                </ul>
+                            </section>
+
+                            <section className={cx(cardPadded, 'space-y-3')}>
+                                <div className="flex items-center gap-2">
+                                    <Download aria-hidden="true" className="h-4 w-4 text-ink-500 dark:text-ink-400" />
+                                    <h2 className={cx(sectionTitle, 'text-sm')}>{t('cash.closureForm.report.title')}</h2>
+                                </div>
+                                {precheck?.last_closure ? (
+                                    <div className="space-y-2">
+                                        <p className="text-xs text-ink-600 dark:text-ink-350">
+                                            {t('cash.closureForm.report.lastClosure', { date: precheck.last_closure.business_date })}
+                                        </p>
+                                        <button type="button" onClick={() => void downloadLastClosurePdf()} className={button('secondary', 'sm')}>
+                                            <Download aria-hidden="true" className="h-4 w-4" />
+                                            {t('cash.closureDetail.downloadPdf')}
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-ink-500 dark:text-ink-400">{t('cash.closureForm.report.beforeClosure')}</p>
+                                )}
+                            </section>
+                        </aside>
                     </div>
 
-                    <ActionBar status={checklistComplete ? t('cash.closureForm.footer.ready') : t('cash.closureForm.footer.notReady')}>
+                    <ActionBar
+                        status={
+                            canSubmit ? (
+                                t('cash.closureForm.footer.ready')
+                            ) : (
+                                <span>
+                                    <span className="block font-semibold text-white">{t('cash.closureForm.footer.notReady')}</span>
+                                    <span className="block text-xs text-brand-100/80">{blockers.join(' · ')}</span>
+                                </span>
+                            )
+                        }
+                    >
                         <Link to="/cash" className={actionBarGhostButton}>
                             {t('common.cancel')}
                         </Link>

@@ -4245,3 +4245,34 @@ messages d'erreur d'API, libellé de permission (`PermissionSeeder` + migration
 « bon de commande » (pièce justificative fournisseur de la caisse, notion différente).
 Le code (`Order`, `orders`, clés i18n `order.*`) et l'anglais (« order ») ne changent pas.
 **Pour tout nouveau texte : écrire « dépôt ».**
+
+**Audit de conformité Caisse + Retraits (2026-10-14)** — cinq captures renvoyées
+(« Vérifie la conformité de ces écrans chez nous ») : Centre de caisse, Nouveau mouvement,
+Clôture et rapprochement, Centre de retrait, Traiter le retrait. Nouveau mouvement et
+Traiter le retrait étaient déjà alignés le même jour (voir plus haut) ; les trois autres
+divergeaient et ont été reconstruits (même décision « tout » que la passe précédente).
+- **Centre de retrait** (`PickupsList.tsx`) : carte de recherche « Retrouver un dépôt
+  instantanément » (lien Scanner vers `/scan`) côte à côte avec « Retraits du jour »
+  (toujours affichée), barre de filtres sur une ligne avec pastille de résultats, tableau
+  titré « Dépôts prêts au retrait » (téléphone sous le nom, code, menu ⋯ : ouvrir le
+  dépôt / ticket et facture).
+- **Centre de caisse** (`CashRegisterPage.tsx`) : liste « Situation de caisse », carte
+  sombre « Solde théorique » + « Encaissements tous moyens », ventilation en 3 colonnes,
+  flux à côté d'une carte de synchronisation réelle (appareil), en-tête date + Exporter
+  (journal Excel du jour sélectionné) + Clôturer + Nouveau mouvement. **Journal** : colonnes
+  Référence et Catégorie/moyen séparées ; une ligne d'encaissement pointe désormais vers
+  son dépôt — `CashLedgerService` joint `invoices`/`orders` sur les paiements et expose
+  `order_id`/`order_number` (null pour mouvements et clôtures), recherche aussi par
+  numéro de dépôt (testé).
+- **Clôture et rapprochement** (`CashClosureFormPage.tsx`) : badge « Prête à clôturer /
+  À compléter », Retour au centre, Rapport PDF (dernière clôture réelle), « Synthèse
+  détaillée » (ouverture, espèces, mobile money, carte, entrées/sorties hors dépôt, ligne
+  sombre « Solde théorique de clôture »), rapprochement en 3 colonnes avec pastille
+  Conforme/Écart par moyen, carte « Résultat du rapprochement » (conforme, ou écart
+  ventilé + justification obligatoire), checklist en colonne latérale avec compteur, barre
+  d'action listant les conditions manquantes. Logique et endpoints inchangés.
+- **Omis, catégorie (c)** : « Enregistrer le brouillon » de clôture (aucun concept de
+  brouillon de clôture) ; validateurs nommés ; synchronisation par ligne du journal ;
+  distinction dépôt/solde sur `Payment` (toujours différée).
+Suite **668/668**, `tsc`/build propres, parité i18n, Playwright 1440/390 sans débordement
+sur `/cash`, `/cash/closures/new`, `/pickups`.

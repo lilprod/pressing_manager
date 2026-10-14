@@ -50,7 +50,7 @@ export default function ClientFormPage() {
     }
 
     return (
-        <div className="max-w-4xl space-y-4">
+        <div className="max-w-6xl space-y-4">
             {backLink}
             <ClientForm
                 client={client}

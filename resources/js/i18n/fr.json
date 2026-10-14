@@ -2301,5 +2301,12 @@
     "cash.closureForm.stats.awaitingCount": "En attente du comptage",
     "cash.closureForm.synthesis.expected": "Solde théorique de clôture",
     "cash.closureForm.synthesis.title": "Synthèse détaillée",
-    "cash.closureForm.toCount": "À compter"
+    "cash.closureForm.toCount": "À compter",
+    "client.emailInvalid": "Adresse e-mail incomplète — exemple : nom@domaine.com",
+    "client.draft.badge": "Brouillon local",
+    "client.draft.offline": "Hors connexion : la saisie reste en brouillon sur cet appareil. L'enregistrement de la fiche nécessite le réseau.",
+    "client.draft.restored": "Brouillon restauré (enregistré le {date}).",
+    "client.draft.discard": "Ignorer le brouillon",
+    "client.draft.savedAt": "Brouillon enregistré sur cet appareil le {date}",
+    "client.draft.hint": "La saisie est conservée automatiquement sur cet appareil jusqu'à l'enregistrement."
 }

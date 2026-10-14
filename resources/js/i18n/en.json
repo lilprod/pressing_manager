@@ -2301,5 +2301,12 @@
     "cash.closureForm.stats.awaitingCount": "Awaiting count",
     "cash.closureForm.synthesis.expected": "Expected closing balance",
     "cash.closureForm.synthesis.title": "Detailed summary",
-    "cash.closureForm.toCount": "To count"
+    "cash.closureForm.toCount": "To count",
+    "client.emailInvalid": "Incomplete e-mail address — example: name@domain.com",
+    "client.draft.badge": "Local draft",
+    "client.draft.offline": "Offline: your input stays as a draft on this device. Saving the record requires a connection.",
+    "client.draft.restored": "Draft restored (saved {date}).",
+    "client.draft.discard": "Discard draft",
+    "client.draft.savedAt": "Draft saved on this device on {date}",
+    "client.draft.hint": "Your input is kept automatically on this device until you save."
 }

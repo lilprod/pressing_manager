@@ -4276,3 +4276,51 @@ divergeaient et ont été reconstruits (même décision « tout » que la passe 
   distinction dépôt/solde sur `Payment` (toujours différée).
 Suite **668/668**, `tsc`/build propres, parité i18n, Playwright 1440/390 sans débordement
 sur `/cash`, `/cash/closures/new`, `/pickups`.
+
+**Audit de conformité « Pressing — Détail », « Configuration du pressing » et écrans
+Clients (2026-10-14)** — six captures (« Vérifie la conformité de ces écrans »). Écrans
+clients (liste, fiche) jugés conformes ; les deux écrans superadmin divergeaient nettement.
+- **Fiche pressing** (`PressingDetailPage.tsx`) : en-tête en carte (initiales, code, pays,
+  date de création, plan, responsable) avec onglets intégrés (« Configuration » ouvre
+  l'écran d'édition), boutons Support (`mailto:` du contact, seulement s'il existe) et menu
+  Actions (modifier, paiement, se connecter en tant que, suspendre). Nouveau
+  `GET /platform/pressings/{id}/overview` (lu en direct, base partagée) : 4 KPI (agences
+  actives, utilisateurs + connectés sur 30 jours via `last_login_at`, jours de licence,
+  **santé = registre d'incidents**, pas un pourcentage), cartes Agences, Personnel par rôle,
+  Licence (période consommée réelle `starts_at→expires_at`, quotas du plan), Configuration
+  (fuseau, formats de numérotation des agences — « N formats » s'ils diffèrent —, offline
+  N/M agences), Incidents ouverts, Synchronisation offline (dépôts `source=offline_sync`).
+  **Journal d'audit du tenant** : nouveau `PressingActivityService` — union `audit_logs`
+  des agences du pressing (+ ses `app_settings`) et `auth_events` de son personnel, filtres
+  catégorie/période/agence/résultat/recherche, détail avant/après, export CSV
+  (`GET .../activity`, `.../activity/export`). **Résultat Succès/Échec réel uniquement
+  pour les connexions** (`login_failed`, `login_locked`, `mfa_failed`) — une écriture
+  auditée a forcément abouti. L'onglet « Audit plateforme » (actions Spark) reste distinct.
+- **Configuration du pressing** (`PressingFormPage.tsx`) : étapes ancrées (Identité,
+  Branding, Licence, Règles métier, Sécurité, coche réelle par section), deux colonnes avec
+  aperçu de l'espace staff aux couleurs saisies, carte Validation (identité, logo, licence,
+  manager actif, **MFA des administrateurs N/M réel**) et dernière modification (audit
+  plateforme). Nouveau : nom commercial (`app_settings.pressing_name`), logo géré par le
+  superadmin (`POST/DELETE/GET /platform/pressings/{id}/logo`), date de début de licence,
+  quotas du plan en lecture, **règles de fidélité** (FCFA par point, valeur du point,
+  expiration, cumul promotions) — réglages d'agence, donc appliqués à **toutes** les
+  agences et seulement pour les champs modifiés, avec « Varie selon l'agence » si elles
+  divergent —, aperçu du workflow réel, rappel du blocage après 5 échecs, zone de
+  suspension. E-mail principal obligatoire à la création seulement (des pressings
+  existants n'en ont pas). `platformApi` gagne `postForm`/`delete`.
+- **Nouveau / modifier client** (`ClientForm.tsx`) : brouillon local réel (localStorage
+  par fiche, autosave 1 s, restauration après rechargement, « Ignorer le brouillon »,
+  effacé à l'enregistrement ou à l'annulation), badge « Brouillon local », mention en pied
+  de formulaire, validation de l'e-mail en direct (rouge), astérisques, bandeau hors
+  connexion honnête (enregistrement désactivé : aucune file hors ligne de fiches client).
+- **Omis, catégorie (c)** : santé technique API/SYNC/IMPRESSION et « 98,7 % » ; « Isolation
+  vérifiée · contrôlé 08:00 » (aucun contrôle périodique — remplacé par une carte
+  descriptive vraie) ; logs d'impression ; domaine personnalisé/SSL ; devise et mode de
+  tarification par tenant ; renouvellement automatique ; bonus anniversaire ; niveau de
+  journalisation ; MFA imposée aux administrateurs ; troisième couleur « action » ;
+  « Convertir en remise » sur la fiche client (aucun mécanisme de rachat de points) ;
+  bouton « Colonnes » de la liste clients.
+Tests : `PressingOverviewActivityTest` (3), `PressingConfigurationTest` (4). Suite
+**675/675**, `tsc`/build propres, parité i18n, Playwright 1440/390 sans débordement,
+parcours réels (édition superadmin persistée puis restaurée, brouillon client restauré
+après rechargement).

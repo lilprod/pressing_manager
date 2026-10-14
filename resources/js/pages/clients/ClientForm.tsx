@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useOnlineStatus } from '../../lib/useOnlineStatus';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useI18n } from '../../contexts/I18nContext';
@@ -70,6 +71,66 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
     const [busy, setBusy] = useState<'save' | 'saveAndOrder' | null>(null);
 
     const effectiveAgencyId = client ? client.agency_id : agencyIdSelected;
+    const online = useOnlineStatus();
+
+    // Brouillon local (appareil) : la saisie est conservée dans le navigateur tant que la
+    // fiche n'est pas enregistrée. L'enregistrement lui-même exige toujours le réseau —
+    // aucune file hors ligne de fiches client n'existe, on ne prétend pas le contraire.
+    const draftKey = `pm.clientDraft.${client ? client.id : 'new'}`;
+    const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+    const [draftRestored, setDraftRestored] = useState(false);
+    const hydrated = useRef(false);
+    const draftValues = {
+        firstName, lastName, phone, phoneSecondary, email, address, city, contactPreference,
+        referralCode, careInstructions, notes, isActive, smsConsent, emailConsent,
+    };
+    const draftSignature = JSON.stringify(draftValues);
+    const initialSignature = useRef(draftSignature);
+
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem(draftKey);
+            if (raw) {
+                const draft = JSON.parse(raw) as { values: typeof draftValues; savedAt: string };
+                const v = draft.values;
+                setFirstName(v.firstName); setLastName(v.lastName); setPhone(v.phone); setPhoneSecondary(v.phoneSecondary);
+                setEmail(v.email); setAddress(v.address); setCity(v.city); setContactPreference(v.contactPreference);
+                setReferralCode(v.referralCode); setCareInstructions(v.careInstructions); setNotes(v.notes);
+                setIsActive(v.isActive); setSmsConsent(v.smsConsent); setEmailConsent(v.emailConsent);
+                setDraftSavedAt(draft.savedAt);
+                setDraftRestored(true);
+            }
+        } catch {
+            // Stockage indisponible : pas de brouillon, le formulaire reste utilisable.
+        }
+        hydrated.current = true;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [draftKey]);
+
+    useEffect(() => {
+        if (!hydrated.current || draftSignature === initialSignature.current) return;
+        const handle = setTimeout(() => {
+            const savedAt = new Date().toISOString();
+            try {
+                localStorage.setItem(draftKey, JSON.stringify({ values: JSON.parse(draftSignature), savedAt }));
+                setDraftSavedAt(savedAt);
+            } catch {
+                // ignoré
+            }
+        }, 1000);
+        return () => clearTimeout(handle);
+    }, [draftSignature, draftKey]);
+
+    function discardDraft() {
+        try {
+            localStorage.removeItem(draftKey);
+        } catch {
+            // ignoré
+        }
+        setDraftSavedAt(null);
+    }
+
+    const emailInvalid = email.trim() !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
     /** Palier de fidélité par défaut (0 FCFA de dépenses) affiché pour un nouveau client, avant toute création. */
     useEffect(() => {
@@ -116,6 +177,12 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
         setBusy(createOrderAfter ? 'saveAndOrder' : 'save');
         setError(null);
 
+        if (emailInvalid) {
+            setError(t('client.emailInvalid'));
+            setBusy(null);
+            return;
+        }
+
         if (!client && isGlobal && !agencyIdSelected) {
             setError(t('client.selectAgency'));
             setBusy(null);
@@ -144,6 +211,7 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
                 ? await api.patch<Client>(`/clients/${client.id}`, payload)
                 : await api.post<Client>('/clients', isGlobal ? { ...payload, agency_id: agencyIdSelected } : payload);
 
+            discardDraft();
             if (createOrderAfter) {
                 navigate(`/?client=${saved.id}`);
             } else {
@@ -170,8 +238,27 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
                     {client ? t('client.edit') : t('client.new')}
                 </h2>
                 {client && (isActive ? <Pill tone="emerald">{t('client.activeStatus')}</Pill> : <Pill tone="rose">{t('client.inactive')}</Pill>)}
+                {draftSavedAt && <Pill tone="amber">{t('client.draft.badge')}</Pill>}
             </div>
 
+            {!online && <Alert tone="warning">{t('client.draft.offline')}</Alert>}
+            {draftRestored && draftSavedAt && (
+                <Alert tone="info">
+                    <span className="flex flex-wrap items-center justify-between gap-2">
+                        {t('client.draft.restored', { date: dateTime(draftSavedAt) })}
+                        <button
+                            type="button"
+                            onClick={() => {
+                                discardDraft();
+                                window.location.reload();
+                            }}
+                            className={cx(textLink, 'text-sm')}
+                        >
+                            {t('client.draft.discard')}
+                        </button>
+                    </span>
+                </Alert>
+            )}
             {error && <Alert tone="error">{error}</Alert>}
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
@@ -183,15 +270,15 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
                         </h3>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="block">
-                                <span className={label}>{t('client.lastName')}</span>
+                                <span className={label}>{t('client.lastName')} *</span>
                                 <input required value={lastName} onChange={(e) => setLastName(e.target.value)} className={input} />
                             </label>
                             <label className="block">
-                                <span className={label}>{t('client.firstName')}</span>
+                                <span className={label}>{t('client.firstName')} *</span>
                                 <input required value={firstName} onChange={(e) => setFirstName(e.target.value)} className={input} />
                             </label>
                             <label className="block">
-                                <span className={label}>{t('client.phone')}</span>
+                                <span className={label}>{t('client.phone')} *</span>
                                 <input required type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className={input} />
                             </label>
                             <label className="block">
@@ -200,7 +287,14 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
                             </label>
                             <label className="block sm:col-span-2">
                                 <span className={label}>{t('client.email')}</span>
-                                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={input} />
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    aria-invalid={emailInvalid}
+                                    className={cx(input, emailInvalid && '!border-red-500 focus:!ring-red-500/30')}
+                                />
+                                {emailInvalid && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{t('client.emailInvalid')}</p>}
                             </label>
                             <label className="block sm:col-span-2">
                                 <span className={label}>{t('client.address')}</span>
@@ -368,15 +462,25 @@ export default function ClientForm({ client, onSaved, onCancel }: Props) {
                 </div>
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2 border-t border-ink-200/80 pt-5 dark:border-ink-800">
-                <button type="button" onClick={onCancel} className={button('ghost')}>
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-ink-200/80 pt-5 dark:border-ink-800">
+                <p className="mr-auto text-xs text-ink-500 dark:text-ink-400">
+                    {draftSavedAt ? t('client.draft.savedAt', { date: dateTime(draftSavedAt) }) : t('client.draft.hint')}
+                </p>
+                <button
+                    type="button"
+                    onClick={() => {
+                        discardDraft();
+                        onCancel();
+                    }}
+                    className={button('ghost')}
+                >
                     {t('common.cancel')}
                 </button>
-                <button type="submit" disabled={busy !== null} className={button('secondary')}>
+                <button type="submit" disabled={busy !== null || !online} className={button('secondary')}>
                     {busy === 'save' ? <Spinner className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />}
                     {t('common.save')}
                 </button>
-                <button type="button" disabled={busy !== null} onClick={(e) => void submit(e, true)} className={button('primary')}>
+                <button type="button" disabled={busy !== null || !online} onClick={(e) => void submit(e, true)} className={button('primary')}>
                     {busy === 'saveAndOrder' ? <Spinner className="h-4 w-4" /> : <Check aria-hidden="true" className="h-4 w-4" strokeWidth={2.5} />}
                     {t('client.saveAndCreateOrder')}
                 </button>

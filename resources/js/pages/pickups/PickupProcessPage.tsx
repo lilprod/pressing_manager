@@ -29,6 +29,7 @@ import { Pill } from '../../components/ui/StatusBadge';
 import { Timeline, type TimelineEntry } from '../../components/ui/Timeline';
 import { button, card, cardPadded, cx, input, label, sectionTitle, textLink } from '../../components/ui/styles';
 import type { AuditLog, Order, PaymentMethod, PickupConditionStatus, PickupRecipientType } from '../../types';
+import { itemPrestationLabel } from '../../lib/orderItem';
 
 /* Écran « Traiter le retrait » (Figma SPARK PRESSING, section 05, « Retraits en
  * agence ») — mise en page deux colonnes, chronologie atelier et journal d'audit
@@ -333,9 +334,10 @@ export default function PickupProcessPage() {
                                             const qty = quantities[item.id] ?? 0;
                                             return (
                                                 <li key={item.id} className="flex items-center gap-4 px-5 py-3">
-                                                    <p className="min-w-0 flex-1 font-semibold text-ink-900 dark:text-ink-50">
-                                                        {item.service?.name ?? item.description}
-                                                    </p>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="font-semibold text-ink-900 dark:text-ink-50">{item.service?.name ?? item.description}</p>
+                                                        {itemPrestationLabel(item) && <p className="text-xs text-ink-600 dark:text-ink-350">{itemPrestationLabel(item)}</p>}
+                                                    </div>
                                                     <p className="w-28 shrink-0 text-sm text-ink-600 dark:text-ink-350">{t('pickup.remaining', { count: remaining })}</p>
                                                     <div className="flex w-32 shrink-0 items-center gap-1.5">
                                                         <button

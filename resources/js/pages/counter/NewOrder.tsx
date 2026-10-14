@@ -109,6 +109,9 @@ export default function NewOrder() {
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
     const [cart, setCart] = useState<CartLine[]>([]);
     const [isExpress, setIsExpress] = useState(false);
+    // Le traitement « Express » d'un article porte le tarif express : la bascule Express
+    // du dépôt et le traitement des lignes restent donc toujours cohérents.
+    const expressTreatment = treatmentTypes.find((t) => t.code === 'express' && t.is_active) ?? null;
     const [notes, setNotes] = useState('');
     const [discount, setDiscount] = useState(0);
     const [discountEdited, setDiscountEdited] = useState(false);
@@ -274,7 +277,7 @@ export default function NewOrder() {
                     description: '',
                     intake_condition_ids: [],
                     intake_notes: '',
-                    treatment_type_id: null,
+                    treatment_type_id: isExpress && expressTreatment ? expressTreatment.id : null,
                     finish_option_id: null,
                 },
             ];
@@ -282,12 +285,24 @@ export default function NewOrder() {
     }
 
     function setLineTreatmentType(serviceId: number, treatmentTypeId: number | null) {
+        const next = cart.map((l) =>
+            l.service_id === serviceId ? { ...l, treatment_type_id: l.treatment_type_id === treatmentTypeId ? null : treatmentTypeId } : l,
+        );
+        setCart(next);
+        if (expressTreatment) setIsExpress(next.some((l) => l.treatment_type_id === expressTreatment.id));
+    }
+
+    function toggleExpress(on: boolean) {
+        setIsExpress(on);
+        if (!expressTreatment) return;
         setCart((current) =>
-            current.map((l) =>
-                l.service_id === serviceId
-                    ? { ...l, treatment_type_id: l.treatment_type_id === treatmentTypeId ? null : treatmentTypeId }
-                    : l,
-            ),
+            current.map((l) => {
+                if (on) {
+                    const current = treatmentTypes.find((t) => t.id === l.treatment_type_id);
+                    return !current || current.price_ratio === 1 ? { ...l, treatment_type_id: expressTreatment.id } : l;
+                }
+                return l.treatment_type_id === expressTreatment.id ? { ...l, treatment_type_id: null } : l;
+            }),
         );
     }
 
@@ -863,7 +878,7 @@ export default function NewOrder() {
                                 <Zap aria-hidden="true" className="h-[18px] w-[18px]" />
                             </span>
                             <span className="flex-1 text-sm font-semibold text-ink-900 dark:text-ink-50">{t('order.express')}</span>
-                            <input type="checkbox" checked={isExpress} onChange={(e) => setIsExpress(e.target.checked)} className="peer sr-only" />
+                            <input type="checkbox" checked={isExpress} onChange={(e) => toggleExpress(e.target.checked)} className="peer sr-only" />
                             <span
                                 aria-hidden="true"
                                 className={cx(

@@ -11,6 +11,7 @@ import { Alert, EmptyState, LoadingState, Spinner } from '../../components/ui/Fe
 import { Timeline, type TimelineEntry } from '../../components/ui/Timeline';
 import { button, card, cx, iconButton, input, label as labelClass, select, sectionTitle, textLink } from '../../components/ui/styles';
 import type { AtelierBoardResponse, AtelierCard, AtelierColumn, AtelierStaffMember, Order, OrderPriority, OrderStatus } from '../../types';
+import { itemPrestationLabel } from '../../lib/orderItem';
 
 const COLUMNS: AtelierColumn[] = ['attente', 'cours', 'traites', 'classes'];
 const PRIORITIES: OrderPriority[] = ['urgent', 'haute', 'normale'];
@@ -457,7 +458,10 @@ export default function AtelierBoard() {
                                         <ul className="space-y-1 text-sm text-ink-700 dark:text-ink-200">
                                             {detailOrder.items.map((item) => (
                                                 <li key={item.id} className="flex items-center justify-between gap-2">
-                                                    <span className="truncate">{item.service?.name ?? t('order.item')}</span>
+                                                    <span className="min-w-0">
+                                                        <span className="block truncate">{item.service?.name ?? t('order.item')}</span>
+                                                        {itemPrestationLabel(item) && <span className="block truncate text-xs text-ink-500 dark:text-ink-400">{itemPrestationLabel(item)}</span>}
+                                                    </span>
                                                     <span className="shrink-0 font-semibold tabular-nums">{item.weight_kg != null ? `${item.weight_kg} kg` : `× ${item.quantity}`}</span>
                                                 </li>
                                             ))}

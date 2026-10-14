@@ -48,6 +48,29 @@ class ArticleSheetTest extends TestCase
         $this->assertSame(9500, $response->json('total_amount'));
     }
 
+    public function test_an_express_treatment_line_makes_the_deposit_express_and_urgent(): void
+    {
+        [$agency, $accueil, $client] = $this->counter();
+        $service = Service::factory()->create(['base_price' => 1000]);
+        $agency->services()->attach($service->id, ['is_active' => true]);
+        $express = TreatmentType::factory()->create(['code' => 'express', 'price_ratio' => 1.5]);
+        $ironing = TreatmentType::factory()->create(['code' => 'repassage_seul', 'price_ratio' => 0.5]);
+
+        $fast = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 1, 'treatment_type_id' => $express->id]],
+        ])->assertCreated();
+        $this->assertTrue($fast->json('is_express'));
+        $this->assertSame('urgent', $fast->json('priority'));
+
+        $slow = $this->actingAs($accueil)->postJson('/api/orders', [
+            'client_id' => $client->id,
+            'items' => [['service_id' => $service->id, 'quantity' => 1, 'treatment_type_id' => $ironing->id]],
+        ])->assertCreated();
+        $this->assertFalse($slow->json('is_express'));
+        $this->assertSame('normale', $slow->json('priority'));
+    }
+
     public function test_an_agency_local_price_scales_the_explicit_treatment_price(): void
     {
         [$agency, $accueil, $client] = $this->counter();

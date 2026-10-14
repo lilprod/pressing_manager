@@ -213,6 +213,14 @@ class OrderController extends ApiController
         $agency = Agency::findOrFail($agencyId);
         $agencySettings = AgencySetting::forAgency($agencyId);
 
+        // Un dépôt est express si le comptoir l'a coché OU si au moins une ligne est
+        // facturée au traitement « Express » : le tarif express de l'article implique
+        // le délai et la priorité express, jamais l'un sans l'autre.
+        $expressTreatmentIds = collect($data['items'])->pluck('treatment_type_id')->filter()->unique()->all();
+        $data['is_express'] = (bool) ($data['is_express'] ?? false)
+            || ($expressTreatmentIds !== [] && TreatmentType::where('pressing_id', $agency->pressing_id)
+                ->whereIn('id', $expressTreatmentIds)->where('code', 'express')->exists());
+
         $order = DB::transaction(function () use ($data, $agencyId, $agency, $agencySettings, $request) {
             $order = Order::create([
                 'agency_id' => $agencyId,

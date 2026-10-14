@@ -4143,3 +4143,25 @@ avec « Voir les règles » (types de traitement). Le prix local d'agence n'est 
 dans la liste (il l'est sur la fiche, « Disponibilité par agence »). Toujours omis :
 pastille « Synchronisé » et « 2 partagées » (aucune donnée), bascule Jour/Semaine/Mois
 (un article n'a pas de date de résultat). Tests : `CatalogListConformityTest` (2).
+
+**Dépôts et retraits alignés sur la refonte article (2026-10-14)** — question
+utilisateur « La logique de dépôts et de retraits s'accorde avec cette correction des
+articles ? ». Vérifié : prix et délai au comptoir passent bien par `priceFor()`/
+`delayFor()`, rendu validé côté serveur, `unit_price` figé (le retrait ne recalcule
+jamais un prix), livraison refusée pour un article non éligible, ticket/facture
+imprimant traitement et rendu. Deux écarts réels corrigés :
+- **Express incohérent** : la bascule « Express » du dépôt (délai plancher express +
+  priorité Urgente) et le traitement « Express » d'une ligne (tarif express) vivaient
+  séparément — un dépôt pouvait être facturé au tarif express sans être prioritaire, ou
+  l'inverse. Désormais `OrderController::store()` marque le dépôt express si au moins une
+  ligne porte le traitement de code `express` ; au comptoir, activer la bascule passe les
+  lignes sans traitement (ou au traitement de référence ×1) en Express, la désactiver les
+  rétablit, et choisir Express sur une ligne allume la bascule. Sans traitement `express`
+  actif dans le pressing, la bascule garde son ancien comportement.
+- **Traitement et rendu invisibles après le comptoir** : affichés désormais sur la fiche
+  dépôt (`OrderItemRow`), l'écran « Traiter le retrait » et le panneau de l'atelier
+  (`lib/orderItem.ts::itemPrestationLabel`, « Express · Sous housse ») — le classeur sait
+  comment rendre la pièce et le comptoir peut le vérifier au retrait.
+Test : `ArticleSheetTest::test_an_express_treatment_line_makes_the_deposit_express_and_urgent`.
+Suite 662/662, `tsc`/build propres, Playwright 1440/390 sans débordement (fiche dépôt,
+atelier).

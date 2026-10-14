@@ -8,6 +8,7 @@ import type { OrderItem, OrderItemStatus } from '../types';
 import StatusBadge, { Pill } from './ui/StatusBadge';
 import { Alert, Spinner } from './ui/Feedback';
 import { button, card, cx, input, label } from './ui/styles';
+import { itemPrestationLabel } from '../lib/orderItem';
 
 interface Props {
     item: OrderItem;
@@ -57,6 +58,7 @@ export default function OrderItemRow({ item, onUpdated, onPrintLabel }: Props) {
                     <p className="font-semibold text-ink-900 dark:text-ink-50">
                         {item.service?.name} <span className="text-ink-600 dark:text-ink-350">× {item.quantity}</span>
                     </p>
+                    {itemPrestationLabel(item) && <p className="text-sm text-ink-600 dark:text-ink-350">{itemPrestationLabel(item)}</p>}
                     <div className="flex flex-wrap items-center gap-2 text-xs">
                         <span className="inline-flex items-center gap-1 rounded-md bg-ink-100 px-2 py-1 font-mono text-ink-700 dark:bg-ink-800 dark:text-ink-300">
                             <QrCode aria-hidden="true" className="h-3.5 w-3.5" />

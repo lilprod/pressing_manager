@@ -30,6 +30,16 @@ class ReportingExtensionsTest extends TestCase
         ]);
     }
 
+    public function test_my_session_is_a_real_json_null_when_no_session_is_open(): void
+    {
+        $this->seedRbac();
+        $cashier = $this->makeUser('accueil', Agency::factory()->create());
+
+        $response = $this->actingAs($cashier)->getJson('/api/cash/sessions/mine')->assertOk();
+        // `{}` serait vrai côté client et afficherait une session fantôme.
+        $this->assertSame('null', $response->getContent());
+    }
+
     public function test_cash_session_lifecycle_links_payments_and_computes_variance(): void
     {
         Notification::fake();

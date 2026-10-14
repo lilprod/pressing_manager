@@ -43,7 +43,9 @@ class CashSessionController extends ApiController
             ->latest('opened_at')
             ->first();
 
-        return response()->json($session ? $this->present($session) : null);
+        // `response()->json(null)` sérialise « {} » (objet vide, vrai côté client) : on
+        // renvoie un vrai `null` JSON quand l'opérateur n'a aucune session ouverte.
+        return $session ? response()->json($this->present($session)) : JsonResponse::fromJsonString('null');
     }
 
     public function open(Request $request): JsonResponse

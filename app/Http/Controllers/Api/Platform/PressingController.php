@@ -298,6 +298,123 @@ class PressingController extends PlatformApiController
      * programme de fidélité depuis `LoyaltyTier`) — jamais depuis la colonne
      * `Pressing` elle-même, qui ne les porte pas.
      */
+    /**
+     * Synthèse de la fiche pressing (« Vue d'ensemble ») : tout est lu en direct dans la
+     * base partagée — agences, personnel, licence, incidents, configuration par agence,
+     * dépôts rejoués depuis la file hors ligne. Aucune métrique de santé technique
+     * (API/synchro/impression) : aucune télémétrie de ce type n'existe.
+     */
+    public function overview(Request $request, Pressing $pressing): JsonResponse
+    {
+        $this->authorizePressing($request->user(), $pressing->id);
+        $pressing->loadMissing(['platformPlan', 'license']);
+
+        $agencies = $pressing->agencies()->with('settings')->withCount('users')->orderBy('name')->get();
+        $users = \App\Models\User::query()->where('pressing_id', $pressing->id)->with('role:id,slug,name')->get(['id', 'name', 'role_id', 'is_active', 'last_login_at']);
+
+        $byRole = $users->where('is_active', true)->groupBy(fn ($u) => $u->role?->name ?? '—')
+            ->map(fn ($group, $role) => [
+                'role' => $role,
+                'count' => $group->count(),
+                'initials' => collect(explode(' ', (string) $group->first()->name))->filter()->take(2)->map(fn ($w) => mb_strtoupper(mb_substr($w, 0, 1)))->implode(''),
+            ])->values();
+
+        $incidents = \App\Models\PlatformIncident::query()->where('pressing_id', $pressing->id)->where('status', '!=', 'resolved')
+            ->get(['id', 'title', 'priority', 'created_at']);
+        $health = $incidents->isEmpty() ? 'sain' : ($incidents->contains('priority', 'P1') ? 'incident' : 'degrade');
+
+        $license = $pressing->license;
+        $starts = $license?->starts_at ?? $pressing->license_starts_at;
+        $expires = $license?->expires_at ?? $pressing->license_expires_at;
+        $consumed = null;
+        if ($starts && $expires && $expires->gt($starts)) {
+            $consumed = (int) round(min(100, max(0, $starts->diffInSeconds(now()) / $starts->diffInSeconds($expires) * 100)));
+        }
+
+        $formats = $agencies->map(fn ($a) => $a->formatOrderNumber(1))->unique()->values();
+        $offlineEnabled = $agencies->filter(fn ($a) => $a->settings?->offline_enabled ?? true)->count();
+        $retentions = $agencies->map(fn ($a) => $a->settings?->offline_retention_days)->filter()->unique()->values();
+
+        $offlineOrders = \App\Models\Order::query()->whereIn('agency_id', $agencies->pluck('id'))->where('source', 'offline_sync')
+            ->with('agency')->latest()->limit(5)->get(['id', 'agency_id', 'order_number', 'client_local_uuid', 'created_at'])
+            ->map(fn ($o) => [
+                'id' => $o->id,
+                'number' => $o->agency?->formatOrderNumber($o->order_number) ?? (string) $o->order_number,
+                'agency_name' => $o->agency?->name,
+                'created_at' => $o->created_at?->toIso8601String(),
+            ]);
+
+        return response()->json([
+            'agencies' => $agencies->map(fn ($a) => [
+                'id' => $a->id, 'name' => $a->name, 'city' => $a->city, 'is_active' => (bool) $a->is_active, 'users_count' => $a->users_count,
+            ])->values(),
+            'agencies_active' => $agencies->where('is_active', true)->count(),
+            'agencies_total' => $agencies->count(),
+            'users_total' => $users->count(),
+            'users_active_30d' => $users->filter(fn ($u) => $u->last_login_at && $u->last_login_at->gte(now()->subDays(30)))->count(),
+            'users_by_role' => $byRole,
+            'license' => [
+                'plan' => $pressing->platformPlan?->name,
+                'starts_at' => $starts?->toIso8601String(),
+                'expires_at' => $expires?->toIso8601String(),
+                'days_remaining' => $expires ? (int) now()->diffInDays($expires, false) : null,
+                'consumed_pct' => $consumed,
+                'agencies_limit' => $pressing->platformPlan?->agencies_limit,
+                'users_limit' => $pressing->platformPlan?->users_limit,
+                'storage_limit_gb' => $pressing->platformPlan?->storage_limit_gb,
+            ],
+            'health' => $health,
+            'open_incidents' => $incidents->map(fn ($i) => ['id' => $i->id, 'title' => $i->title, 'priority' => $i->priority])->values(),
+            'configuration' => [
+                'timezone' => config('app.timezone'),
+                'numbering_formats' => $formats,
+                'offline_enabled_count' => $offlineEnabled,
+                'offline_retention_days' => $retentions,
+            ],
+            'offline_orders' => $offlineOrders,
+            'offline_orders_total' => \App\Models\Order::query()->whereIn('agency_id', $agencies->pluck('id'))->where('source', 'offline_sync')->count(),
+        ]);
+    }
+
+    /** Journal d'activité du tenant (audit des agences + connexions du personnel). */
+    public function activity(Request $request, Pressing $pressing, \App\Services\PressingActivityService $service): JsonResponse
+    {
+        $this->authorizePressing($request->user(), $pressing->id);
+
+        return response()->json($service->paginate($pressing, $this->activityFilters($request), min(50, max(5, $request->integer('per_page', 10)))));
+    }
+
+    public function activityExport(Request $request, Pressing $pressing, \App\Services\PressingActivityService $service): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $this->authorizePressing($request->user(), $pressing->id);
+        $rows = $service->all($pressing, $this->activityFilters($request));
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Date', 'Source', 'Objet', 'Action', 'Acteur', 'Rôle', 'Agence', 'Ressource', 'Adresse IP', 'Résultat']);
+            foreach ($rows as $r) {
+                fputcsv($out, [$r['created_at'], $r['source'], $r['subject'], $r['kind'], $r['actor_name'], $r['actor_role'], $r['agency_name'], $r['resource_id'], $r['ip_address'], $r['result'] === 'failure' ? 'Échec' : 'Succès']);
+            }
+            fclose($out);
+        }, 'journal-'.$pressing->code.'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function activityFilters(Request $request): array
+    {
+        $filters = $request->only(['category', 'agency_id', 'result', 'search', 'from', 'to']);
+        $period = $request->string('period')->value();
+        if ($period && empty($filters['from'])) {
+            $filters['from'] = match ($period) {
+                'day' => now()->toDateString(),
+                'week' => now()->subDays(6)->toDateString(),
+                'month' => now()->subDays(29)->toDateString(),
+                default => null,
+            };
+        }
+
+        return $filters;
+    }
+
     public function settings(Request $request, Pressing $pressing): JsonResponse
     {
         $this->authorizePressing($request->user(), $pressing->id);

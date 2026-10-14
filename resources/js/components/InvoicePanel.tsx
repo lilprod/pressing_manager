@@ -18,6 +18,11 @@ import StatusBadge from './ui/StatusBadge';
 import { Alert, Spinner } from './ui/Feedback';
 import { button, card, cx, input, label, sectionTitle } from './ui/styles';
 
+/** Montant réellement encaissé (paiements complets uniquement) — même règle que balance_due côté serveur. */
+function paidOf(invoice: Invoice): number {
+    return (invoice.payments ?? []).filter((p) => p.status === 'complete').reduce((sum, p) => sum + p.amount, 0);
+}
+
 export default function InvoicePanel({ order }: { order: Order }) {
     const { t } = useI18n();
     const { money, dateTime } = useFormat();
@@ -28,7 +33,8 @@ export default function InvoicePanel({ order }: { order: Order }) {
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [method, setMethod] = useState<PaymentMethod>('espece');
-    const [amount, setAmount] = useState<number>(order.total_amount);
+    const initialInvoice = order.invoice?.[0] ?? null;
+    const [amount, setAmount] = useState<number>(initialInvoice ? Math.max(0, initialInvoice.total_amount - paidOf(initialInvoice)) : order.total_amount);
     const [reference, setReference] = useState('');
 
     const referenceRequired = method !== 'espece';
@@ -81,6 +87,7 @@ export default function InvoicePanel({ order }: { order: Order }) {
             setReference('');
             const refreshed = await api.get<Invoice>(`/invoices/${invoice.id}`);
             setInvoice(refreshed);
+            setAmount(Math.max(0, refreshed.total_amount - paidOf(refreshed)));
         } catch (err) {
             setError(err instanceof ApiError ? err.message : t('common.error'));
         } finally {
@@ -89,11 +96,11 @@ export default function InvoicePanel({ order }: { order: Order }) {
     }
 
     return (
-        <section aria-labelledby="invoice-heading" className={cx(card, 'overflow-hidden')}>
+        <section id="invoice-panel" aria-labelledby="invoice-heading" className={cx(card, 'overflow-hidden scroll-mt-24')}>
             <div className="flex items-center justify-between gap-2 border-b border-ink-200/80 px-5 py-4 dark:border-ink-800">
                 <h2 id="invoice-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
                     <Receipt aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
-                    {t('order.invoice')}
+                    {t('order.totalAndPayments')}
                 </h2>
                 {invoice && <StatusBadge kind="invoice" status={invoice.status} />}
             </div>
@@ -133,6 +140,24 @@ export default function InvoicePanel({ order }: { order: Order }) {
                                     <p className="text-xs font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-350">{t('invoice.amountDue')}</p>
                                     <p className="whitespace-nowrap font-display text-2xl font-extrabold tabular-nums text-ink-900 dark:text-white">{money(invoice.total_amount)}</p>
                                 </div>
+                                <div className="text-right text-sm">
+                                    <p className="text-ink-600 dark:text-ink-350">
+                                        {t('order.table.paid')} <span className="font-semibold tabular-nums text-ink-900 dark:text-white">{money(paidOf(invoice))}</span>
+                                    </p>
+                                    <p className="text-ink-600 dark:text-ink-350">
+                                        {t('order.table.remaining')}{' '}
+                                        <span
+                                            className={cx(
+                                                'font-semibold tabular-nums',
+                                                invoice.total_amount - paidOf(invoice) > 0 ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300',
+                                            )}
+                                        >
+                                            {money(Math.max(0, invoice.total_amount - paidOf(invoice)))}
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex justify-end">
                                 {invoice.pdf_path && (
                                     <button type="button" onClick={() => void downloadPdf()} className={button('secondary', 'sm')}>
                                         <FileDown aria-hidden="true" className="h-4 w-4" />

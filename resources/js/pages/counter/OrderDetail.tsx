@@ -9,6 +9,9 @@ import {
     CalendarDays,
     ClipboardCheck,
     Clock,
+    HandCoins,
+    PackageCheck,
+    SlidersHorizontal,
     FileQuestion,
     Pencil,
     Phone,
@@ -28,6 +31,7 @@ import OrderItemRow from '../../components/OrderItemRow';
 import PrintableTicket from '../../components/PrintableTicket';
 import PrintableLabel from '../../components/PrintableLabel';
 import InvoicePanel from '../../components/InvoicePanel';
+import { itemPrestationLabel } from '../../lib/orderItem';
 import { Avatar } from '../../components/ui/PageHeader';
 import StatusBadge, { Pill, statusTone } from '../../components/ui/StatusBadge';
 import { Alert, EmptyState, LoadingState, Spinner } from '../../components/ui/Feedback';
@@ -56,6 +60,9 @@ export default function OrderDetail() {
     const [loading, setLoading] = useState(true);
     const [printTarget, setPrintTarget] = useState<PrintTarget>(null);
     const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+    const [itemsView, setItemsView] = useState<'summary' | 'tracking'>('summary');
+    const [showFullTimeline, setShowFullTimeline] = useState(false);
+    const [showFullAudit, setShowFullAudit] = useState(false);
 
     const [editing, setEditing] = useState(false);
     const [editNotes, setEditNotes] = useState('');
@@ -203,6 +210,18 @@ export default function OrderDetail() {
     }
 
     const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const treatmentNames = [...new Set(order.items.map((i) => i.treatment_type?.name).filter((n): n is string => !!n))];
+    const finishNames = [...new Set(order.items.map((i) => i.finish_option?.name).filter((n): n is string => !!n))];
+    // Reliquat de remise saisi à la main au comptoir (ni fidélité ni promotion) — même découpage que le serveur.
+    const manualDiscount = Math.max(0, order.discount_amount - (order.loyalty_discount_amount ?? 0) - (order.promotion_discount_amount ?? 0));
+    const invoiceStatus = order.invoice?.[0]?.status;
+    const canAddPayment = order.status !== 'annule' && invoiceStatus !== 'payee' && invoiceStatus !== 'annulee';
+
+    function focusPayment() {
+        const panel = document.getElementById('invoice-panel');
+        panel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.setTimeout(() => document.getElementById(`invoice-amount-${order!.id}`)?.focus({ preventScroll: true }), 400);
+    }
 
     return (
         <div className="space-y-6">
@@ -249,12 +268,6 @@ export default function OrderDetail() {
                                 </span>
                             )}
                         </div>
-                        {order.notes && (
-                            <p className="inline-flex items-start gap-1.5 text-sm text-ink-700 dark:text-ink-300">
-                                <StickyNote aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
-                                {order.notes}
-                            </p>
-                        )}
                     </div>
 
                     <div className="flex flex-col items-start gap-3 sm:items-end">
@@ -265,37 +278,13 @@ export default function OrderDetail() {
                         <div className="flex flex-wrap gap-2 no-print">
                             <button type="button" onClick={() => setPrintTarget({ kind: 'ticket' })} className={button('secondary')}>
                                 <Printer aria-hidden="true" className="h-4 w-4" />
-                                {t('common.print')} — {t('order.ticket')}
+                                {t('order.printTicket')}
                             </button>
-                            <Link to={`/orders/${order.id}/documents`} className={button('secondary')}>
-                                <ScrollText aria-hidden="true" className="h-4 w-4" />
-                                {t('documents.title')}
-                            </Link>
-                            {['recu', 'trie', 'en_traitement', 'controle_qualite', 'pret'].includes(order.status) && (
-                                <Link to={`/atelier?order=${order.id}`} className={button('secondary')}>
-                                    <Workflow aria-hidden="true" className="h-4 w-4" />
-                                    {t('order.followWorkshop')}
-                                </Link>
-                            )}
-                            {!NOT_EDITABLE_STATUSES.includes(order.status) && (
-                                <>
-                                    <button type="button" onClick={openEdit} className={button('secondary')}>
-                                        <Pencil aria-hidden="true" className="h-4 w-4" />
-                                        {t('order.edit.action')}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setCancelReason('');
-                                            setCancelError(null);
-                                            setCancelling(true);
-                                        }}
-                                        className={button('danger')}
-                                    >
-                                        <Ban aria-hidden="true" className="h-4 w-4" />
-                                        {t('order.cancel.action')}
-                                    </button>
-                                </>
+                            {canAddPayment && (
+                                <button type="button" onClick={focusPayment} className={button('accent')}>
+                                    <HandCoins aria-hidden="true" className="h-4 w-4" />
+                                    {t('order.addPayment')}
+                                </button>
                             )}
                         </div>
                     </div>
@@ -318,29 +307,134 @@ export default function OrderDetail() {
                 />
             </div>
 
-            <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-                <section aria-labelledby="items-heading" className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                        <h2 id="items-heading" className={sectionTitle}>
-                            {t('order.items')}
-                        </h2>
-                        <Pill tone="neutral">{t('order.itemsCount', { count: itemCount })}</Pill>
-                    </div>
-                    {order.items.length > 0 && (
-                        <div
-                            role="row"
-                            className="hidden items-center gap-4 rounded-xl border border-ink-200/80 bg-ink-50 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
-                        >
-                            <span className="min-w-0 flex-1">{t('order.itemsTable.article')}</span>
-                            <span className="w-28 shrink-0 text-right">{t('order.itemsTable.price')}</span>
-                            <span className="w-32 shrink-0 text-right">{t('order.itemsTable.status')}</span>
+            <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+                <section aria-labelledby="items-heading" className="min-w-0 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <h2 id="items-heading" className={sectionTitle}>
+                                {t('order.items')}
+                            </h2>
+                            <Pill tone="neutral">{t('order.itemsCount', { count: itemCount })}</Pill>
                         </div>
+                        <div role="group" aria-label={t('order.itemsView.label')} className="flex h-9 items-center gap-1 rounded-xl bg-ink-100 p-1 dark:bg-ink-800">
+                            {(['summary', 'tracking'] as const).map((view) => (
+                                <button
+                                    key={view}
+                                    type="button"
+                                    aria-pressed={itemsView === view}
+                                    onClick={() => setItemsView(view)}
+                                    className={cx(
+                                        'h-full whitespace-nowrap rounded-lg px-3 text-xs font-semibold transition',
+                                        itemsView === view ? 'bg-white text-ink-900 shadow-sm dark:bg-ink-700 dark:text-white' : 'text-ink-600 hover:text-ink-900 dark:text-ink-300',
+                                    )}
+                                >
+                                    {t(`order.itemsView.${view}`)}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {itemsView === 'summary' ? (
+                        <div className={cx(card, 'overflow-hidden')}>
+                            <div className="overflow-x-auto">
+                                <table className="w-full min-w-[640px] text-sm">
+                                    <thead className="bg-ink-50 text-left text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:bg-ink-950/40 dark:text-ink-400">
+                                        <tr>
+                                            <th scope="col" className="px-5 py-2.5">{t('order.itemsTable.article')}</th>
+                                            <th scope="col" className="px-3 py-2.5">{t('order.itemsTable.prestation')}</th>
+                                            <th scope="col" className="px-3 py-2.5 text-right">{t('order.itemsTable.quantity')}</th>
+                                            <th scope="col" className="px-3 py-2.5 text-right">{t('order.itemsTable.price')}</th>
+                                            <th scope="col" className="px-5 py-2.5 text-right">{t('order.itemsTable.status')}</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
+                                        {order.items.map((item) => (
+                                            <tr key={item.id}>
+                                                <td className="px-5 py-3">
+                                                    <p className="font-medium text-ink-900 dark:text-white">{item.service?.name ?? t('order.item')}</p>
+                                                    {(item.intake_conditions?.length ?? 0) > 0 && (
+                                                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                            {item.intake_conditions!.map((c) => c.label).join(', ')}
+                                                        </p>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-3 text-ink-700 dark:text-ink-200">{itemPrestationLabel(item) || '—'}</td>
+                                                <td className="px-3 py-3 text-right tabular-nums text-ink-700 dark:text-ink-200">
+                                                    {item.weight_kg ? `${item.weight_kg} kg` : `× ${item.quantity}`}
+                                                </td>
+                                                <td className="px-3 py-3 text-right font-semibold tabular-nums text-ink-900 dark:text-white">{money(lineTotal(item))}</td>
+                                                <td className="px-5 py-3 text-right">
+                                                    <StatusBadge kind="order" status={item.status} />
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot className="border-t border-ink-200/80 dark:border-ink-800">
+                                        {order.discount_amount > 0 && (
+                                            <tr>
+                                                <td colSpan={3} className="px-5 py-2 text-right text-ink-600 dark:text-ink-350">{t('invoice.discount')}</td>
+                                                <td className="px-3 py-2 text-right tabular-nums text-ink-700 dark:text-ink-200">-{money(order.discount_amount)}</td>
+                                                <td />
+                                            </tr>
+                                        )}
+                                        <tr>
+                                            <td colSpan={3} className="px-5 py-2.5 text-right font-semibold text-ink-900 dark:text-white">{t('common.total')}</td>
+                                            <td className="px-3 py-2.5 text-right font-display font-bold tabular-nums text-ink-900 dark:text-white">{money(order.total_amount)}</td>
+                                            <td />
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            <div
+                                role="row"
+                                className="hidden items-center gap-4 rounded-xl border border-ink-200/80 bg-ink-50 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-ink-500 sm:flex dark:border-ink-800 dark:bg-ink-950/40 dark:text-ink-400"
+                            >
+                                <span className="min-w-0 flex-1">{t('order.itemsTable.article')}</span>
+                                <span className="w-28 shrink-0 text-right">{t('order.itemsTable.price')}</span>
+                                <span className="w-32 shrink-0 text-right">{t('order.itemsTable.status')}</span>
+                            </div>
+                            <ul className="space-y-3">
+                                {order.items.map((item) => (
+                                    <OrderItemRow key={item.id} item={item} onUpdated={handleItemUpdated} onPrintLabel={printLabel} />
+                                ))}
+                            </ul>
+                        </>
                     )}
-                    <ul className="space-y-3">
-                        {order.items.map((item) => (
-                            <OrderItemRow key={item.id} item={item} onUpdated={handleItemUpdated} onPrintLabel={printLabel} />
-                        ))}
-                    </ul>
+
+                    <section aria-labelledby="options-heading" className={cx(cardPadded, 'space-y-3')}>
+                        <h2 id="options-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
+                            <SlidersHorizontal aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
+                            {t('order.options.title')}
+                        </h2>
+                        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
+                            <OptionRow label={t('order.options.delay')} value={order.is_express ? t('order.expressShort') : t('order.standard')} />
+                            <OptionRow label={t('order.options.treatments')} value={treatmentNames.length > 0 ? treatmentNames.join(', ') : '—'} />
+                            <OptionRow label={t('order.options.finishes')} value={finishNames.length > 0 ? finishNames.join(', ') : '—'} />
+                            <OptionRow label={t('order.promisedAt')} value={order.promised_at ? dateTime(order.promised_at) : '—'} />
+                            <OptionRow
+                                label={t('order.options.loyaltyDiscount')}
+                                value={order.loyalty_discount_amount ? `-${money(order.loyalty_discount_amount)}` : '—'}
+                            />
+                            <OptionRow
+                                label={t('order.options.promotion')}
+                                value={
+                                    order.promotion_discount_amount
+                                        ? `${order.promotion ? `${order.promotion.code} · ` : ''}-${money(order.promotion_discount_amount)}`
+                                        : '—'
+                                }
+                            />
+                            {manualDiscount > 0 && <OptionRow label={t('order.options.manualDiscount')} value={`-${money(manualDiscount)}`} />}
+                        </dl>
+                        {order.notes && (
+                            <p className="flex items-start gap-1.5 rounded-xl bg-ink-50 px-3.5 py-2.5 text-sm text-ink-700 dark:bg-ink-950/60 dark:text-ink-300">
+                                <StickyNote aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                                {order.notes}
+                            </p>
+                        )}
+                    </section>
                 </section>
 
                 <div className="space-y-6 lg:sticky lg:top-20">
@@ -392,17 +486,66 @@ export default function OrderDetail() {
                         </section>
                     )}
 
+                    <section aria-labelledby="actions-heading" className={cx(cardPadded, 'space-y-3 no-print')}>
+                        <h2 id="actions-heading" className={sectionTitle}>
+                            {t('order.actions.title')}
+                        </h2>
+                        <div className="grid grid-cols-1 gap-2">
+                            <Link to={`/orders/${order.id}/documents`} className={button('secondary', 'md', 'w-full justify-start')}>
+                                <ScrollText aria-hidden="true" className="h-4 w-4" />
+                                {t('documents.title')}
+                            </Link>
+                            {order.status === 'pret' && (
+                                <Link to={`/pickups/${order.id}`} className={button('secondary', 'md', 'w-full justify-start')}>
+                                    <PackageCheck aria-hidden="true" className="h-4 w-4" />
+                                    {t('order.actions.pickup')}
+                                </Link>
+                            )}
+                            {['recu', 'trie', 'en_traitement', 'controle_qualite', 'pret'].includes(order.status) && (
+                                <Link to={`/atelier?order=${order.id}`} className={button('secondary', 'md', 'w-full justify-start')}>
+                                    <Workflow aria-hidden="true" className="h-4 w-4" />
+                                    {t('order.followWorkshop')}
+                                </Link>
+                            )}
+                            {!NOT_EDITABLE_STATUSES.includes(order.status) && (
+                                <>
+                                    <button type="button" onClick={openEdit} className={button('secondary', 'md', 'w-full justify-start')}>
+                                        <Pencil aria-hidden="true" className="h-4 w-4" />
+                                        {t('order.edit.action')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCancelReason('');
+                                            setCancelError(null);
+                                            setCancelling(true);
+                                        }}
+                                        className={button('danger', 'md', 'w-full justify-start')}
+                                    >
+                                        <Ban aria-hidden="true" className="h-4 w-4" />
+                                        {t('order.cancel.action')}
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </section>
+
                     <InvoicePanel order={order} />
                 </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <section aria-labelledby="timeline-heading" className={cx(cardPadded, 'space-y-4')}>
                     <h2 id="timeline-heading" className={cx(sectionTitle, 'flex items-center gap-2')}>
                         <Workflow aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                         {t('order.timeline.title')}
                     </h2>
-                    <Timeline entries={workshopTimeline} emptyLabel={t('order.timeline.empty')} />
+                    <Timeline entries={showFullTimeline ? workshopTimeline : workshopTimeline.slice(0, 5)} emptyLabel={t('order.timeline.empty')} />
+                    {workshopTimeline.length > 5 && (
+                        <button type="button" onClick={() => setShowFullTimeline((v) => !v)} className={cx(textLink, 'text-sm')}>
+                            {showFullTimeline ? t('order.journal.showLess') : t('order.journal.showAll', { count: workshopTimeline.length })}
+                        </button>
+                    )}
                 </section>
 
                 <section aria-labelledby="audit-heading" className={cx(cardPadded, 'space-y-4')}>
@@ -410,7 +553,12 @@ export default function OrderDetail() {
                         <ScrollText aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                         {t('order.audit.title')}
                     </h2>
-                    <Timeline entries={auditTimeline} emptyLabel={t('order.audit.empty')} />
+                    <Timeline entries={showFullAudit ? auditTimeline : auditTimeline.slice(0, 5)} emptyLabel={t('order.audit.empty')} />
+                    {auditTimeline.length > 5 && (
+                        <button type="button" onClick={() => setShowFullAudit((v) => !v)} className={cx(textLink, 'text-sm')}>
+                            {showFullAudit ? t('order.journal.showLess') : t('order.journal.showAll', { count: auditTimeline.length })}
+                        </button>
+                    )}
                 </section>
             </div>
 
@@ -519,4 +667,18 @@ export default function OrderDetail() {
             )}
         </div>
     );
+}
+
+function OptionRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="min-w-0">
+            <dt className="text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400">{label}</dt>
+            <dd className="truncate font-medium text-ink-900 dark:text-ink-50">{value}</dd>
+        </div>
+    );
+}
+
+/** Montant d'une ligne tel que facturé : `unit_price` est figé à la création (une ligne au poids a une quantité de 1). */
+function lineTotal(item: OrderItem): number {
+    return item.unit_price * item.quantity;
 }

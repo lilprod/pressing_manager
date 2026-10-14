@@ -672,6 +672,7 @@ export interface Order {
     loyalty_discount_amount?: number;
     promotion_id?: number | null;
     promotion_discount_amount?: number;
+    promotion?: { id: number; code: string; name: string } | null;
     notes: string | null;
     created_at: string;
     promised_at: string | null;

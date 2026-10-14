@@ -467,7 +467,7 @@ class OrderController extends ApiController
         $order->load(
             'items.service', 'items.treatmentType', 'items.finishOption:id,name', 'items.intakeConditions', 'items.statusHistories.actor',
             'client', 'invoice.payments.receiver', 'agency', 'pickups.items.orderItem', 'pickups.processor', 'creator',
-            'washer', 'sorter',
+            'washer', 'sorter', 'promotion:id,code,name',
         );
         $balanceDue = $this->balanceDue($order);
         $order->setAttribute('balance_due', $balanceDue);

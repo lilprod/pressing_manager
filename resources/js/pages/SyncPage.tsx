@@ -95,7 +95,7 @@ export default function SyncPage() {
                                 <div className="min-w-0">
                                     <p className="truncate font-semibold text-ink-900 dark:text-ink-50">{order.preview.client_label}</p>
                                     <p className="text-sm text-ink-600 dark:text-ink-350">
-                                        {t('sync.queue.itemsCount', { count: order.preview.items_count })} · {dateTime(order.created_at)}
+                                        {order.preview.local_reference ? `${order.preview.local_reference} · ` : ''}{t('sync.queue.itemsCount', { count: order.preview.items_count })} · {dateTime(order.created_at)}
                                     </p>
                                 </div>
                                 {order.status === 'error' ? (

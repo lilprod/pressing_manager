@@ -57,6 +57,45 @@ class ClientController extends ApiController
         return response()->json($clients);
     }
 
+    /**
+     * Annuaire des clients actifs d'une agence, téléchargé par le comptoir pour pouvoir
+     * retrouver un client sans réseau (« Client depuis le cache »). Projection minimale
+     * (pas les `$appends` du modèle : le palier est résolu en mémoire, une seule requête),
+     * limitée à une seule agence et aux seuls champs utiles à la prise en charge.
+     */
+    public function offlineDirectory(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $agencyId = $user->effectiveAgencyId($request->integer('agency_id') ?: null);
+        abort_unless($agencyId !== null && $user->canAccessAgency($agencyId), 422, "Choisissez l'agence du comptoir.");
+
+        $tiers = $this->activeTiers($user->pressing_id)->sortByDesc('min_spend_amount')->values();
+        $clients = Client::query()
+            ->where('agency_id', $agencyId)
+            ->where('is_active', true)
+            ->orderBy('last_name')
+            ->limit(20000)
+            ->get(['id', 'agency_id', 'first_name', 'last_name', 'phone', 'email', 'loyalty_points', 'loyalty_spend_12m', 'city'])
+            ->map(function (Client $client) use ($tiers) {
+                $tier = $tiers->first(fn (LoyaltyTier $t) => $t->min_spend_amount <= $client->loyalty_spend_12m);
+
+                return [
+                    'id' => $client->id,
+                    'agency_id' => $client->agency_id,
+                    'first_name' => $client->first_name,
+                    'last_name' => $client->last_name,
+                    'phone' => $client->phone,
+                    'email' => $client->email,
+                    'city' => $client->city,
+                    'loyalty_points' => (int) $client->loyalty_points,
+                    'loyalty_tier_name' => $tier?->name,
+                    'loyalty_discount_rate' => (float) ($tier?->discount_rate ?? 0),
+                ];
+            });
+
+        return response()->json(['agency_id' => $agencyId, 'generated_at' => now()->toIso8601String(), 'clients' => $clients]);
+    }
+
     /** Export Excel du répertoire clients — mêmes filtres que la liste, jamais paginé. */
     public function export(Request $request, ClientsExcelExporter $exporter): StreamedResponse
     {

@@ -39,6 +39,7 @@ import { useI18n } from '../contexts/I18nContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useOnlineStatus, useLastSyncedAt } from '../lib/useOnlineStatus';
+import { useSyncQueue } from '../lib/useSyncQueue';
 import { useFormat } from '../lib/format';
 import { hasPermission } from '../lib/permissions';
 import LicenseBanner from './LicenseBanner';
@@ -207,6 +208,8 @@ function SidebarAgencySelector() {
 function SidebarNetworkBox() {
     const { t } = useI18n();
     const { user, agencies } = useAuth();
+    const online = useOnlineStatus();
+    const queue = useSyncQueue();
 
     // Compte global : toutes les agences du pressing. Compte local multi-agences :
     // agence principale + affectations complémentaires (au moins deux).
@@ -221,10 +224,14 @@ function SidebarNetworkBox() {
     return (
         <div className="mx-3 mb-3 rounded-xl bg-white/5 px-3.5 py-3 ring-1 ring-inset ring-white/10">
             <div className="flex items-center gap-2 text-xs font-semibold text-white">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" aria-hidden="true" />
+                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${online ? 'bg-emerald-400' : 'bg-amber-400'}`} aria-hidden="true" />
                 {t('sidebar.network.title')}
             </div>
-            <p className="mt-1 text-xs text-brand-100/70">{t('sidebar.network.activeAgencies', { count: agencies.length })}</p>
+            <p className="mt-1 text-xs text-brand-100/70">
+                {online
+                    ? t('sidebar.network.activeAgencies', { count: agencies.length })
+                    : t('sidebar.network.localMode', { count: queue.length })}
+            </p>
         </div>
     );
 }

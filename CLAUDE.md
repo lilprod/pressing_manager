@@ -4165,3 +4165,71 @@ imprimant traitement et rendu. Deux écarts réels corrigés :
 Test : `ArticleSheetTest::test_an_express_treatment_line_makes_the_deposit_express_and_urgent`.
 Suite 662/662, `tsc`/build propres, Playwright 1440/390 sans débordement (fiche dépôt,
 atelier).
+
+**Audit de conformité « Traiter le retrait », « Nouveau mouvement de caisse », « Nouveau
+dépôt (hors ligne) » (2026-10-14)** — trois captures renvoyées (« Les trois écrans sont
+conformes chez nous ? »). Aucun ne l'était ; périmètre tranché via `AskUserQuestion` :
+**tout construire, y compris le cache local des fiches clients**. Un commit par écran.
+- **Bug trouvé en auditant** : `GET /cash/sessions/mine` renvoyait `{}` (Laravel
+  sérialise `response()->json(null)` en objet vide) quand l'opérateur n'avait aucune
+  session — objet « vrai » côté client, d'où « cashSession.status.undefined » sur la carte
+  « Caisse concernée ». Renvoie désormais un vrai `null` (`JsonResponse::fromJsonString`),
+  testé ; le front garde en plus `s && s.id`.
+- **Nouveau mouvement** (`CashMovementFormPage.tsx`) : en-tête avec badge Brouillon et
+  « Retour au journal », 3 cartes (Nature : entrée/sortie, catégorie **obligatoire sans
+  présélection**, montant ; Détails : mode de paiement affiché « Espèces » non modifiable
+  — un mouvement de caisse est toujours en espèces —, bénéficiaire, motif, référence,
+  commentaire ; Pièce justificative en zone de dépôt avec rejet client du format/poids
+  et « Retirer »). Validation en rouge (bloquant) / ambre (conseil : pièce justificative
+  non exigée par le backend, donc jamais présentée comme bloquante) / vert. Traçabilité
+  **prévisionnelle** dérivée de l'état réel du formulaire (brouillon créé à HH:MM, montant
+  sensible si ≥ seuil, seconde validation « à venir »). Double contrôle : initiateur réel +
+  collaborateurs habilités réels (« Peut valider » si le seuil est atteint) — pas
+  d'approbateur nommé inventé. Barre d'action : « Sortie de caisse · 350 000 FCFA » +
+  conséquence réelle (double contrôle ou ajout direct au journal).
+- **Traiter le retrait** (`PickupProcessPage.tsx`) : frise atelier à 6 étapes sur les
+  vrais statuts (`recu`→`livre`, date = premier passage réel d'un article ; détail complet
+  à la demande), carte client à colonnes (dépôt, agence, commande avec traitements,
+  total + acompte, pastilles « Atelier terminé »/« X dus »), tableau avec case de
+  sélection, sous-ligne (traitement · rendu · états à la réception · notes), colonne
+  Vérification = statut atelier réel (prêt / contrôle requis / non récupéré), pied
+  « N pièces prêtes ». État des pièces avant Réceptionnaire (ordre de la maquette). Solde :
+  total, acompte encaissé, montant restant ; boutons « Encaisser X » et « Dérogation » ;
+  **monnaie à rendre** (espèces) — l'encaissement envoyé est plafonné au solde, l'excédent
+  n'est jamais persisté (même règle que le comptoir). « Notifier le client » devient une
+  vraie bascule : nouveau `notify_client` (`StoreOrderPickupRequest`, défaut `true` =
+  comportement historique), lu par `PickupService::process()` (testé). Carte Réseau =
+  connectivité réelle de l'appareil + dernière synchro réelle, avec la vérité : un retrait
+  n'est pas mis en file hors ligne. Carte sombre de confirmation, journal d'audit condensé
+  (3 dernières entrées, « Journal complet »). Parcours réel : 8 000 FCFA reçus pour 7 139
+  dus → 861 de monnaie affichés, paiement enregistré à 7 139, facture payée, dépôt livré.
+- **Nouveau dépôt hors ligne** (`NewOrder.tsx`) : `GET /clients/offline-directory`
+  (clients actifs d'une seule agence, projection minimale, palier résolu en mémoire —
+  pas les `$appends` du modèle, aucun N+1 —, limite 20 000, testé : isolation agence,
+  inactifs exclus, 422 sans agence pour un compte global) → `lib/clientDirectoryCache.ts`
+  (localStorage par agence, rafraîchi au plus toutes les 30 min en ligne, recherche
+  hors ligne nom/téléphone, repli sur les clients récents). Bandeau hors ligne (heure
+  réelle du cache catalogue — `cachedServicesAt` —, file réelle, « Réessayer » =
+  `flushPendingOrders()`), numéro temporaire `LOCAL-{AGENCE}-0001` (`lib/localTicket.ts`,
+  compteur de l'appareil, réservé à la mise en file et stocké dans
+  `preview.local_reference`, affiché sur l'écran Synchronisation), indicateur d'étapes
+  Client/Articles/Paiement/Ticket (aussi en ligne), « Client depuis le cache » avec nombre
+  de fiches et heure réelle, « Créer une fiche client — Connexion requise », filtre
+  À la pièce/Au kilo, pastille Local, code promo désactivé hors ligne (validé côté
+  serveur uniquement), carte « Ticket local ». `offline_enabled` mémorisé par agence pour
+  rester appliqué sans réseau. Boîte « Réseau agences » : « Mode local · N opérations en
+  file » hors ligne. Parcours réel : réseau coupé → client trouvé dans l'annuaire local →
+  dépôt mis en file sous LOCAL-LOME01-0001 → réseau rétabli → file vidée, dépôt créé
+  (`source = offline_sync`).
+- **Omis, catégorie (c)** : approbateurs nommés du double contrôle ; imprimante « POS-01 »
+  (aucun registre de périphériques) ; **impression du ticket hors ligne** (les QR des
+  pièces et le numéro officiel sont générés par le serveur — un ticket local imprimé
+  serait faux) ; ajout au panier par sélecteurs Traitement/Délai/Quantité (le comptoir
+  ajoute d'un toucher et règle le traitement par ligne, même résultat) ; signature du
+  réceptionnaire.
+- **Piège** : `npx prettier --write` sans configuration de dépôt reformate tout un
+  fichier (aucune `.prettierrc` ici) — ne pas l'utiliser ; restauré et modifications
+  réappliquées.
+Suite **667/667**, `tsc`/build propres, parité i18n, Playwright 1440/390 sans débordement
+(une pastille « En cache » écrasait le nom du client à 390 px : déplacée sur la ligne des
+pastilles de fidélité).

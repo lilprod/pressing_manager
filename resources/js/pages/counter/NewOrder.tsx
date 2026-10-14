@@ -5,17 +5,26 @@ import { useI18n } from '../../contexts/I18nContext';
 import { useSettings } from '../../contexts/SettingsContext';
 import { api, ApiError } from '../../lib/api';
 import { queuePendingOrder } from '../../lib/offlineDb';
-import { readCachedServices, writeCachedServices } from '../../lib/servicesCache';
+import { cachedServicesAt, readCachedServices, writeCachedServices } from '../../lib/servicesCache';
+import { clientDirectoryIsStale, readClientDirectory, searchClientDirectory, writeClientDirectory, type DirectoryClient } from '../../lib/clientDirectoryCache';
+import { peekLocalReference, reserveLocalReference } from '../../lib/localTicket';
+import { useOnlineStatus } from '../../lib/useOnlineStatus';
+import { useSyncQueue } from '../../lib/useSyncQueue';
 import { readCachedIntakeConditions, writeCachedIntakeConditions } from '../../lib/intakeConditionsCache';
 import { readCachedTreatmentTypes, writeCachedTreatmentTypes } from '../../lib/treatmentTypesCache';
 import { readRecentClients, rememberClients } from '../../lib/recentClientsCache';
-import { configureSyncInterval, syncEvents } from '../../lib/sync';
+import { configureSyncInterval, flushPendingOrders, syncEvents } from '../../lib/sync';
 import { categoryMeta } from '../../lib/serviceCategory';
 import PaymentMethodPicker from '../../components/PaymentMethodPicker';
 import PaymentReferenceField from '../../components/PaymentReferenceField';
 import type { AgencySettings, Client, IntakeCondition, Order, PaymentMethod, Service, ServiceCategory, TreatmentType } from '../../types';
 import {
     Award,
+    CloudOff,
+    Lock,
+    RefreshCw,
+    ShieldCheck,
+    UserPlus,
     Building2,
     Check,
     ChevronDown,
@@ -88,15 +97,23 @@ function lineTotal(service: Service | undefined, treatmentType: TreatmentType | 
 }
 
 export default function NewOrder() {
-    const { user, activeAgencyId } = useAuth();
+    const { user, activeAgencyId, agencies } = useAuth();
     const { t } = useI18n();
-    const { money } = useFormat();
+    const { money, time, dateTime } = useFormat();
+    const online = useOnlineStatus();
+    const queue = useSyncQueue();
     const { settings } = useSettings();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const taxRate = settings?.tax_rate ?? 0;
 
     const agencyId = user?.agency_id ?? activeAgencyId;
+    const agencyCode = user?.agency?.code ?? agencies.find((a) => a.id === agencyId)?.code ?? null;
+    // Annuaire clients conservé sur l'appareil (recherche hors ligne) : nombre de fiches et
+    // heure réelle du dernier téléchargement, jamais estimés.
+    const [directoryMeta, setDirectoryMeta] = useState<{ count: number; saved_at: string } | null>(null);
+    const [billingFilter, setBillingFilter] = useState<'all' | 'piece' | 'kg'>('all');
+    const [retrying, setRetrying] = useState(false);
 
     const [services, setServices] = useState<(Service & { effective_price: number })[]>([]);
     const [agencySettings, setAgencySettings] = useState<AgencySettings | null>(null);
@@ -131,6 +148,26 @@ export default function NewOrder() {
 
     useEffect(() => {
         if (!agencyId) {
+            setDirectoryMeta(null);
+            return;
+        }
+        const stored = readClientDirectory(agencyId);
+        setDirectoryMeta(stored ? { count: stored.clients.length, saved_at: stored.saved_at } : null);
+        if (!online || !clientDirectoryIsStale(agencyId)) return;
+        api
+            .get<{ clients: DirectoryClient[] }>(`/clients/offline-directory?agency_id=${agencyId}`)
+            .then((res) => {
+                writeClientDirectory(agencyId, res.clients);
+                const saved = readClientDirectory(agencyId);
+                if (saved) setDirectoryMeta({ count: saved.clients.length, saved_at: saved.saved_at });
+            })
+            .catch(() => {
+                // Pas d'annuaire : la recherche hors ligne retombe sur les clients récents.
+            });
+    }, [agencyId, online]);
+
+    useEffect(() => {
+        if (!agencyId) {
             return;
         }
         setServices(readCachedServices(agencyId));
@@ -155,6 +192,11 @@ export default function NewOrder() {
             .then((settings) => {
                 setAgencySettings(settings);
                 configureSyncInterval(settings.offline_sync_interval_minutes);
+                try {
+                    localStorage.setItem(`pm.offlineEnabled.${agencyId}`, settings.offline_enabled === false ? '0' : '1');
+                } catch {
+                    // Stockage indisponible : la règle sera revérifiée au prochain chargement en ligne.
+                }
             })
             .catch(() => setAgencySettings(null));
     }, [agencyId]);
@@ -197,14 +239,17 @@ export default function NewOrder() {
                     rememberClients(res.data);
                 })
                 .catch(() => {
+                    // Hors ligne : annuaire de l'agence conservé sur l'appareil, complété par
+                    // les clients récemment consultés.
                     const term = clientQuery.toLowerCase();
-                    setClientResults(
-                        readRecentClients().filter(
-                            (c) =>
-                                c.agency_id === agencyId &&
-                                (`${c.first_name} ${c.last_name}`.toLowerCase().includes(term) || c.phone.includes(term)),
-                        ),
+                    const fromDirectory = agencyId ? (searchClientDirectory(agencyId, clientQuery) as Client[]) : [];
+                    const recent = readRecentClients().filter(
+                        (c) =>
+                            c.agency_id === agencyId &&
+                            (`${c.first_name} ${c.last_name}`.toLowerCase().includes(term) || c.phone.includes(term)) &&
+                            !fromDirectory.some((d) => d.id === c.id),
                     );
+                    setClientResults([...fromDirectory, ...recent].slice(0, 20));
                 });
         }, 300);
         return () => {
@@ -371,10 +416,14 @@ export default function NewOrder() {
         } catch (err) {
             if (err instanceof ApiError) {
                 setError(err.message);
-            } else if (agencySettings && agencySettings.offline_enabled === false) {
+            } else if (
+                (agencySettings && agencySettings.offline_enabled === false) ||
+                (!agencySettings && localStorage.getItem(`pm.offlineEnabled.${agencyId}`) === '0')
+            ) {
                 // Mode hors ligne désactivé pour l'agence : rien n'est mis en file locale.
                 setError(t('order.offlineDisabled'));
             } else {
+                const localReference = reserveLocalReference(agencyCode);
                 await queuePendingOrder({
                     client_local_uuid: clientLocalUuid,
                     payload,
@@ -384,10 +433,11 @@ export default function NewOrder() {
                         client_label: `${selectedClient.first_name} ${selectedClient.last_name}`,
                         total_amount: grandTotal,
                         items_count: cart.length,
+                        local_reference: localReference,
                     },
                 });
                 syncEvents.dispatchEvent(new Event('change'));
-                setFeedback(t('order.submittedOffline'));
+                setFeedback(t('order.submittedOfflineRef', { reference: localReference }));
                 resetForm();
             }
         } finally {
@@ -442,11 +492,12 @@ export default function NewOrder() {
     const SERVICE_PREVIEW_LIMIT_PER_CATEGORY = 9;
     const trimmedServiceQuery = serviceQuery.trim().toLowerCase();
     const filteredServices = useMemo(() => {
-        if (!trimmedServiceQuery) return services;
-        return services.filter(
+        const byMode = billingFilter === 'all' ? services : services.filter((s) => (billingFilter === 'kg' ? s.billing_mode !== 'piece' : s.billing_mode !== 'kg'));
+        if (!trimmedServiceQuery) return byMode;
+        return byMode.filter(
             (s) => s.name.toLowerCase().includes(trimmedServiceQuery) || s.code.toLowerCase().includes(trimmedServiceQuery),
         );
-    }, [services, trimmedServiceQuery]);
+    }, [services, trimmedServiceQuery, billingFilter]);
     const groupedServices = useMemo(() => {
         const groups = new Map<string, typeof filteredServices>();
         for (const service of filteredServices) {
@@ -463,9 +514,83 @@ export default function NewOrder() {
         });
     }, [filteredServices, trimmedServiceQuery]);
 
+    const catalogCachedAt = agencyId ? cachedServicesAt(agencyId) : null;
+    const offlineAllowed =
+        agencySettings !== null ? agencySettings.offline_enabled !== false : !(agencyId && localStorage.getItem(`pm.offlineEnabled.${agencyId}`) === '0');
+    const steps = [
+        { key: 'client', done: selectedClient !== null, current: selectedClient === null },
+        { key: 'items', done: cart.length > 0, current: selectedClient !== null && cart.length === 0 },
+        { key: 'payment', done: payNow && amountReceived > 0, current: selectedClient !== null && cart.length > 0 && !(payNow && amountReceived > 0) },
+        { key: 'ticket', done: false, current: selectedClient !== null && cart.length > 0 && payNow && amountReceived > 0 },
+    ];
+
+    async function retrySync() {
+        setRetrying(true);
+        try {
+            await flushPendingOrders();
+        } finally {
+            setRetrying(false);
+        }
+    }
+
     return (
         <div className="space-y-6">
-            <PageHeader title={t('order.new')} subtitle={t('order.newSubtitle')} icon={ShoppingBag} />
+            {!online && (
+                <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-400/40 dark:bg-amber-400/10">
+                    <div className="flex min-w-0 items-start gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-800 dark:bg-amber-400/20 dark:text-amber-200">
+                            <CloudOff aria-hidden="true" className="h-5 w-5" />
+                        </span>
+                        <div className="min-w-0 text-sm">
+                            <p className="font-semibold text-amber-900 dark:text-amber-100">{t('order.offline.bannerTitle')}</p>
+                            <p className="text-amber-800 dark:text-amber-200">
+                                {catalogCachedAt ? t('order.offline.cacheAt', { date: dateTime(catalogCachedAt) }) : t('order.offline.noCache')}{' '}
+                                {offlineAllowed ? t('order.offline.queued') : t('order.offline.disabled')}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-amber-900 dark:text-amber-100">{t('order.offline.queueCount', { count: queue.length })}</span>
+                        <button type="button" onClick={() => void retrySync()} disabled={retrying} className={button('secondary', 'sm')}>
+                            {retrying ? <Spinner className="h-4 w-4" /> : <RefreshCw aria-hidden="true" className="h-4 w-4" />}
+                            {t('order.offline.retry')}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <PageHeader
+                title={t('order.new')}
+                subtitle={online ? t('order.newSubtitle') : t('order.offline.subtitle')}
+                icon={ShoppingBag}
+                actions={
+                    !online && offlineAllowed ? (
+                        <div className="text-right">
+                            <Pill tone="accent">{peekLocalReference(agencyCode)}</Pill>
+                            <p className="mt-1 text-xs text-ink-500 dark:text-ink-400">{t('order.offline.tempNumber')}</p>
+                        </div>
+                    ) : undefined
+                }
+            />
+
+            <ol aria-label={t('order.steps.label')} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {steps.map((step, index) => (
+                    <li
+                        key={step.key}
+                        aria-current={step.current ? 'step' : undefined}
+                        className={cx(
+                            'rounded-xl border px-3 py-2.5 text-center text-sm font-semibold',
+                            step.done
+                                ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-300'
+                                : step.current
+                                  ? 'border-brand-300 bg-white text-brand-800 ring-2 ring-brand-500/20 dark:border-brand-400/40 dark:bg-ink-900 dark:text-brand-200'
+                                  : 'border-ink-200 bg-white text-ink-500 dark:border-ink-700 dark:bg-ink-900 dark:text-ink-400',
+                        )}
+                    >
+                        {index + 1} · {t(`order.steps.${step.key}`)}
+                    </li>
+                ))}
+            </ol>
 
             {feedback && <Alert tone="success">{feedback}</Alert>}
             {error && <Alert tone="error">{error}</Alert>}
@@ -473,7 +598,15 @@ export default function NewOrder() {
             <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_340px] lg:grid-cols-[minmax(0,1fr)_420px]">
                 <div className="min-w-0 space-y-6">
                     <section aria-labelledby="client-heading" className={cardPadded}>
-                        <StepHeading id="client-heading" step={1} title={t('order.client')} />
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                            <StepHeading id="client-heading" step={1} title={online ? t('order.client') : t('order.offline.clientFromCache')} />
+                            {directoryMeta && <Pill tone={online ? 'neutral' : 'amber'}>{t('order.offline.dataAt', { time: time(directoryMeta.saved_at) })}</Pill>}
+                        </div>
+                        {!online && (
+                            <p className="-mt-2 mb-3 text-sm text-ink-600 dark:text-ink-350">
+                                {directoryMeta ? t('order.offline.directoryCount', { count: directoryMeta.count }) : t('order.offline.directoryMissing')}
+                            </p>
+                        )}
 
                         {selectedClient ? (
                             <div className="flex animate-fade-in flex-wrap items-center gap-3 rounded-xl border border-brand-200 bg-brand-50/60 p-3 dark:border-brand-400/25 dark:bg-brand-400/5">
@@ -495,6 +628,7 @@ export default function NewOrder() {
                                                 {selectedClient.loyalty_tier_name}
                                             </Pill>
                                         )}
+                                        {!online && <Pill tone="emerald">{t('order.offline.inCache')}</Pill>}
                                     </p>
                                 </div>
                                 <button type="button" onClick={() => setSelectedClient(null)} className={button('secondary', 'sm')}>
@@ -545,12 +679,32 @@ export default function NewOrder() {
                                         ))}
                                     </ul>
                                 )}
+                                {!online && (
+                                    <p className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-ink-300 bg-ink-50 px-3.5 py-2.5 text-sm text-ink-500 dark:border-ink-700 dark:bg-ink-950/40 dark:text-ink-400">
+                                        <span className="flex items-center gap-2">
+                                            <UserPlus aria-hidden="true" className="h-4 w-4" />
+                                            {t('order.offline.createClient')}
+                                        </span>
+                                        <span className="flex items-center gap-1 text-xs font-semibold">
+                                            <Lock aria-hidden="true" className="h-3.5 w-3.5" />
+                                            {t('order.offline.connectionRequired')}
+                                        </span>
+                                    </p>
+                                )}
                             </div>
                         )}
                     </section>
 
                     <section aria-labelledby="services-heading" className={cardPadded}>
-                        <StepHeading id="services-heading" step={2} title={t('order.service')} hint={t('order.servicesHint')} />
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                            <StepHeading
+                                id="services-heading"
+                                step={2}
+                                title={online ? t('order.service') : t('order.offline.localCatalog')}
+                                hint={online ? t('order.servicesHint') : t('order.offline.localCatalogHint')}
+                            />
+                            {services.length > 0 && <Pill tone="emerald">{t('order.catalogCount', { count: services.length })}</Pill>}
+                        </div>
 
                         {!agencyId ? (
                             <EmptyState icon={Building2} title={t('order.selectAgency')} description={t('order.selectAgencyHint')} />
@@ -571,6 +725,25 @@ export default function NewOrder() {
                                         onChange={(e) => setServiceQuery(e.target.value)}
                                         className={cx(inputLg, 'pl-12')}
                                     />
+                                </div>
+
+                                <div className="flex flex-wrap gap-2" role="group" aria-label={t('order.billingFilter')}>
+                                    {(['all', 'piece', 'kg'] as const).map((mode) => (
+                                        <button
+                                            key={mode}
+                                            type="button"
+                                            onClick={() => setBillingFilter(mode)}
+                                            aria-pressed={billingFilter === mode}
+                                            className={cx(
+                                                'rounded-full px-3 py-1.5 text-xs font-semibold transition',
+                                                billingFilter === mode
+                                                    ? 'bg-brand-100 text-brand-800 dark:bg-brand-400/20 dark:text-brand-200'
+                                                    : 'bg-ink-100 text-ink-600 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-300',
+                                            )}
+                                        >
+                                            {t(`order.billingFilterMode.${mode}`)}
+                                        </button>
+                                    ))}
                                 </div>
 
                                 {filteredServices.length === 0 ? (
@@ -619,7 +792,10 @@ export default function NewOrder() {
                             <Receipt aria-hidden="true" className="h-5 w-5 text-brand-700 dark:text-brand-300" />
                             {t('order.items')}
                         </h2>
-                        <Pill tone={cartCount > 0 ? 'brand' : 'neutral'}>{t('order.itemsCount', { count: cartCount })}</Pill>
+                        <span className="flex items-center gap-1.5">
+                            {!online && <Pill tone="amber">{t('order.offline.local')}</Pill>}
+                            <Pill tone={cartCount > 0 ? 'brand' : 'neutral'}>{t('order.itemsCount', { count: cartCount })}</Pill>
+                        </span>
                     </div>
 
                     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -935,7 +1111,9 @@ export default function NewOrder() {
                                 type="text"
                                 value={promotionCode}
                                 onChange={(e) => setPromotionCode(e.target.value.toUpperCase())}
-                                placeholder={t('order.promotionCodePlaceholder')}
+                                disabled={!online}
+                                title={!online ? t('order.offline.promoNeedsNetwork') : undefined}
+                                placeholder={online ? t('order.promotionCodePlaceholder') : t('order.offline.connectionRequired')}
                                 className={cx(inputSm, 'h-9 w-28 text-right font-mono uppercase')}
                                 maxLength={30}
                             />
@@ -957,6 +1135,7 @@ export default function NewOrder() {
 
                         <div className="space-y-3 border-t border-ink-200/80 pt-3 dark:border-ink-800">
                             <StepHeading id="payment-heading" step={3} title={t('order.payment.title')} />
+                            {!online && <p className="-mt-1 text-xs text-ink-600 dark:text-ink-350">{t('order.offline.paymentSynced')}</p>}
                             <label className="flex items-center justify-between gap-3 rounded-xl border border-ink-200 bg-white px-3.5 py-3 dark:border-ink-700 dark:bg-ink-900">
                                 <span className="text-sm font-semibold text-ink-900 dark:text-ink-50">{t('order.payment.toggle')}</span>
                                 <input
@@ -1027,9 +1206,35 @@ export default function NewOrder() {
                             className={button('primary', 'lg', 'w-full text-lg')}
                         >
                             {submitting ? <Spinner className="h-5 w-5" /> : <Check aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} />}
-                            {payNow ? t('order.submitAndPay') : t('order.submit')}
+                            {!online ? t('order.offline.submit') : payNow ? t('order.submitAndPay') : t('order.submit')}
                         </button>
                         {submitHint && <p className="text-center text-xs text-ink-600 dark:text-ink-350">{submitHint}</p>}
+                        {!online && offlineAllowed && (
+                            <>
+                                <p className="flex items-start gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300">
+                                    <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
+                                    {t('order.offline.storedOnDevice')}
+                                </p>
+                                <section className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-sm dark:border-amber-400/30 dark:bg-amber-400/5">
+                                    <h2 className="font-display text-base font-bold text-ink-900 dark:text-white">{t('order.offline.localTicket')}</h2>
+                                    <p className="text-xs text-ink-600 dark:text-ink-350">{t('order.offline.localTicketHint')}</p>
+                                    <dl className="space-y-1">
+                                        <div className="flex justify-between gap-2">
+                                            <dt className="text-ink-600 dark:text-ink-350">{t('order.offline.reference')}</dt>
+                                            <dd className="font-mono font-semibold text-accent-700 dark:text-accent-300">{peekLocalReference(agencyCode)}</dd>
+                                        </div>
+                                        <div className="flex justify-between gap-2">
+                                            <dt className="text-ink-600 dark:text-ink-350">{t('order.offline.syncLabel')}</dt>
+                                            <dd className="font-semibold text-ink-900 dark:text-ink-50">{t('order.offline.afterReconnect')}</dd>
+                                        </div>
+                                        <div className="flex justify-between gap-2">
+                                            <dt className="text-ink-600 dark:text-ink-350">{t('order.offline.queueLabel')}</dt>
+                                            <dd className="font-semibold text-ink-900 dark:text-ink-50">{t('order.offline.queueCount', { count: queue.length })}</dd>
+                                        </div>
+                                    </dl>
+                                </section>
+                            </>
+                        )}
                     </div>
                 </aside>
             </div>

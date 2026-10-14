@@ -193,6 +193,7 @@ Route::middleware(['auth:sanctum', 'pressing'])->group(function () {
 
     Route::get('/clients/stats', [ClientController::class, 'stats']);
     Route::get('/clients/export', [ClientController::class, 'export']);
+    Route::get('/clients/offline-directory', [ClientController::class, 'offlineDirectory']);
     Route::apiResource('clients', ClientController::class)->except(['destroy'])->parameters(['clients' => 'client']);
     Route::delete('/clients/{client}', [ClientController::class, 'destroy']);
     Route::get('/clients/{client}/notes', [ClientController::class, 'notes']);

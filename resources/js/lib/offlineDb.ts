@@ -32,7 +32,7 @@ export interface PendingOrder {
     status: 'pending' | 'error';
     error?: string;
     /** Aperçu client-side pour l'affichage avant synchronisation (nom client, total estimé). */
-    preview: { client_label: string; total_amount: number; items_count: number };
+    preview: { client_label: string; total_amount: number; items_count: number; local_reference?: string };
 }
 
 interface PressingDb extends DBSchema {

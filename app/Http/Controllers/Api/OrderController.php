@@ -173,12 +173,12 @@ class OrderController extends ApiController
 
     #[OA\Post(
         path: '/orders',
-        summary: "Crée une commande multi-articles (idempotent via client_local_uuid pour la réconciliation hors-ligne)",
-        tags: ['Commandes'],
+        summary: "Crée un dépôt multi-articles (idempotent via client_local_uuid pour la réconciliation hors-ligne)",
+        tags: ['Dépôts'],
         security: [['sanctum' => []]],
         responses: [
-            new OA\Response(response: 201, description: 'Commande créée'),
-            new OA\Response(response: 200, description: 'Commande déjà synchronisée (rejouée par client_local_uuid)'),
+            new OA\Response(response: 201, description: 'Dépôt créé'),
+            new OA\Response(response: 200, description: 'Dépôt déjà synchronisé (rejouée par client_local_uuid)'),
             new OA\Response(response: 422, description: 'Client hors de l\'agence ou données invalides'),
         ]
     )]

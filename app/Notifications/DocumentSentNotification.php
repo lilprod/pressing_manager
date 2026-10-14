@@ -27,8 +27,8 @@ class DocumentSentNotification extends ConfigurableNotification
         $label = $this->documentType === 'invoice' ? 'votre facture' : 'votre ticket de dépôt';
 
         $message = (new MailMessage)
-            ->subject("Commande n° {$this->order->order_number} — {$label}")
-            ->line("Veuillez trouver ci-joint {$label} pour la commande n° {$this->order->order_number}.")
+            ->subject("Dépôt n° {$this->order->order_number} — {$label}")
+            ->line("Veuillez trouver ci-joint {$label} pour le dépôt n° {$this->order->order_number}.")
             ->line('Merci de votre confiance.');
 
         if ($this->pdfAttachmentData !== null) {
@@ -46,6 +46,6 @@ class DocumentSentNotification extends ConfigurableNotification
 
     public function summary(): string
     {
-        return "Document ({$this->documentType}) envoyé par e-mail pour la commande n° {$this->order->order_number}.";
+        return "Document ({$this->documentType}) envoyé par e-mail pour le dépôt n° {$this->order->order_number}.";
     }
 }

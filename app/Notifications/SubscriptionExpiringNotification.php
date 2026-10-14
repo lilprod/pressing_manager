@@ -30,7 +30,7 @@ class SubscriptionExpiringNotification extends Notification
         }
 
         return $message
-            ->line('Passé ce délai, vos commandes seront facturées au tarif normal jusqu\'au renouvellement.')
+            ->line('Passé ce délai, vos dépôts seront facturés au tarif normal jusqu\'au renouvellement.')
             ->line('Contactez votre agence pour le renouveler.');
     }
 }

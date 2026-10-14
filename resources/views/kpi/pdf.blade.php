@@ -25,9 +25,9 @@
     <table>
         <tbody>
             <tr><td>Chiffre d'affaires encaissé</td><td class="num">{{ number_format($data['revenue'], 0, ',', ' ') }} FCFA</td></tr>
-            <tr><td>Nombre de commandes</td><td class="num">{{ $data['orders_count'] }}</td></tr>
+            <tr><td>Nombre de dépôts</td><td class="num">{{ $data['orders_count'] }}</td></tr>
             <tr><td>Panier moyen</td><td class="num">{{ number_format($data['average_order_value'], 0, ',', ' ') }} FCFA</td></tr>
-            <tr><td>Taux de commandes express</td><td class="num">{{ $data['express_rate'] }} %</td></tr>
+            <tr><td>Taux de dépôts express</td><td class="num">{{ $data['express_rate'] }} %</td></tr>
             <tr><td>Articles en stock bas</td><td class="num">{{ $data['low_stock_items'] }}</td></tr>
             <tr><td>Mouvements de stock</td><td class="num">{{ $data['stock_movements'] }}</td></tr>
             <tr><td>Livraisons totales</td><td class="num">{{ $data['deliveries_total'] }}</td></tr>
@@ -49,7 +49,7 @@
                 <tr>
                     <th>Agence</th>
                     <th>CA encaissé</th>
-                    <th>Commandes</th>
+                    <th>Dépôts</th>
                     <th>Stock bas</th>
                     <th>Livraisons OK</th>
                     <th>Présences</th>

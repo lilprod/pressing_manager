@@ -10,7 +10,7 @@ class PermissionSeeder extends Seeder
 {
     public const PERMISSIONS = [
         ['slug' => 'clients.manage', 'name' => 'Gérer les clients', 'group' => 'clients'],
-        ['slug' => 'orders.manage', 'name' => 'Gérer les commandes', 'group' => 'orders'],
+        ['slug' => 'orders.manage', 'name' => 'Gérer les dépôts', 'group' => 'orders'],
         ['slug' => 'orders.update_status', 'name' => 'Changer le statut des articles', 'group' => 'orders'],
         ['slug' => 'invoices.manage', 'name' => 'Gérer les factures', 'group' => 'billing'],
         ['slug' => 'payments.manage', 'name' => 'Encaisser les paiements', 'group' => 'billing'],

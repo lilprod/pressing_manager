@@ -12,8 +12,8 @@ class DeliveryCompletedNotification extends ConfigurableNotification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject("Livraison effectuée — commande n° {$this->delivery->order->order_number}")
-            ->line("Votre commande n° {$this->delivery->order->order_number} vient d'être livrée à l'adresse indiquée.")
+            ->subject("Livraison effectuée — dépôt n° {$this->delivery->order->order_number}")
+            ->line("Votre dépôt n° {$this->delivery->order->order_number} vient d'être livré à l'adresse indiquée.")
             ->line('Merci de votre confiance.');
     }
 
@@ -21,6 +21,6 @@ class DeliveryCompletedNotification extends ConfigurableNotification
     {
         $name = \App\Models\AppSetting::nameFor($this->delivery->agency?->pressing_id);
 
-        return "{$name} : votre commande n° {$this->delivery->order->order_number} a été livrée.";
+        return "{$name} : votre dépôt n° {$this->delivery->order->order_number} a été livré.";
     }
 }

@@ -4233,3 +4233,15 @@ conformes chez nous ? »). Aucun ne l'était ; périmètre tranché via `AskUser
 Suite **667/667**, `tsc`/build propres, parité i18n, Playwright 1440/390 sans débordement
 (une pastille « En cache » écrasait le nom du client à 390 px : déplacée sur la ligne des
 pastilles de fidélité).
+
+**Vocabulaire : « dépôt », jamais « commande » (2026-10-14)** — demande utilisateur
+« Remplace commande par dépôt ». Tous les textes français visibles passent à « dépôt »
+(accord au masculin : « Dépôt créé », « votre dépôt est prêt ») : 37 clés de `fr.json`
+(navigation « Nouveau dépôt »/« Dépôts », fiche, tableau de bord, KPI, notifications,
+paramètres), e-mails/SMS clients (`OrderReady`, `PickupCompleted`, `DeliveryCompleted`,
+`DeliveryFailed`, `DocumentSent`, `SubscriptionExpiring`), PDF et Excel des rapports,
+messages d'erreur d'API, libellé de permission (`PermissionSeeder` + migration
+`rename_orders_permission_label` pour les bases existantes). Conservé volontairement :
+« bon de commande » (pièce justificative fournisseur de la caisse, notion différente).
+Le code (`Order`, `orders`, clés i18n `order.*`) et l'anglais (« order ») ne changent pas.
+**Pour tout nouveau texte : écrire « dépôt ».**

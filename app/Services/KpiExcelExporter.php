@@ -50,9 +50,9 @@ class KpiExcelExporter
         $rows = [
             ['Indicateur', 'Valeur'],
             ['Chiffre d\'affaires encaissé (FCFA)', $data['revenue']],
-            ['Nombre de commandes', $data['orders_count']],
+            ['Nombre de dépôts', $data['orders_count']],
             ['Panier moyen (FCFA)', $data['average_order_value']],
-            ['Taux de commandes express (%)', $data['express_rate']],
+            ['Taux de dépôts express (%)', $data['express_rate']],
             ['Articles en stock bas', $data['low_stock_items']],
             ['Mouvements de stock', $data['stock_movements']],
             ['Livraisons totales', $data['deliveries_total']],
@@ -75,7 +75,7 @@ class KpiExcelExporter
     {
         $sheet->setTitle('Par agence');
         $headers = [
-            'Agence', 'CA encaissé (FCFA)', 'Commandes', 'Panier moyen (FCFA)', 'Stock bas',
+            'Agence', 'CA encaissé (FCFA)', 'Dépôts', 'Panier moyen (FCFA)', 'Stock bas',
             'Livraisons', 'Livraisons OK', 'Taux livraison (%)', 'Présences', 'Retards', 'Absences',
         ];
         $sheet->fromArray([$headers], null, 'A1');

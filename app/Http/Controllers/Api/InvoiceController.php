@@ -54,7 +54,7 @@ class InvoiceController extends ApiController
         $this->authorizePermission($request->user(), 'invoices.manage');
 
         if ($order->invoice()->exists()) {
-            throw new HttpException(422, 'Cette commande a déjà une facture.');
+            throw new HttpException(422, 'Ce dépôt a déjà une facture.');
         }
 
         $invoice = $this->invoices->createFromOrder($order);

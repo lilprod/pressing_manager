@@ -12,8 +12,8 @@ class OrderReadyNotification extends ConfigurableNotification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject("Votre commande n° {$this->order->order_number} est prête")
-            ->line("Bonne nouvelle : votre commande n° {$this->order->order_number} est prête à être récupérée.")
+            ->subject("Votre dépôt n° {$this->order->order_number} est prêt")
+            ->line("Bonne nouvelle : votre dépôt n° {$this->order->order_number} est prêt à être récupéré.")
             ->line('Merci de votre confiance.');
     }
 
@@ -21,6 +21,6 @@ class OrderReadyNotification extends ConfigurableNotification
     {
         $name = \App\Models\AppSetting::nameFor($this->order->agency?->pressing_id);
 
-        return "{$name} : votre commande n° {$this->order->order_number} est prête. Merci de passer la récupérer.";
+        return "{$name} : votre dépôt n° {$this->order->order_number} est prêt. Merci de passer le récupérer.";
     }
 }

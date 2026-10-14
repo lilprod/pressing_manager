@@ -393,12 +393,12 @@ class ClientController extends ApiController
 
     #[OA\Delete(
         path: '/clients/{client}',
-        summary: 'Supprime un client (refusé s\'il a des commandes : désactivez-le plutôt)',
+        summary: 'Supprime un client (refusé s\'il a des dépôts : désactivez-le plutôt)',
         tags: ['Clients'],
         security: [['sanctum' => []]],
         responses: [
             new OA\Response(response: 204, description: 'Client supprimé'),
-            new OA\Response(response: 409, description: 'Le client a des commandes : suppression refusée'),
+            new OA\Response(response: 409, description: 'Le client a des dépôts : suppression refusée'),
         ]
     )]
     public function destroy(Request $request, Client $client): JsonResponse
@@ -407,7 +407,7 @@ class ClientController extends ApiController
         $this->authorizePermission($request->user(), 'clients.manage');
 
         if ($client->orders()->exists()) {
-            throw new HttpException(409, "Ce client a des commandes : impossible de le supprimer. Désactivez-le plutôt.");
+            throw new HttpException(409, "Ce client a des dépôts : impossible de le supprimer. Désactivez-le plutôt.");
         }
 
         $client->delete();
